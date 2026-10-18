@@ -130,7 +130,7 @@ def main():
     out = a.out or os.path.join(a.results, "comparison")
     os.makedirs(out, exist_ok=True)
     engine = Engine()
-    md = [f"# Photoshop vs engine\n",
+    md = ["# Photoshop vs engine\n",
           f"Photoshop {report['environment']['photoshop']} · UXP {report['environment'].get('uxp')} · "
           f"{report['environment'].get('os')} · probe {report['probe']}\n"]
     subj_rows, bg_rows, notes = [], [], []
@@ -174,9 +174,14 @@ def main():
                "ps_mask_all_objects": (f"{mao['detail']['created']} object layers" if mao.get("ok") else "not available"),
                "engine_people": len(eng_people),
                "engine_layers": ", ".join(l.name for l in result.objects())}
-        if ps_mask is not None and eng_people:
+        rb_mask = None
+        if rb.get("ok"):
+            rb_mask = unrle(os.path.join(a.results, f"{iid}_remove_background.rle"), w * h).reshape(h, w) > 127
+        if eng_people:
             u = union_alpha(eng_people, result)
-            row["agreement_iou"] = round(float((u & ps_mask).sum() / max((u | ps_mask).sum(), 1)), 3)
+            for key, m in (("agreement_iou", ps_mask), ("rb_agreement_iou", rb_mask)):
+                if m is not None:
+                    row[key] = round(float((u & m).sum() / max((u | m).sum(), 1)), 3)
         if img["expected"]["cap"]:
             caps = [d for d in engine.detector(rgb) if d.label == "Baseball Cap" and d.score >= 0.22]
             if caps:
@@ -246,12 +251,12 @@ def main():
 
     # ---- write up
     md.append("\n## Subjects\n")
-    md.append("| Image | People | Photoshop Select Subject | s | Mask All Objects | Engine people | Agreement IoU | Cap in subject (PS / engine) |")
+    md.append("| Image | People | Photoshop Select Subject | s | Mask All Objects | Engine people | Agreement IoU (Select Subject / Remove Background) | Cap in subject (PS / engine) |")
     md.append("|---|---|---|---|---|---|---|---|")
     for r in subj_rows:
         cap = f"{r.get('cap_in_ps_subject', '–')} / {r.get('cap_in_engine_person', '–')}" if "cap_in_engine_person" in r or "cap_in_ps_subject" in r else "–"
         md.append(f"| {r['image']} | {r['people']} | {r['ps_select_subject']} | {r['ps_time']} | {r['ps_mask_all_objects']} | "
-                  f"{r['engine_people']} | {r.get('agreement_iou', '–')} | {cap} |")
+                  f"{r['engine_people']} | {r.get('agreement_iou', '–')} / {r.get('rb_agreement_iou', '–')} | {cap} |")
     md.append("\nEngine layers per image: " + "; ".join(f"**{r['image']}**: {r['engine_layers']}" for r in subj_rows))
     md.append("\n## Background on Photoshop's own hole\n")
     md.append("| Image | Hole | People left (PS / engine) | Seam (PS / engine) | Match ΔE (PS / engine) | Detail (PS / engine) | PS s | PS changed outside |")
