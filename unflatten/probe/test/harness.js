@@ -53,9 +53,19 @@ function ellipse(w, h) {
     if (((x - w / 2) / (w * 0.22)) ** 2 + ((y - h * 0.55) / (h * 0.38)) ** 2 < 1) m[y * w + x] = 255;
   return m;
 }
+// Colour setups seen in Photoshop 27.1 on the bundled images. The imaging API
+// rejects RGB buffers whose profile it does not know ("Unknown color profile").
+const OPENED_AS = {
+  B_cap_red: { profile: "c2" }, C_crew: { profile: "c2" }, C_family: { profile: "None", mode: "grayscaleMode" },
+  D_simian: { profile: "None" }, D_philadelphia: { profile: "None" }, D_rosie: { profile: "None" },
+  B_cap_black: { profile: "Adobe RGB (1998)" },
+};
+const KNOWN_PROFILES = new Set(["sRGB IEC61966-2.1", "Adobe RGB (1998)", "Gray Gamma 2.2"]);
 function makeDoc(title, w, h, rgb) {
-  const doc = { id: nextId++, title, width: w, height: h, mode: "RGBColorMode", bitsPerChannel: 8,
-                colorProfileName: "sRGB IEC61966-2.1", layers: [], selection: null, active: null, closed: false };
+  const as = OPENED_AS[title] || {};
+  const doc = { id: nextId++, title, width: w, height: h, mode: as.mode || "RGBColorMode", bitsPerChannel: "bitDepth8",
+                colorProfileName: as.profile || "sRGB IEC61966-2.1", layers: [], selection: null, active: null, closed: false };
+  doc.changeMode = async (to) => { if (to !== "RGB") throw new Error("mode"); doc.mode = "RGBColorMode"; doc.colorProfileName = "sRGB IEC61966-2.1"; };
   const base = { id: nextId++, name: "Background", rgba: new Uint8Array(w * h * 4), mask: null };
   for (let i = 0; i < w * h; i++) { base.rgba.set(rgb ? rgb.subarray(3 * i, 3 * i + 3) : [255, 255, 255], 4 * i); base.rgba[4 * i + 3] = 255; }
   doc.layers.push(base);
@@ -100,7 +110,7 @@ const photoshop = {
     },
     async createDocument({ name, width: w, height: h }) { return makeDoc(name, w, h, null); },
   },
-  constants: {},
+  constants: { ChangeMode: { RGB: "RGB" } },
   core: { executeAsModal: async (fn) => fn({ hostControl: {}, reportProgress() {} }) },
   action: {
     addNotificationListener: async () => {}, removeNotificationListener: async () => {},
@@ -146,9 +156,12 @@ const photoshop = {
     },
     async createImageDataFromBuffer(buf, o) {
       if (buf.length !== o.width * o.height * o.components) throw new Error("buffer size mismatch");
+      if (o.colorSpace === "RGB" && !KNOWN_PROFILES.has(o.colorProfile)) throw new Error("Photoshop Error. Code: -26120. Message: Unknown color profile null");
       return { ...o, buf: new Uint8Array(buf), dispose() {} };
     },
-    async putPixels({ documentID, layerID, imageData: d }) { layerById(docById(documentID), layerID).rgba.set(d.buf); },
+    async putPixels({ documentID, layerID, imageData: d }) {
+      const doc = docById(documentID);
+      if (!doc.mode.startsWith("RGB") || d.colorProfile !== doc.colorProfileName) throw new Error("putPixels: document is not RGB with this profile"); layerById(docById(documentID), layerID).rgba.set(d.buf); },
     async putSelection({ documentID, imageData: d }) { docById(documentID).selection = d.buf; },
   },
 };
@@ -195,6 +208,9 @@ const probe = sandbox.module.exports;
     }
     const mao = img.checks.find((x) => x.name.endsWith("Mask All Objects"));
     if (!mao || mao.ok) fail("Mask All Objects should fail without a recorded command in the simulation");
+  }
+  for (const img of tested) {
+    if (!files.some((f) => /^.+_thumb_\d+x\d+\.rgb$/.test(f) && f.startsWith(img.id + "_thumb_"))) fail(`${img.id}: thumbnail file missing or misnamed`);
   }
   if (docs.some((d) => !d.closed)) fail("probe left documents open");
   if (r.accuracy.length !== 4) fail("scene tests missing");

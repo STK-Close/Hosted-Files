@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.2";
+const PROBE_VERSION = "0.2.3";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -109,6 +109,50 @@ const MASK_ALL_OBJECTS = () => {
 };
 
 // ---------------------------------------------------------------- pixels and masks
+
+function profileOf(doc) { try { return doc.colorProfileName; } catch (e) { return null; } }
+
+// Writing pixels needs an 8-bit RGB document whose colour profile Photoshop's
+// imaging API knows. Images in the wild are often grayscale, untagged ("None")
+// or carry an embedded profile with an odd name ("c2"); the first run failed on
+// those. Assigning a profile keeps every pixel value, so it is used for those;
+// grayscale is tagged Gray Gamma 2.2 (sRGB's tone curve) before going to RGB so
+// the values change as little as possible. Returns what was done.
+async function normalize(doc) {
+  const done = [];
+  if (!String(doc.mode).toLowerCase().includes("rgb")) {
+    if (String(doc.mode).toLowerCase().includes("gray")) {
+      await assignProfile(doc, "Gray Gamma 2.2").then(() => done.push("tagged Gray Gamma 2.2"), () => {});
+    }
+    await doc.changeMode(constants.ChangeMode.RGB);
+    done.push("converted to RGB");
+  }
+  if (String(doc.bitsPerChannel) !== "bitDepth8" && constants.BitsPerChannelType) {
+    try { doc.bitsPerChannel = constants.BitsPerChannelType.EIGHT; done.push("converted to 8 bit"); } catch (e) { /* keep */ }
+  }
+  const was = profileOf(doc);
+  if (!(await profileUsable(was))) {
+    await assignProfile(doc, "sRGB IEC61966-2.1");
+    done.push(`assigned sRGB in place of ${was}`);
+  }
+  return done;
+}
+
+async function profileUsable(name) {
+  if (!name || name === "None") return false;
+  try {
+    const img = await imaging.createImageDataFromBuffer(new Uint8Array(4),
+      { width: 1, height: 1, components: 4, chunky: true, colorSpace: "RGB", colorProfile: name });
+    img.dispose();
+    return true;
+  } catch (e) { return false; }
+}
+
+async function assignProfile(doc, name) {
+  try { doc.colorProfileName = name; if (profileOf(doc) === name) return; } catch (e) { /* use the command */ }
+  await batch({ _obj: "assignProfile", _target: [{ _ref: "document", _enum: "ordinal", _value: "targetEnum" }],
+    profile: name, _options: NO_DIALOG });
+}
 
 async function compositeRGB(docId, w, h) {
   const got = await imaging.getPixels({ documentID: docId, componentSize: 8, applyAlpha: true });
@@ -399,17 +443,19 @@ async function checkImage(entry, meta) {
   row.checks.push(await timed(`${meta.id}: open`, () => modal("open", async () => {
     doc = await app.open(entry);
     w = doc.width; h = doc.height;
+    const opened = { mode: String(doc.mode), bits: String(doc.bitsPerChannel), profile: profileOf(doc) };
+    const normalized = await normalize(doc);
     rgb = await compositeRGB(doc.id, w, h);
     // thumbnail lets the comparison confirm it decoded the same pixels Photoshop saw
     const thumb = await imaging.getPixels({ documentID: doc.id, componentSize: 8, applyAlpha: true, targetSize: { width: 256 } });
     const t = thumb.imageData;
+    const tw = t.width, th = t.height, tc = t.components;
     const tdata = await t.getData({ chunky: true });
-    const trgb = new Uint8Array(t.width * t.height * 3);
-    for (let i = 0; i < t.width * t.height; i++) trgb.set(tdata.subarray(i * t.components, i * t.components + 3), i * 3);
+    const trgb = new Uint8Array(tw * th * 3);
+    for (let i = 0; i < tw * th; i++) trgb.set(tdata.subarray(i * tc, i * tc + 3), i * 3);
     t.dispose();
-    await writeFile(`${meta.id}_thumb_${t.width}x${t.height}.rgb`, trgb);
-    return { width: w, height: h, mode: String(doc.mode), bits: String(doc.bitsPerChannel),
-             profile: (() => { try { return doc.colorProfileName; } catch (e) { return null; } })() };
+    await writeFile(`${meta.id}_thumb_${tw}x${th}.rgb`, trgb);
+    return { width: w, height: h, ...opened, normalized, profileNow: profileOf(doc) };
   })));
   if (!doc) { await saveReport(); return; }
   row.size = [w, h];
