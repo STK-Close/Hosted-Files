@@ -12,7 +12,7 @@ unflatten/
   engine/            local separation engine (Python + ONNX)
     unflatten_engine/  pipeline, stages/, server, PSD writer, CLI
     tests/             acceptance tests on ground-truth scenes
-    download_models.py fetch SAM 2.1, LaMa, CLIP (≈ 950 MB, permissive licences)
+    download_models.py fetch OWLv2, SAM 2.1, LaMa, CLIP (≈ 1.6 GB, permissive licences)
   ARCHITECTURE.md    decisions, limits, costs, acceptance criteria, plan
 ```
 
@@ -46,6 +46,7 @@ This writes `cover_layers/cover.psd` (a real layered PSD), one PNG per layer, an
 ### Tests
 
 ```bash
-cd unflatten/engine && python -m pytest -q          # 37 tests
+cd unflatten/engine && python -m pytest -q          # 37 synthetic-scene tests (fast)
+python -m pytest -q -m real                          # acceptance A-D on real images (downloads them, ~6 min on CPU)
 node ../plugin/test/harness.js <raw.rgb> <w> <h>     # panel script vs a running engine
 ```

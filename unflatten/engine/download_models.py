@@ -5,6 +5,7 @@ onnxruntime execution providers). Nothing is sent to the cloud.
 
   SAM 2.1 hiera-tiny  (Apache-2.0)  object/instance proposals
   LaMa                (Apache-2.0)  background reconstruction (inpainting)
+  OWLv2 B/16          (Apache-2.0)  open-vocabulary subjects and accessories
   CLIP ViT-B/32       (MIT)         zero-shot layer naming
 
 Usage: python download_models.py [--dest models]
@@ -22,6 +23,9 @@ FILES = {
         "onnx/prompt_encoder_mask_decoder.onnx", "onnx/prompt_encoder_mask_decoder.onnx_data",
     ]),
     "lama": ("Carve/LaMa-ONNX", ["lama_fp32.onnx"]),
+    "owlv2": ("Xenova/owlv2-base-patch16-ensemble", [
+        "onnx/model.onnx", "tokenizer.json", "preprocessor_config.json",
+    ]),
     "clip": ("Xenova/clip-vit-base-patch32", [
         "onnx/vision_model.onnx", "onnx/text_model.onnx", "tokenizer.json",
     ]),

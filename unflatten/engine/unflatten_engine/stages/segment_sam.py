@@ -46,6 +46,27 @@ class SamSegmenter:
         out = self.encoder.run(None, {"pixel_values": pad.transpose(2, 0, 1)[None]})
         return out, scale, (nh, nw)
 
+    def decode_box(self, emb, box):
+        """Box prompt (x0, y0, x1, y1 in model coordinates): the whole object in it."""
+        feeds = {
+            "input_points": np.zeros((1, 1, 1, 2), np.float32),
+            "input_labels": np.full((1, 1, 1), -10, np.int64),  # -10 = no point
+            "input_boxes": np.float32(box).reshape(1, 1, 4),
+            "image_embeddings.0": emb[0], "image_embeddings.1": emb[1], "image_embeddings.2": emb[2],
+        }
+        iou, masks, _ = self.decoder.run(None, feeds)
+        return iou[0, 0], masks[0, 0]
+
+    def decode_box_point(self, emb, box, point):
+        feeds = {
+            "input_points": np.float32(point).reshape(1, 1, 1, 2),
+            "input_labels": np.ones((1, 1, 1), np.int64),
+            "input_boxes": np.float32(box).reshape(1, 1, 4),
+            "image_embeddings.0": emb[0], "image_embeddings.1": emb[1], "image_embeddings.2": emb[2],
+        }
+        iou, masks, _ = self.decoder.run(None, feeds)
+        return iou[0, 0], masks[0, 0]
+
     def _decode(self, emb, point):
         pts = np.float32(point).reshape(1, 1, -1, 2)
         feeds = {

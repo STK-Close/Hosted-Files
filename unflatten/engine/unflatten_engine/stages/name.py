@@ -88,6 +88,7 @@ class ClipNamer:
         from tokenizers import Tokenizer
 
         d = os.path.join(models_dir, "clip")
+        self.dir = d
         prov = ort.get_available_providers()
         self.vision = ort.InferenceSession(os.path.join(d, "vision_model.onnx"), providers=prov)
         cache = os.path.join(d, "vocab_embeds.npy")
@@ -112,6 +113,55 @@ class ClipNamer:
         if models_dir and os.path.exists(os.path.join(models_dir, "clip", "vision_model.onnx")):
             return cls(models_dir)
         return None
+
+    TEXT_PROMPTS = ["text", "printed letters", "a word", "a title", "a headline", "handwritten words"]
+    OTHER_PROMPTS = ["a photo", "a texture", "a pattern", "a fence", "a building", "a person", "clothing",
+                     "furniture", "a drawing", "grass", "the sky", "metal", "a crowd", "a car", "trees"]
+
+    def _prompt_embeds(self):
+        if getattr(self, "_verify", None) is None:
+            import onnxruntime as ort
+            from tokenizers import Tokenizer
+
+            cache = os.path.join(self.dir, "text_verify.npy")
+            prompts = self.TEXT_PROMPTS + self.OTHER_PROMPTS
+            if os.path.exists(cache) and np.load(cache).shape[0] == len(prompts):
+                self._verify = np.load(cache)
+            else:
+                text = ort.InferenceSession(os.path.join(self.dir, "text_model.onnx"),
+                                            providers=ort.get_available_providers())
+                tok = Tokenizer.from_file(os.path.join(self.dir, "tokenizer.json"))
+                emb = []
+                for p in prompts:
+                    v = text.run(None, {"input_ids": np.array([tok.encode(f"a photo of {p}").ids], np.int64)})[0][0]
+                    emb.append(v / np.linalg.norm(v))
+                self._verify = np.stack(emb).astype(np.float32)
+                np.save(cache, self._verify)
+        return self._verify
+
+    def _embed(self, rgb):
+        x = cv2.resize(rgb.astype(np.float32), (224, 224), interpolation=cv2.INTER_AREA) / 255.0
+        x = ((x - MEAN) / STD).transpose(2, 0, 1)[None].astype(np.float32)
+        e = self.vision.run(None, {"pixel_values": x})[0][0]
+        return e / np.linalg.norm(e)
+
+    def is_text(self, rgb, box, thresh=0.5, mask=None):
+        """Does this read as lettering? With `mask`, judge the glyph shapes alone
+        (black on white), so nearby real type cannot vouch for a false line."""
+        x0, y0, x1, y1 = box
+        h, w = rgb.shape[:2]
+        pad = int(0.15 * (y1 - y0)) + 2
+        if mask is not None:
+            rgb = np.where(mask[..., None], 0, 255).astype(np.uint8)
+        crop = rgb[max(0, y0 - pad):min(h, y1 + pad), max(0, x0 - pad):min(w, x1 + pad)]
+        side = max(crop.shape[:2])
+        canvas = np.full((side, side, 3), 255 if mask is not None else 128, np.uint8)
+        oy, ox = (side - crop.shape[0]) // 2, (side - crop.shape[1]) // 2
+        canvas[oy:oy + crop.shape[0], ox:ox + crop.shape[1]] = crop
+        logits = 100.0 * self._prompt_embeds() @ self._embed(canvas)
+        p = np.exp(logits - logits.max())
+        p /= p.sum()
+        return float(p[:len(self.TEXT_PROMPTS)].sum()) >= thresh
 
     def classify(self, rgba_crop):
         """Top label and probability for an RGBA crop shown on neutral gray."""
@@ -155,6 +205,9 @@ class Namer:
             if kind == "shadow":
                 names.append("Shadow")
                 continue
+            if info.get("subject"):
+                names.append(subject_name(info["subject"], info.get("parts", []), info.get("role")))
+                continue
             color = color_name(info["rgb_mean"])
             shape = shape_name(info["hard"])
             if shape:
@@ -171,6 +224,23 @@ class Namer:
                     continue
             names.append(f"{color} Graphic")
         return unique(names)
+
+
+def subject_name(label, parts, role):
+    """'Person Wearing Baseball Cap', 'Person Holding Umbrella', 'Dog'."""
+    if role != "carrier" or label != "Person" or not parts:
+        return label
+    worn = sorted((p for p in parts if p[1] == "wearing"), key=lambda p: -p[2])
+    held = sorted((p for p in parts if p[1] == "holding"), key=lambda p: -p[2])
+    # one headline accessory: headwear reads first, then eyewear, then the rest
+    rank = {"Baseball Cap": 0, "Hat": 0, "Helmet": 0, "Sunglasses": 1, "Glasses": 1}
+    worn.sort(key=lambda p: (rank.get(p[0], 2), -p[2]))
+    worn = [p for p in worn if p[0] in rank]  # caps, hats, glasses read in a name; necklaces do not
+    if worn:
+        return f"{label} Wearing {worn[0][0]}"
+    if held:
+        return f"{label} Holding {held[0][0]}"
+    return label
 
 
 def unique(names):

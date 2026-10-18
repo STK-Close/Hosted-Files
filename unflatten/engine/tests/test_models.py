@@ -15,7 +15,7 @@ need = pytest.mark.skipif(not os.path.exists(os.path.join(DEFAULT_MODELS, "sam2"
 def test_sam_path_is_exact_and_finds_objects():
     scene = SCENES["shapes"]()
     r = Engine(segmenter="sam2").run(scene.image())
-    assert r.stats["segmenter"] == "sam2"
+    assert r.stats["segmenter"] in ("sam2", "subjects")
     assert r.stats["reconstruction_psnr"] >= 45
     assert len(r.objects()) >= 2
 

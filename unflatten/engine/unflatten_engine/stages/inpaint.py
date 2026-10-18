@@ -34,8 +34,8 @@ class SurfaceInpainter:
         coef, *_ = np.linalg.lstsq(A, rgb[ys, xs].astype(np.float64), rcond=None)
         resid = rgb[ys, xs] - A @ coef
         noise = resid.std(0)
-        if noise.max() > 12:
-            return None  # not a clean surface after all
+        if noise.max() > 3.0:
+            return None  # textured (cloth, paper, film grain): LaMa rebuilds texture, a surface cannot
         gy, gx = np.nonzero(mask)
         fill = basis(gy.astype(np.float64), gx.astype(np.float64)) @ coef
         if noise.max() > 1.0:  # matched grain so the fill does not read as a smooth patch
@@ -105,6 +105,46 @@ class LamaInpainter:
         return out
 
 
+def harmonize(original, filled, mask):
+    """Seam correction: a fill that is a shade off its surroundings shows its
+    outline (the ghost of the removed element). Measure the mismatch just
+    outside each hole and spread it smoothly inward (normalised convolution),
+    so the fill meets its border exactly while keeping its own texture."""
+    if not mask.any():
+        return filled
+    ring = dilate(mask, 2) & ~mask
+    if not ring.any():
+        return filled
+    # mismatch of the fill's own prediction along the ring: the fill is
+    # re-estimated there by pushing it outward one step from the hole
+    out = filled.astype(np.float32)
+    ref = original.astype(np.float32)
+    inner = mask & ~cv2.erode(mask.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
+    from scipy import ndimage
+
+    _, (iy, ix) = ndimage.distance_transform_edt(~inner, return_indices=True)
+    resid = np.zeros_like(out)
+    resid[ring] = ref[ring] - out[iy[ring], ix[ring]]
+    weight = ring.astype(np.float32)
+    count, comp, stats, _ = cv2.connectedComponentsWithStats(dilate(mask, 2).astype(np.uint8), connectivity=8)
+    corr = np.zeros_like(out)
+    for c in range(1, count):
+        x, y, w, h = stats[c, :4]
+        sigma = max(2.0, 0.25 * min(w, h))
+        pad = int(3 * sigma)
+        y0, y1 = max(0, y - pad), min(mask.shape[0], y + h + pad)
+        x0, x1 = max(0, x - pad), min(mask.shape[1], x + w + pad)
+        sel = comp[y0:y1, x0:x1] == c
+        wgt = weight[y0:y1, x0:x1] * sel
+        num = cv2.GaussianBlur(resid[y0:y1, x0:x1] * wgt[..., None], (0, 0), sigma)
+        den = cv2.GaussianBlur(wgt, (0, 0), sigma)[..., None]
+        local = num / np.maximum(den, 1e-4)
+        m = mask[y0:y1, x0:x1] & sel
+        corr[y0:y1, x0:x1][m] = local[m]
+    out[mask] = out[mask] + corr[mask]
+    return np.clip(np.rint(out), 0, 255).astype(np.uint8)
+
+
 class AutoInpainter:
     """Surface fill when the background is a clean surface, LaMa otherwise,
     OpenCV Telea when no model is installed."""
@@ -118,8 +158,9 @@ class AutoInpainter:
         if not mask.any():
             return rgb.copy(), "none"
         out = self.surface(rgb, mask, **kw)
-        if out is not None:
-            return out, self.surface.name
-        if self.lama is not None:
-            return self.lama(rgb, mask), self.lama.name
-        return self.telea(rgb, mask), self.telea.name
+        used = self.surface.name
+        if out is None and self.lama is not None:
+            out, used = self.lama(rgb, mask), self.lama.name
+        if out is None:
+            out, used = self.telea(rgb, mask), self.telea.name
+        return harmonize(rgb, out, mask), used
