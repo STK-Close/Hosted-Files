@@ -1,47 +1,55 @@
-// Unflatten Probe: verifies, inside a real Photoshop, which native operations a
-// plugin can drive automatically, how fast they are, and how good the results
-// are, before the Unflatten pipeline is moved onto them.
+// Unflatten Probe: measures, inside a real Photoshop, which native operations a
+// plugin can drive automatically, how fast they are and how good their results
+// are, so the Unflatten architecture is chosen from measurements.
 //
-// Every check runs on a duplicate or on a test document the probe creates, and
-// records {ok, ms, detail, error}. Nothing here touches the user's documents.
+// One button runs everything that is safe. The probe opens its own bundled test
+// images (and builds test scenes with a known true background), never touches
+// the user's documents, closes what it opened, and writes its results to a
+// folder on the Desktop after every single test, so even an interrupted run
+// leaves usable data. The WebAssembly test is separate and never runs on its own.
 const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const ENGINE = "http://127.0.0.1:7865";
-const report = { probe: "0.1.0", started: new Date().toISOString(), environment: null, recorded: [],
-                 checks: [], accuracy: [], wasm: null };
-const resultDocs = [];
-const logEl = document.getElementById("log");
-
-function log(line) {
-  logEl.textContent += line + "\n";
-  logEl.scrollTop = logEl.scrollHeight;
-}
-
+const PROBE_VERSION = "0.2.0";
+const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
+const RESULTS_NAME = "Unflatten Probe Results";
+
+const report = { probe: PROBE_VERSION, started: new Date().toISOString(), environment: null,
+                 resultsFolder: null, recorded: [], images: [], accuracy: [], wasm: null, notes: [] };
+let resultsFolder = null;
+let busy = false;
+
+const $ = (id) => document.getElementById(id);
+function log(line) {
+  const el = $("log");
+  el.textContent += line + "\n";
+  el.scrollTop = el.scrollHeight;
+}
+function status(text) { $("status").textContent = text; }
 
 // ---------------------------------------------------------------- utilities
+
+function summary(d) {
+  if (!d) return "";
+  const s = JSON.stringify(d);
+  return s.length > 140 ? s.slice(0, 137) + "…" : s;
+}
 
 async function timed(name, fn) {
   const t = Date.now();
   const entry = { name, ok: false, ms: 0 };
   try {
     const detail = await fn();
-    entry.ok = detail && detail.ok === false ? false : true;
+    entry.ok = !(detail && detail.ok === false);
     entry.detail = detail;
   } catch (e) {
     entry.error = String((e && e.message) || e);
   }
   entry.ms = Date.now() - t;
-  log(`${entry.ok ? "✓" : "✗"} ${name}  ${entry.ms} ms  ${entry.error || summary(entry.detail)}`);
+  log(`${entry.ok ? "✓" : "✗"} ${name}  ${(entry.ms / 1000).toFixed(1)} s  ${entry.error || summary(entry.detail)}`);
   return entry;
-}
-
-function summary(d) {
-  if (!d) return "";
-  const s = JSON.stringify(d);
-  return s.length > 160 ? s.slice(0, 157) + "…" : s;
 }
 
 function modal(name, fn) {
@@ -52,14 +60,13 @@ async function batch(desc) {
   return action.batchPlay([desc], {});
 }
 
-// Try descriptors in order (recorded ones first); report which one worked.
 async function tryDescriptors(candidates) {
   const errors = [];
   for (const c of candidates) {
     try {
       const res = await batch({ ...c.desc, _options: NO_DIALOG });
       const err = res && res[0] && res[0]._obj === "error" ? res[0].message || "error" : null;
-      if (!err) return { used: c.label, result: res && res[0] };
+      if (!err) return { used: c.label };
       errors.push(`${c.label}: ${err}`);
     } catch (e) {
       errors.push(`${c.label}: ${(e && e.message) || e}`);
@@ -68,26 +75,40 @@ async function tryDescriptors(candidates) {
   throw new Error(errors.join(" | ") || "no candidates");
 }
 
-function recordedFor(objNames) {
-  return report.recorded
-    .filter((r) => objNames.includes(r.event))
-    .map((r, i) => ({ label: `recorded ${r.event} #${i + 1}`, desc: stripForReplay(r.descriptor, r.event) }));
+function recordedFor(events) {
+  return report.recorded.filter((r) => events.includes(r.event)).map((r, i) => {
+    const d = JSON.parse(JSON.stringify(r.descriptor || {}));
+    delete d._isCommand;
+    d._obj = d._obj || r.event;
+    return { label: `recorded ${r.event} #${i + 1}`, desc: d };
+  });
 }
 
-function stripForReplay(desc, event) {
-  const d = JSON.parse(JSON.stringify(desc || {}));
-  delete d._isCommand;
-  d._obj = d._obj || event;
-  return d;
-}
+// Recorded descriptors (optional step) first, then the commonly scripted forms.
+const SELECT_SUBJECT = () => [...recordedFor(["autoCutout"]),
+  { label: "autoCutout", desc: { _obj: "autoCutout", sampleAllLayers: false } }];
+const CONTENT_AWARE = () => [...recordedFor(["fill"]),
+  { label: "fill contentAware + colour adaptation", desc: { _obj: "fill", using: { _enum: "fillContents", _value: "contentAware" },
+    contentAwareColorAdaptationFill: true, opacity: { _unit: "percentUnit", _value: 100 }, mode: { _enum: "blendMode", _value: "normal" } } },
+  { label: "fill contentAware", desc: { _obj: "fill", using: { _enum: "fillContents", _value: "contentAware" } } }];
+const REMOVE_BACKGROUND = () => [...recordedFor(["removeBackground"]),
+  { label: "removeBackground", desc: { _obj: "removeBackground" } }];
+const MASK_ALL_OBJECTS = () => [...recordedFor(["autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"]),
+  { label: "maskAllObjects (guess)", desc: { _obj: "maskAllObjects" } },
+  { label: "autoMaskAllObjects (guess)", desc: { _obj: "autoMaskAllObjects" } }];
+
+// ---------------------------------------------------------------- pixels and masks
 
 async function compositeRGB(docId, w, h) {
   const got = await imaging.getPixels({ documentID: docId, componentSize: 8, applyAlpha: true });
+  const out = await toCanvasRGB(got, w, h);
+  return out;
+}
+
+async function toCanvasRGB(got, w, h) {
   const data = await got.imageData.getData({ chunky: true });
-  const comps = got.imageData.components;
+  const comps = got.imageData.components, b = got.sourceBounds, gw = got.imageData.width;
   const out = new Uint8Array(w * h * 3);
-  const b = got.sourceBounds;
-  const gw = got.imageData.width;
   for (let y = 0; y < got.imageData.height; y++) {
     for (let x = 0; x < gw; x++) {
       const s = (y * gw + x) * comps, d = ((y + b.top) * w + (x + b.left)) * 3;
@@ -98,15 +119,7 @@ async function compositeRGB(docId, w, h) {
   return out;
 }
 
-// Current selection as a full-canvas Uint8Array (0..255), or null if none.
-async function selectionMask(docId, w, h) {
-  let got;
-  try {
-    got = await imaging.getSelection({ documentID: docId });
-  } catch (e) {
-    return null;
-  }
-  if (!got || !got.imageData) return null;
+async function toCanvasMask(got, w, h) {
   const data = await got.imageData.getData({ chunky: true });
   const comps = got.imageData.components || 1;
   const b = got.sourceBounds || { left: 0, top: 0 };
@@ -118,9 +131,15 @@ async function selectionMask(docId, w, h) {
       if (yy >= 0 && yy < h && xx >= 0 && xx < w) out[yy * w + xx] = data[(y * sw + x) * comps];
     }
   }
-  const info = { colorSpace: got.imageData.colorSpace, components: comps, bounds: b };
   got.imageData.dispose();
-  return { mask: out, info };
+  return out;
+}
+
+async function selectionMask(docId, w, h) {
+  let got;
+  try { got = await imaging.getSelection({ documentID: docId }); } catch (e) { return null; }
+  if (!got || !got.imageData) return null;
+  return toCanvasMask(got, w, h);
 }
 
 function maskStats(mask, w, h) {
@@ -133,13 +152,12 @@ function maskStats(mask, w, h) {
       }
     }
   }
-  return { coverage: +(on / (w * h)).toFixed(4), bbox: on ? [x0, y0, x1 + 1, y1 + 1] : null,
-           components: components(mask, w, h) };
+  return { coverage: +(on / (w * h)).toFixed(4), bbox: on ? [x0, y0, x1 + 1, y1 + 1] : null, pieces: pieces(mask, w, h) };
 }
 
-// Connected pieces (on a ≤256 px copy): Select Subject on a group photo returns one
-// selection; how many separate pieces it has says whether people can be told apart.
-function components(mask, w, h) {
+// Separate pieces in a selection: on a group photo, Select Subject returns one
+// selection, and its pieces show whether people could be told apart from it.
+function pieces(mask, w, h) {
   const s = Math.max(1, Math.ceil(Math.max(w, h) / 256));
   const sw = Math.ceil(w / s), sh = Math.ceil(h / s);
   const m = new Uint8Array(sw * sh);
@@ -164,13 +182,11 @@ function components(mask, w, h) {
     }
     sizes.push(n);
   }
-  sizes.sort((a, b) => b - a);
   const total = sizes.reduce((a, b) => a + b, 0) || 1;
   return { count: sizes.length, significant: sizes.filter((n) => n > 0.02 * total).length };
 }
 
 function dilateMask(mask, w, h, r) {
-  // separable max filter
   const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -203,16 +219,13 @@ async function newLayerWithPixels(doc, name, rgb, w, h) {
   return layer;
 }
 
-async function putMaskOnLayer(doc, layer, mask, w, h) {
-  const img = await imaging.createImageDataFromBuffer(mask, {
+async function grayImage(mask, w, h) {
+  return imaging.createImageDataFromBuffer(mask, {
     width: w, height: h, components: 1, chunky: false, colorSpace: "Grayscale", colorProfile: "Gray Gamma 2.2" });
-  await imaging.putLayerMask({ documentID: doc.id, layerID: layer.id, imageData: img });
-  img.dispose();
 }
 
 async function setSelection(doc, mask, w, h) {
-  const img = await imaging.createImageDataFromBuffer(mask, {
-    width: w, height: h, components: 1, chunky: false, colorSpace: "Grayscale", colorProfile: "Gray Gamma 2.2" });
+  const img = await grayImage(mask, w, h);
   await imaging.putSelection({ documentID: doc.id, imageData: img });
   img.dispose();
 }
@@ -221,23 +234,15 @@ async function selectLayer(layer) {
   await batch({ _obj: "select", _target: [{ _ref: "layer", _id: layer.id }], makeVisible: false, _options: NO_DIALOG });
 }
 
-async function deselect(doc) {
-  try { await batch({ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }], to: { _enum: "ordinal", _value: "none" }, _options: NO_DIALOG }); } catch (e) { /* none */ }
+async function deselect() {
+  try {
+    await batch({ _obj: "set", _target: [{ _ref: "channel", _property: "selection" }],
+                  to: { _enum: "ordinal", _value: "none" }, _options: NO_DIALOG });
+  } catch (e) { /* nothing selected */ }
 }
 
-async function layerPixelsRGB(doc, layer, w, h) {
-  const got = await imaging.getPixels({ documentID: doc.id, layerID: layer.id, componentSize: 8 });
-  const data = await got.imageData.getData({ chunky: true });
-  const comps = got.imageData.components, b = got.sourceBounds, gw = got.imageData.width;
-  const out = new Uint8Array(w * h * 3);
-  for (let y = 0; y < got.imageData.height; y++) {
-    for (let x = 0; x < gw; x++) {
-      const s = (y * gw + x) * comps, d = ((y + b.top) * w + (x + b.left)) * 3;
-      out[d] = data[s]; out[d + 1] = data[s + 1]; out[d + 2] = data[s + 2];
-    }
-  }
-  got.imageData.dispose();
-  return out;
+async function layerRGB(doc, layer, w, h) {
+  return toCanvasRGB(await imaging.getPixels({ documentID: doc.id, layerID: layer.id, componentSize: 8 }), w, h);
 }
 
 function psnr(a, b, mask) {
@@ -251,8 +256,8 @@ function psnr(a, b, mask) {
   return se === 0 ? 99 : +(10 * Math.log10(n / se)).toFixed(2);
 }
 
-// How visible the hole's outline is: mean colour jump across the hole border,
-// relative to the image's ordinary neighbour-to-neighbour variation.
+// How visible a filled hole's outline is: colour jump across the hole border
+// relative to ordinary neighbour-to-neighbour variation (≈ 1: invisible).
 function seamScore(rgb, mask, w, h) {
   let border = 0, nb = 0, base = 0, nbase = 0;
   for (let y = 1; y < h; y++) {
@@ -268,212 +273,233 @@ function seamScore(rgb, mask, w, h) {
   return nb && nbase ? +((border / nb) / Math.max(base / nbase, 1e-3)).toFixed(3) : null;
 }
 
-async function engineAvailable() {
-  try {
-    const r = await fetch(`${ENGINE}/health`);
-    return r.ok ? await r.json() : null;
-  } catch (e) {
-    return null;
+// ---------------------------------------------------------------- results on disk
+
+// Compact files: masks run-length encoded, fills cropped to the filled area.
+function rle(mask) {
+  const out = [];
+  let i = 0;
+  while (i < mask.length) {
+    const v = mask[i];
+    let n = 1;
+    while (i + n < mask.length && mask[i + n] === v && n < 0xffffffff) n++;
+    out.push(v, n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255);
+    i += n;
   }
+  return new Uint8Array(out);
 }
 
-async function engineInpaint(rgb, mask, w, h) {
-  const body = new Uint8Array(w * h * 4);
-  body.set(rgb, 0);
-  body.set(mask, w * h * 3);
-  const r = await fetch(`${ENGINE}/inpaint`, {
-    method: "POST",
-    headers: { "Content-Type": "application/octet-stream", "X-Width": String(w), "X-Height": String(h), "X-Components": "3" },
-    body: body.buffer,
-  });
-  if (!r.ok) throw new Error(`engine ${r.status}`);
-  return { rgb: new Uint8Array(await r.arrayBuffer()), used: r.headers.get("X-Inpainter") };
+function cropRGB(rgb, w, bbox) {
+  const [x0, y0, x1, y1] = bbox;
+  const cw = x1 - x0, ch = y1 - y0;
+  const out = new Uint8Array(cw * ch * 3);
+  for (let y = 0; y < ch; y++) out.set(rgb.subarray(((y + y0) * w + x0) * 3, ((y + y0) * w + x1) * 3), y * cw * 3);
+  return out;
 }
 
-// Candidate descriptors. Recorded ones (from step 1) always go first; the rest are
-// the commonly scripted forms and are reported as such.
-const SELECT_SUBJECT = () => [...recordedFor(["autoCutout"]),
-  { label: "autoCutout", desc: { _obj: "autoCutout", sampleAllLayers: false } }];
-const CONTENT_AWARE = () => [...recordedFor(["fill"]),
-  { label: "fill contentAware + colour adaptation", desc: { _obj: "fill", using: { _enum: "fillContents", _value: "contentAware" },
-    contentAwareColorAdaptationFill: true, opacity: { _unit: "percentUnit", _value: 100 }, mode: { _enum: "blendMode", _value: "normal" } } },
-  { label: "fill contentAware", desc: { _obj: "fill", using: { _enum: "fillContents", _value: "contentAware" } } }];
-const REMOVE_BACKGROUND = () => [...recordedFor(["removeBackground"]),
-  { label: "removeBackground", desc: { _obj: "removeBackground" } }];
-const MASK_ALL_OBJECTS = () => [...recordedFor(["autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"])];
+async function openResultsFolder() {
+  if (resultsFolder) return resultsFolder;
+  const fs = uxp.storage.localFileSystem;
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const name = `${RESULTS_NAME} ${stamp}`;
+  // 1. Desktop, where it is easy to find
+  try {
+    const os = require("os");
+    const home = os.homedir();
+    const sep = home.includes("\\") ? "\\" : "/";
+    const desktopPath = `${home}${sep}Desktop`;
+    const url = "file:" + (desktopPath.startsWith("/") ? "" : "/") + desktopPath.replace(/\\/g, "/");
+    const desktop = await fs.getEntryWithUrl(url);
+    resultsFolder = await desktop.createFolder(name);
+  } catch (e) {
+    report.notes.push(`Desktop not writable (${e.message})`);
+    // 2. ask once where to put the results
+    let picked = null;
+    try { picked = await fs.getFolder(); } catch (e2) { /* cancelled */ }
+    // 3. the plugin's own data folder (its path is shown in the panel)
+    resultsFolder = await (picked || await fs.getDataFolder()).createFolder(name);
+  }
+  report.resultsFolder = resultsFolder.nativePath;
+  return resultsFolder;
+}
 
-// ---------------------------------------------------------------- 0. environment
+async function writeFile(name, bytes) {
+  const folder = await openResultsFolder();
+  const f = await folder.createFile(name, { overwrite: true });
+  await f.write(bytes.buffer ? bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) : bytes,
+                { format: uxp.storage.formats.binary });
+  return name;
+}
+
+async function saveReport() {
+  report.updated = new Date().toISOString();
+  const folder = await openResultsFolder();
+  const f = await folder.createFile("unflatten-probe-report.json", { overwrite: true });
+  await f.write(JSON.stringify(report, null, 2));
+}
+
+// ---------------------------------------------------------------- environment
 
 function environment() {
-  const doc = app.activeDocument;
-  const env = {
-    photoshop: app.version,
-    uxp: uxp.versions && uxp.versions.uxp,
-    os: (() => { try { return require("os").platform() + " " + require("os").release(); } catch (e) { return null; } })(),
+  let os = null;
+  try { const o = require("os"); os = `${o.platform()} ${o.release()} ${o.arch ? o.arch() : ""}`.trim(); } catch (e) { /* n/a */ }
+  return {
+    photoshop: app.version, uxp: uxp.versions && uxp.versions.uxp, os,
     api: {
-      "imaging.getPixels": typeof imaging.getPixels, "imaging.putPixels": typeof imaging.putPixels,
       "imaging.getSelection": typeof imaging.getSelection, "imaging.putSelection": typeof imaging.putSelection,
       "imaging.getLayerMask": typeof imaging.getLayerMask, "imaging.putLayerMask": typeof imaging.putLayerMask,
+      "app.open": typeof app.open, "app.createDocument": typeof app.createDocument,
       "action.addNotificationListener": typeof action.addNotificationListener,
-      "core.executeAsModal": typeof core.executeAsModal,
-      "app.createDocument": typeof app.createDocument,
       WebAssembly: typeof WebAssembly,
     },
   };
-  if (doc) {
-    env.api["Document.createPixelLayer"] = typeof doc.createPixelLayer;
-    env.api["Document.createTextLayer"] = typeof doc.createTextLayer;
-    env.api["Document.groupLayers"] = typeof doc.groupLayers;
-    env.api["Document.duplicate"] = typeof doc.duplicate;
-    try {
-      const sel = doc.selection;
-      env.api["Document.selection"] = sel ? Object.getOwnPropertyNames(Object.getPrototypeOf(sel)).filter((k) => k !== "constructor").join(",") : "none";
-    } catch (e) { env.api["Document.selection"] = "error: " + e.message; }
-  }
-  return env;
 }
 
-// ---------------------------------------------------------------- 1. recorder
+// ---------------------------------------------------------------- test images
 
-let recording = false;
-function onEvent(event, descriptor) {
-  report.recorded.push({ event, descriptor });
-  log(`● recorded ${event}: ${summary(descriptor)}`);
-}
-async function toggleRecord(btn) {
-  if (!recording) {
-    try {
-      await action.addNotificationListener(["all"], onEvent);
-    } catch (e) {
-      await action.addNotificationListener(["autoCutout", "fill", "removeBackground", "make", "set", "select",
-        "autoMaskAllObjects", "maskAllObjects", "contentAwareFill"], onEvent);
-    }
-    recording = true;
-    btn.textContent = "Stop recording";
-    log("Recording… run Select › Subject, Edit › Fill › Content-Aware, Layer › Mask All Objects, then Stop.");
-  } else {
-    try { await action.removeNotificationListener(["all"], onEvent); } catch (e) { /* listener list form */ }
-    recording = false;
-    btn.textContent = "Record";
-    const kinds = [...new Set(report.recorded.map((r) => r.event))];
-    log(`Stopped. Captured: ${kinds.join(", ") || "nothing"}`);
-  }
+async function loadManifest() {
+  const fs = uxp.storage.localFileSystem;
+  const plugin = await fs.getPluginFolder();
+  const folder = await plugin.getEntry("testimages");
+  const manifest = JSON.parse(await (await folder.getEntry("images.json")).read());
+  return { folder, images: manifest.images };
 }
 
-// ---------------------------------------------------------------- 2. real image checks
+async function imageEntry(folder, img) {
+  if (img.file) return folder.getEntry(img.file);
+  // not redistributed with the probe: fetched once, cached in the plugin's data folder
+  const data = await uxp.storage.localFileSystem.getDataFolder();
+  const name = `${img.id}.jpg`;
+  try { return await data.getEntry(name); } catch (e) { /* not cached yet */ }
+  const r = await fetch(img.url);
+  if (!r.ok) throw new Error(`download ${r.status}`);
+  const f = await data.createFile(name, { overwrite: true });
+  await f.write(await r.arrayBuffer(), { format: uxp.storage.formats.binary });
+  return f;
+}
 
-async function realChecks() {
-  const src = app.activeDocument;
-  if (!src) return log("Open an image first.");
-  report.environment = environment();
-  log(`Photoshop ${report.environment.photoshop}, UXP ${report.environment.uxp}`);
-  const engine = await engineAvailable();
-  log(engine ? `Engine reachable (${engine.inpainter}); will compare.` : "Engine not running; Photoshop-only checks.");
+// ---------------------------------------------------------------- checks on one image
 
+async function checkImage(entry, meta) {
+  const row = { id: meta.id, case: meta.case, expected: { people: meta.people, cap: meta.cap }, checks: [] };
+  report.images.push(row);
   let doc, w, h, rgb, subject = null;
-  report.checks.push(await timed("duplicate document", () => modal("duplicate", async () => {
-    doc = await src.duplicate(`Unflatten Probe – ${src.title || "image"}`);
+
+  row.checks.push(await timed(`${meta.id}: open`, () => modal("open", async () => {
+    doc = await app.open(entry);
     w = doc.width; h = doc.height;
     rgb = await compositeRGB(doc.id, w, h);
-    resultDocs.push(doc);
-    return { width: w, height: h, mode: String(doc.mode), bits: String(doc.bitsPerChannel) };
+    // thumbnail lets the comparison confirm it decoded the same pixels Photoshop saw
+    const thumb = await imaging.getPixels({ documentID: doc.id, componentSize: 8, applyAlpha: true, targetSize: { width: 256 } });
+    const t = thumb.imageData;
+    const tdata = await t.getData({ chunky: true });
+    const trgb = new Uint8Array(t.width * t.height * 3);
+    for (let i = 0; i < t.width * t.height; i++) trgb.set(tdata.subarray(i * t.components, i * t.components + 3), i * 3);
+    t.dispose();
+    await writeFile(`${meta.id}_thumb_${t.width}x${t.height}.rgb`, trgb);
+    return { width: w, height: h, mode: String(doc.mode), bits: String(doc.bitsPerChannel),
+             profile: (() => { try { return doc.colorProfileName; } catch (e) { return null; } })() };
   })));
-  if (!doc) return;
+  if (!doc) { await saveReport(); return; }
+  row.size = [w, h];
 
-  // Select Subject: automatic? how long? does it separate people?
-  report.checks.push(await timed("Select Subject (batchPlay autoCutout)", () => modal("select subject", async () => {
-    await deselect(doc);
-    const used = await tryDescriptors(SELECT_SUBJECT());
-    const sel = await selectionMask(doc.id, w, h);
-    if (!sel) return { ok: false, used: used.used, note: "no selection produced" };
-    subject = sel.mask;
-    const layer = await newLayerWithPixels(doc, "Probe · Select Subject", rgb, w, h);
-    await putMaskOnLayer(doc, layer, subject, w, h);
-    return { used: used.used, selection: sel.info, ...maskStats(subject, w, h) };
-  })));
+  try {
+    // Select Subject: does it run unattended, how long, does it keep accessories,
+    // does it separate people?
+    row.checks.push(await timed(`${meta.id}: Select Subject`, () => modal("select subject", async () => {
+      await deselect();
+      const used = await tryDescriptors(SELECT_SUBJECT());
+      const m = await selectionMask(doc.id, w, h);
+      if (!m) return { ok: false, used: used.used, note: "ran, but produced no selection" };
+      subject = m;
+      await writeFile(`${meta.id}_select_subject.rle`, rle(m));
+      return { used: used.used, ...maskStats(m, w, h) };
+    })));
+    await saveReport();
 
-  // Remove Background quick action: same model as Select Subject or different?
-  report.checks.push(await timed("Remove Background (batchPlay)", () => modal("remove background", async () => {
-    await deselect(doc);
-    const layer = await newLayerWithPixels(doc, "Probe · Remove Background", rgb, w, h);
-    await selectLayer(layer);
-    const used = await tryDescriptors(REMOVE_BACKGROUND());
-    const m = await imaging.getLayerMask({ documentID: doc.id, layerID: layer.id });
-    const data = await m.imageData.getData({ chunky: true });
-    const full = new Uint8Array(w * h);
-    const b = m.sourceBounds, mw = m.imageData.width;
-    for (let y = 0; y < m.imageData.height; y++) for (let x = 0; x < mw; x++) full[(y + b.top) * w + x + b.left] = data[y * mw + x];
-    m.imageData.dispose();
-    return { used: used.used, ...maskStats(full, w, h) };
-  })));
+    // Remove Background quick action: a different model than Select Subject?
+    row.checks.push(await timed(`${meta.id}: Remove Background`, () => modal("remove background", async () => {
+      await deselect();
+      const layer = await newLayerWithPixels(doc, "Probe · Remove Background", rgb, w, h);
+      await selectLayer(layer);
+      const used = await tryDescriptors(REMOVE_BACKGROUND());
+      const m = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: layer.id }), w, h);
+      await writeFile(`${meta.id}_remove_background.rle`, rle(m));
+      return { used: used.used, ...maskStats(m, w, h) };
+    })));
+    await saveReport();
 
-  // Mask All Objects: only with a recorded descriptor (no public form exists)
-  report.checks.push(await timed("Mask All Objects (recorded descriptor)", () => modal("mask all objects", async () => {
-    const cands = MASK_ALL_OBJECTS();
-    if (!cands.length) return { ok: false, note: "not recorded: run Layer › Mask All Objects during step 1, then re-run" };
-    await deselect(doc);
-    const before = doc.layers.length;
-    const used = await tryDescriptors(cands);
-    const names = [];
-    const walk = (ls) => ls.forEach((l) => { names.push(l.name); if (l.layers) walk(l.layers); });
-    walk(doc.layers);
-    return { used: used.used, topLevelLayersBefore: before, topLevelLayersAfter: doc.layers.length, names: names.slice(0, 40) };
-  })));
+    // Mask All Objects: per-object masks would tell people apart natively
+    row.checks.push(await timed(`${meta.id}: Mask All Objects`, () => modal("mask all objects", async () => {
+      await deselect();
+      const before = new Set();
+      const walk = (ls, f) => ls.forEach((l) => { f(l); if (l.layers) walk(l.layers, f); });
+      walk(doc.layers, (l) => before.add(l.id));
+      const used = await tryDescriptors(MASK_ALL_OBJECTS());
+      const created = [];
+      walk(doc.layers, (l) => { if (!before.has(l.id)) created.push(l); });
+      const masks = [];
+      for (const l of created.slice(0, 40)) {
+        try {
+          const m = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: l.id }), w, h);
+          const file = await writeFile(`${meta.id}_object_${masks.length}.rle`, rle(m));
+          masks.push({ name: l.name, file, ...maskStats(m, w, h) });
+        } catch (e) { masks.push({ name: l.name, error: e.message }); }
+      }
+      return { used: used.used, created: created.length, objects: masks };
+    })));
+    await saveReport();
 
-  // Content-Aware Fill behind the subject: automatic, no dialog? how long?
-  let hole = null;
-  report.checks.push(await timed("Content-Aware Fill behind subject (batchPlay fill)", () => modal("content-aware fill", async () => {
-    if (!subject) return { ok: false, note: "needs Select Subject" };
-    hole = dilateMask(subject, w, h, Math.max(4, Math.round(0.008 * Math.max(w, h))));
-    const layer = await newLayerWithPixels(doc, "Probe · Content-Aware Fill", rgb, w, h);
-    await selectLayer(layer);
-    await setSelection(doc, hole, w, h);
-    const used = await tryDescriptors(CONTENT_AWARE());
-    await deselect(doc);
-    const out = await layerPixelsRGB(doc, layer, w, h);
-    let changedIn = 0, changedOut = 0, nIn = 0;
-    for (let i = 0; i < w * h; i++) {
-      const diff = out[3 * i] !== rgb[3 * i] || out[3 * i + 1] !== rgb[3 * i + 1] || out[3 * i + 2] !== rgb[3 * i + 2];
-      if (hole[i] > 127) { nIn++; if (diff) changedIn++; } else if (diff) changedOut++;
+    // Content-Aware Fill behind the subject: unattended? anything outside changed?
+    row.checks.push(await timed(`${meta.id}: Content-Aware Fill behind subject`, () => modal("content-aware fill", async () => {
+      if (!subject) return { ok: false, note: "skipped: needs Select Subject" };
+      const hole = dilateMask(subject, w, h, Math.max(4, Math.round(0.008 * Math.max(w, h))));
+      const layer = await newLayerWithPixels(doc, "Probe · Content-Aware Fill", rgb, w, h);
+      await selectLayer(layer);
+      await setSelection(doc, hole, w, h);
+      const used = await tryDescriptors(CONTENT_AWARE());
+      await deselect();
+      const out = await layerRGB(doc, layer, w, h);
+      let changedIn = 0, changedOut = 0, nIn = 0;
+      let x0 = w, y0 = h, x1 = 0, y1 = 0;
+      for (let i = 0; i < w * h; i++) {
+        const diff = out[3 * i] !== rgb[3 * i] || out[3 * i + 1] !== rgb[3 * i + 1] || out[3 * i + 2] !== rgb[3 * i + 2];
+        if (hole[i] > 127) {
+          nIn++; if (diff) changedIn++;
+          const x = i % w, y = (i / w) | 0;
+          if (x < x0) x0 = x; if (x >= x1) x1 = x + 1; if (y < y0) y0 = y; if (y >= y1) y1 = y + 1;
+        } else if (diff) changedOut++;
+      }
+      const bbox = nIn ? [x0, y0, x1, y1] : [0, 0, w, h];
+      await writeFile(`${meta.id}_caf_hole.rle`, rle(hole));
+      const file = await writeFile(`${meta.id}_caf_${bbox.join("_")}.rgb`, cropRGB(out, w, bbox));
+      return { used: used.used, file, bbox, holeCoverage: +(nIn / (w * h)).toFixed(3),
+               changedInsideHole: +(changedIn / Math.max(nIn, 1)).toFixed(3), changedOutsideHole: changedOut,
+               seam: seamScore(out, hole, w, h) };
+    })));
+    await saveReport();
+
+    // Editable text layer: priority 2, does the API work at all
+    if (meta.id === report.images[0].id) {
+      row.checks.push(await timed(`${meta.id}: create editable text layer`, () => modal("text layer", async () => {
+        if (!doc.createTextLayer) return { ok: false, note: "Document.createTextLayer missing" };
+        const t = await doc.createTextLayer({ name: "Probe · Text", contents: "Unflatten", fontSize: 24, position: { x: 20, y: 40 } });
+        return { created: !!t, kind: String(t && t.kind) };
+      })));
     }
-    return { used: used.used, holeCoverage: +(nIn / (w * h)).toFixed(3), changedInsideHole: +(changedIn / Math.max(nIn, 1)).toFixed(3),
-             changedOutsideHole: changedOut, seam: seamScore(out, hole, w, h) };
-  })));
-
-  // Same mask through the engine (LaMa), for a side-by-side look
-  if (engine && hole) {
-    let res;
-    report.checks.push(await timed("Engine background on the same mask", async () => {
-      res = await engineInpaint(rgb, hole, w, h);
-      return { used: res.used, seam: seamScore(res.rgb, hole, w, h) };
-    }));
-    if (res) {
-      await modal("engine layer", async () => {
-        const layer = await newLayerWithPixels(doc, `Probe · Engine (${res.used})`, res.rgb, w, h);
-        layer.visible = false;
-      });
-    }
+  } finally {
+    await modal("close", async () => { try { await doc.closeWithoutSaving(); } catch (e) { /* already closed */ } });
+    await saveReport();
   }
-
-  // Text layer creation: second priority, check the API works at all
-  report.checks.push(await timed("Create editable text layer (DOM)", () => modal("text layer", async () => {
-    if (!doc.createTextLayer) return { ok: false, note: "Document.createTextLayer missing" };
-    const t = await doc.createTextLayer({ name: "Probe · Text", contents: "Unflatten", fontSize: 24,
-                                          position: { x: 20, y: 40 } });
-    t.visible = false;
-    return { created: !!t, kind: String(t.kind) };
-  })));
-  log("Done. Inspect the 'Unflatten Probe' document's layers, then Save (step 4).");
 }
 
-// ---------------------------------------------------------------- 3. accuracy (synthetic)
+// ---------------------------------------------------------------- known-truth background scenes
 
 function prng(seed) {
   let s = seed >>> 0;
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 }
 
-// Backgrounds with known truth, plus a foreground silhouette whose hole we fill.
 function makeScene(kind, w, h) {
   const rnd = prng(kind.length * 7919 + 17);
   const bg = new Uint8Array(w * h * 3);
@@ -490,7 +516,7 @@ function makeScene(kind, w, h) {
         const tone = 0.85 + 0.15 * Math.sin(row * 12.9898 + Math.floor((x + off) / 90) * 78.233);
         r = mortar ? 200 : 170 * tone; g = mortar ? 195 : 90 * tone; b = mortar ? 185 : 70 * tone;
         r += 10 * n; g += 8 * n; b += 8 * n;
-      } else { // textured paper / cloth
+      } else {
         const weave = 6 * Math.sin(x * 1.3) * Math.sin(y * 1.1);
         r = 205 + weave + 7 * n; g = 195 + weave + 7 * n; b = 175 + weave + 7 * n;
       }
@@ -502,7 +528,6 @@ function makeScene(kind, w, h) {
 }
 
 function silhouette(w, h, scale) {
-  // head + body, anti-aliased by 4x supersampling
   const m = new Uint8Array(w * h);
   const cx = w / 2, hy = h * (0.5 - 0.28 * scale), hr = h * 0.09 * scale;
   const bx = w * 0.17 * scale, by = h * 0.3 * scale, bcy = h * (0.5 + 0.12 * scale);
@@ -511,9 +536,7 @@ function silhouette(w, h, scale) {
       let c = 0;
       for (let sy = 0; sy < 4; sy++) for (let sx = 0; sx < 4; sx++) {
         const px = x + (sx + 0.5) / 4, py = y + (sy + 0.5) / 4;
-        const head = (px - cx) ** 2 + (py - hy) ** 2 < hr * hr;
-        const body = ((px - cx) / bx) ** 2 + ((py - bcy) / by) ** 2 < 1;
-        if (head || body) c++;
+        if ((px - cx) ** 2 + (py - hy) ** 2 < hr * hr || ((px - cx) / bx) ** 2 + ((py - bcy) / by) ** 2 < 1) c++;
       }
       m[y * w + x] = Math.round((c / 16) * 255);
     }
@@ -521,120 +544,182 @@ function silhouette(w, h, scale) {
   return m;
 }
 
-async function accuracyTest() {
-  report.environment = report.environment || environment();
-  const engine = await engineAvailable();
-  log(engine ? "Engine reachable; scoring both." : "Engine not running; scoring Photoshop only.");
+const SCENES = [["blue wall", 1.0], ["brick wall", 1.0], ["paper", 1.0], ["brick wall", 2.1]];
+
+function buildScene(kind, scale, w, h) {
+  const bg = makeScene(kind, w, h);
+  const sil = silhouette(w, h, scale);
+  const comp = new Uint8Array(w * h * 3);
+  for (let i = 0; i < w * h; i++) {
+    const a = sil[i] / 255;
+    comp[3 * i] = Math.round(25 * a + bg[3 * i] * (1 - a));
+    comp[3 * i + 1] = Math.round(30 * a + bg[3 * i + 1] * (1 - a));
+    comp[3 * i + 2] = Math.round(45 * a + bg[3 * i + 2] * (1 - a));
+  }
+  return { bg, comp, hole: dilateMask(sil, w, h, 5) };
+}
+
+async function sceneTest(kind, scale, index) {
   const w = 900, h = 600;
-  const cases = [["blue wall", 1.0], ["brick wall", 1.0], ["paper", 1.0], ["brick wall", 2.1]];
-  for (const [kind, scale] of cases) {
-    const label = `${kind}${scale > 1.5 ? ", large hole" : ""}`;
-    const bg = makeScene(kind, w, h);
-    const sil = silhouette(w, h, scale);
-    const comp = new Uint8Array(w * h * 3);
-    for (let i = 0; i < w * h; i++) {
-      const a = sil[i] / 255;
-      comp[3 * i] = Math.round(25 * a + bg[3 * i] * (1 - a));
-      comp[3 * i + 1] = Math.round(30 * a + bg[3 * i + 1] * (1 - a));
-      comp[3 * i + 2] = Math.round(45 * a + bg[3 * i + 2] * (1 - a));
-    }
-    const hole = dilateMask(sil, w, h, 5);
-    let holeFrac = 0;
-    for (let i = 0; i < w * h; i++) if (hole[i] > 127) holeFrac++;
-    holeFrac /= w * h;
-    const row = { scene: label, hole: +holeFrac.toFixed(3) };
+  const label = `${kind}${scale > 1.5 ? ", large hole" : ""}`;
+  const { bg, comp, hole } = buildScene(kind, scale, w, h);
+  let holeFrac = 0;
+  for (let i = 0; i < w * h; i++) if (hole[i] > 127) holeFrac++;
+  const row = { scene: label, index, hole: +(holeFrac / (w * h)).toFixed(3) };
+  let doc;
+  const run = await timed(`Content-Aware Fill, known background: ${label}`, () => modal("accuracy", async () => {
+    doc = await app.createDocument({ name: `Unflatten Probe – ${label}`, width: w, height: h, resolution: 72,
+      mode: (constants.NewDocumentMode && constants.NewDocumentMode.RGB) || "RGBColorMode",
+      fill: (constants.DocumentFill && constants.DocumentFill.WHITE) || "white" });
+    const layer = await newLayerWithPixels(doc, "Scene", comp, w, h);
+    await selectLayer(layer);
+    await setSelection(doc, hole, w, h);
+    const used = await tryDescriptors(CONTENT_AWARE());
+    await deselect();
+    const out = await layerRGB(doc, layer, w, h);
+    await writeFile(`scene${index}_caf.rgb`, out);
+    return { used: used.used, psnr: psnr(out, bg, hole), seam: seamScore(out, hole, w, h) };
+  }));
+  if (doc) await modal("close", async () => { try { await doc.closeWithoutSaving(); } catch (e) { /* closed */ } });
+  row.photoshop = run.ok ? { ms: run.ms, ...run.detail } : { error: run.error };
 
-    let doc;
-    const fillRun = await timed(`Content-Aware Fill · ${label}`, () => modal("accuracy", async () => {
-      doc = await app.createDocument({ name: `Unflatten Probe – ${label}`, width: w, height: h, resolution: 72,
-        mode: (constants.NewDocumentMode && constants.NewDocumentMode.RGB) || "RGBColorMode",
-        fill: (constants.DocumentFill && constants.DocumentFill.WHITE) || "white" });
-      resultDocs.push(doc);
-      const truth = await newLayerWithPixels(doc, "Truth · background", bg, w, h);
-      truth.visible = false;
-      await newLayerWithPixels(doc, "Scene", comp, w, h);
-      const layer = await newLayerWithPixels(doc, "Photoshop · Content-Aware Fill", comp, w, h);
-      await selectLayer(layer);
-      await setSelection(doc, hole, w, h);
-      const used = await tryDescriptors(CONTENT_AWARE());
-      await deselect(doc);
-      const out = await layerPixelsRGB(doc, layer, w, h);
-      return { used: used.used, psnr: psnr(out, bg, hole), seam: seamScore(out, hole, w, h) };
-    }));
-    row.photoshop = fillRun.ok ? { ms: fillRun.ms, ...fillRun.detail } : { error: fillRun.error };
-
-    if (engine) {
-      const en = await timed(`Engine · ${label}`, async () => {
-        const res = await engineInpaint(comp, hole, w, h);
-        if (doc) await modal("engine layer", async () => {
-          const l = await newLayerWithPixels(doc, `Engine · ${res.used}`, res.rgb, w, h);
-          l.visible = false;
-        });
-        return { used: res.used, psnr: psnr(res.rgb, bg, hole), seam: seamScore(res.rgb, hole, w, h) };
-      });
-      row.engine = en.ok ? { ms: en.ms, ...en.detail } : { error: en.error };
-    }
-    report.accuracy.push(row);
+  // optional: a developer running the engine locally gets the same scene scored by it
+  const engine = await engineAvailable();
+  if (engine) {
+    const en = await timed(`Engine, known background: ${label}`, async () => {
+      const res = await engineInpaint(comp, hole, w, h);
+      return { used: res.used, psnr: psnr(res.rgb, bg, hole), seam: seamScore(res.rgb, hole, w, h) };
+    });
+    row.engine = en.ok ? { ms: en.ms, ...en.detail } : { error: en.error };
   }
-  log("\nScene                      hole   Photoshop dB/seam/ms        Engine dB/seam/ms");
-  for (const r of report.accuracy) {
-    const p = r.photoshop && r.photoshop.psnr != null ? `${r.photoshop.psnr} / ${r.photoshop.seam} / ${r.photoshop.ms}` : "failed";
-    const e = r.engine ? (r.engine.psnr != null ? `${r.engine.psnr} / ${r.engine.seam} / ${r.engine.ms}` : "failed") : "–";
-    log(`${r.scene.padEnd(26)} ${String(r.hole).padEnd(6)} ${p.padEnd(27)} ${e}`);
-  }
-  log("Higher dB = closer to the true background. Seam ≈ 1 means the hole's outline is invisible.");
+  report.accuracy.push(row);
+  await saveReport();
 }
 
-// ---------------------------------------------------------------- 4. save
+async function engineAvailable() {
+  try { const r = await fetch(`${ENGINE}/health`); return r.ok ? await r.json() : null; } catch (e) { return null; }
+}
 
-async function save() {
-  const fs = uxp.storage.localFileSystem;
-  const folder = await fs.getFolder();
-  if (!folder) return;
+async function engineInpaint(rgb, mask, w, h) {
+  const body = new Uint8Array(w * h * 4);
+  body.set(rgb, 0);
+  body.set(mask, w * h * 3);
+  const r = await fetch(`${ENGINE}/inpaint`, { method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "X-Width": String(w), "X-Height": String(h), "X-Components": "3" },
+    body: body.buffer });
+  if (!r.ok) throw new Error(`engine ${r.status}`);
+  return { rgb: new Uint8Array(await r.arrayBuffer()), used: r.headers.get("X-Inpainter") };
+}
+
+// ---------------------------------------------------------------- the one button
+
+async function runSafeTests() {
+  report.environment = environment();
+  await openResultsFolder();
+  log(`Photoshop ${report.environment.photoshop} · results: ${report.resultsFolder}`);
+  await saveReport();
+
+  const { folder, images } = await loadManifest();
+  const total = images.length + SCENES.length;
+  let step = 0;
+  for (const meta of images) {
+    status(`Testing image ${++step} of ${total}: ${meta.case}`);
+    let entry;
+    try {
+      entry = await imageEntry(folder, meta);
+    } catch (e) {
+      log(`✗ ${meta.id}: could not load (${e.message}); skipped`);
+      report.images.push({ id: meta.id, case: meta.case, skipped: e.message });
+      await saveReport();
+      continue;
+    }
+    await checkImage(entry, meta);
+  }
+  for (let i = 0; i < SCENES.length; i++) {
+    status(`Testing background scene ${++step} of ${total}`);
+    await sceneTest(SCENES[i][0], SCENES[i][1], i);
+  }
   report.finished = new Date().toISOString();
-  const file = await folder.createFile("unflatten-probe-report.json", { overwrite: true });
-  await file.write(JSON.stringify(report, null, 2));
-  log(`Saved ${file.name}`);
-  for (const doc of resultDocs) {
-    await timed(`save ${doc.title}`, () => modal("save", async () => {
-      const name = (doc.title || "probe").replace(/[^\w\- ]+/g, "_") + ".psd";
-      const f = await folder.createFile(name, { overwrite: true });
-      await doc.saveAs.psd(f, {}, true);
-      return { file: name };
-    }));
+  await saveReport();
+  status(`Finished. Send the folder “${RESULTS_NAME} …” from your ${report.resultsFolder.includes("Desktop") ? "Desktop" : "results location below"}.`);
+  log(`\nAll safe tests finished.\nResults folder: ${report.resultsFolder}`);
+}
+
+// ---------------------------------------------------------------- optional: recording
+
+let recording = false;
+function onEvent(event, descriptor) {
+  report.recorded.push({ event, descriptor });
+  log(`● recorded ${event}`);
+}
+async function toggleRecord(btn) {
+  if (!recording) {
+    try { await action.addNotificationListener(["all"], onEvent); } catch (e) {
+      await action.addNotificationListener(["autoCutout", "fill", "removeBackground", "maskAllObjects", "autoMaskAllObjects"], onEvent);
+    }
+    recording = true;
+    btn.textContent = "Stop recording";
+    log("Recording. Do the step(s) the report asked for by hand, then click Stop recording, then Run safe tests again.");
+  } else {
+    try { await action.removeNotificationListener(["all"], onEvent); } catch (e) { /* list form */ }
+    recording = false;
+    btn.textContent = "Record a command";
+    await openResultsFolder();
+    await saveReport();
+    log(`Stopped. Captured: ${[...new Set(report.recorded.map((r) => r.event))].join(", ") || "nothing"}`);
   }
 }
 
-// ---------------------------------------------------------------- 5. WebAssembly
+// ---------------------------------------------------------------- optional: WebAssembly (unsafe)
 
-async function wasmCheck() {
+let wasmArmed = false;
+async function wasmCheck(btn) {
+  if (!wasmArmed) {
+    wasmArmed = true;
+    btn.textContent = "Click again to run (may close Photoshop)";
+    return;
+  }
+  wasmArmed = false;
+  btn.textContent = "WebAssembly test";
+  report.environment = report.environment || environment();
+  await openResultsFolder();
+  report.wasm = { started: true, photoshop: app.version };
+  await saveReport(); // if Photoshop crashes now, the report still says the test was attempted
   // (module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))
   const bytes = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 7, 1, 96, 2, 127, 127, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 97, 100, 100, 0, 0,
     10, 9, 1, 7, 0, 32, 0, 32, 1, 106, 11]);
   report.wasm = await timed("WebAssembly instantiate + call", async () => {
     if (typeof WebAssembly === "undefined") return { ok: false, note: "WebAssembly not defined" };
     const { instance } = await WebAssembly.instantiate(bytes);
-    const r = instance.exports.add(2, 3);
-    return { ok: r === 5, result: r, simd: typeof WebAssembly.validate === "function" };
+    return { ok: instance.exports.add(2, 3) === 5 };
   });
+  await saveReport();
 }
 
 // ---------------------------------------------------------------- wiring
 
 function guard(fn) {
   return async (ev) => {
+    if (busy) return;
     const btn = ev && ev.target;
+    busy = true;
     if (btn) btn.disabled = true;
-    try { await fn(btn); } catch (e) { log("✗ " + ((e && e.message) || e)); } finally { if (btn) btn.disabled = false; }
+    try { await fn(btn); } catch (e) {
+      log("✗ " + ((e && e.message) || e));
+      report.notes.push(String((e && e.message) || e));
+      try { await saveReport(); } catch (e2) { /* nowhere to write */ }
+    } finally { busy = false; if (btn) btn.disabled = false; }
   };
 }
 
-document.getElementById("record").addEventListener("click", (ev) => toggleRecord(ev.target).catch((e) => log("✗ " + e.message)));
-document.getElementById("real").addEventListener("click", guard(realChecks));
-document.getElementById("synthetic").addEventListener("click", guard(accuracyTest));
-document.getElementById("save").addEventListener("click", guard(save));
-document.getElementById("wasm").addEventListener("click", guard(wasmCheck));
+$("run").addEventListener("click", guard(runSafeTests));
+$("record").addEventListener("click", (ev) => toggleRecord(ev.target).catch((e) => log("✗ " + e.message)));
+$("wasm").addEventListener("click", guard(wasmCheck));
+try {
+  const v = app.version || "";
+  if (v.startsWith("26.0")) $("wasmwarn").textContent = `You are on Photoshop ${v}, the version reported to crash here. Skip this test unless asked.`;
+} catch (e) { /* no app */ }
 
 if (typeof module !== "undefined") {
-  module.exports = { realChecks, accuracyTest, wasmCheck, toggleRecord, report, makeScene, silhouette, psnr, seamScore, maskStats };
+  module.exports = { runSafeTests, wasmCheck, toggleRecord, report, buildScene, SCENES, psnr, seamScore, maskStats, rle };
 }

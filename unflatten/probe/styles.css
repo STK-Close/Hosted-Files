@@ -8,3 +8,5 @@ h2 { font-size: 11px; margin: 14px 0 4px; }
 sp-button { width: 100%; }
 #log { font-size: 10px; white-space: pre-wrap; margin-top: 12px; max-height: 420px; overflow-y: auto;
        font-family: monospace; }
+.status { font-size: 11px; margin: 8px 0 4px; }
+section { margin-top: 16px; }

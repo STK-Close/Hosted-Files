@@ -7,26 +7,25 @@
 <body>
   <main>
     <h1>UNFLATTEN PROBE</h1>
-    <p class="note">Development test. Works on duplicates and its own test documents; your files are not changed.</p>
+    <p class="note">Tests Photoshop's built-in Select Subject, Remove Background, Mask All Objects and
+      Content-Aware Fill on its own test images. Your open documents are not touched.</p>
 
-    <h2>1 · Record Photoshop's commands</h2>
-    <p class="note">Click Record, then do by hand: Select › Subject, Edit › Fill › Content-Aware, Layer › Mask All Objects (if your version has it). Then click Stop.</p>
-    <sp-button id="record" variant="secondary">Record</sp-button>
+    <sp-button id="run" variant="cta">Run safe tests</sp-button>
+    <p id="status" class="status">Takes about 5–15 minutes. Documents will open and close by themselves.</p>
 
-    <h2>2 · Checks on the open image</h2>
-    <p class="note">Open a photo (a person against a wall works best), then run.</p>
-    <sp-button id="real" variant="cta">Run checks</sp-button>
+    <section>
+      <h2>Only if asked: record a command</h2>
+      <p class="note">If the results say a command was not found, click Record, do that one step by hand
+        (for example Layer › Mask All Objects), click Stop, then run the safe tests again.</p>
+      <sp-button id="record" variant="secondary">Record a command</sp-button>
+    </section>
 
-    <h2>3 · Background rebuild accuracy</h2>
-    <p class="note">Builds test scenes whose true background is known and scores Content-Aware Fill (and the engine, if running).</p>
-    <sp-button id="synthetic" variant="cta">Run accuracy test</sp-button>
-
-    <h2>4 · Save</h2>
-    <sp-button id="save" variant="secondary">Save report and result documents…</sp-button>
-
-    <h2>5 · WebAssembly</h2>
-    <p class="note warn">Photoshop 2025 (26.0) was reported to crash on any WebAssembly. Save your work first.</p>
-    <sp-button id="wasm" variant="secondary">Test WebAssembly</sp-button>
+    <section>
+      <h2 class="warn">Unsafe test: WebAssembly (may close Photoshop)</h2>
+      <p class="note warn" id="wasmwarn">Photoshop 2025 (26.0) was reported to crash on this test.
+        Save and close your work first. Needs two clicks.</p>
+      <sp-button id="wasm" variant="secondary">WebAssembly test</sp-button>
+    </section>
 
     <pre id="log"></pre>
   </main>

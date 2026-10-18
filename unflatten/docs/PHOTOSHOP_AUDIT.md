@@ -69,8 +69,9 @@ Verified against Adobe's UXP reference. "batchPlay" means Photoshop's low-level 
   - `tools/quant_compare.py` reproduces this.
 - **Half-precision** (about 0.55 GB for the set) usually keeps accuracy; it is the next experiment.
 - **Delivery:** models can live in the package or be fetched automatically on first run, with a progress bar and no user steps.
+- **Decision (agreed):** size is not traded for accuracy; see section 6.
 
-## 4. Recommended architecture (simplest that meets the requirements)
+## 4. Provisional architecture (final choice after the Photoshop measurements)
 
 **Photoshop does the pixel work; the plugin carries a small brain.**
 
@@ -107,42 +108,52 @@ Decisions the probe results will settle:
 
 ## 5. The Photoshop integration test (`unflatten/probe`)
 
-This is a separate development panel ("Unflatten Probe"). It works on duplicates and on its own test documents, never on your files.
+Instructions for running it are in [`probe/HOW_TO_RUN.md`](../probe/HOW_TO_RUN.md). In short: one-time setup, then load the plugin, click **Run safe tests**, and send back the results folder that appears on the Desktop as a zip.
 
-**Load it:** UXP Developer Tool › Add Plugin › `unflatten/probe/manifest.json` › Load. Then open Plugins › Unflatten Probe.
+**What the one button does, with no images opened by you and no recording:**
 
-1. **Record:** click Record, then by hand run Select › Subject, Edit › Fill › Content-Aware, and Layer › Mask All Objects (if your version has it). Click Stop. This captures the exact commands.
-2. **Run checks:** open a photo and click Run checks. It times and reports:
-   - Select Subject (coverage, how many separate pieces it finds);
+1. **Test images:** it opens its own test images, one by one. These are the public-domain/CC0 acceptance images bundled with the probe; the Unsplash "person against a blue wall" photo is downloaded at run time and not redistributed.
+2. **Checks on each image**, each run automatically, timed, and saved:
+   - Select Subject: the selection's coverage, and how many separate pieces it has (can people be told apart?);
    - Remove Background;
-   - Mask All Objects (layers created);
-   - Content-Aware Fill behind the subject (did it run without a dialog, did anything outside the hole change, how visible its outline is);
-   - creating an editable text layer.
+   - Mask All Objects (per-object layers);
+   - Content-Aware Fill behind the subject (did it run without a dialog, did anything outside the hole change);
+   - once per run, creating an editable text layer.
+3. **Background scenes:** it builds four scenes with a known true background (smooth wall, brick wall, textured paper, and a hole covering 56% of the frame), fills them with Content-Aware Fill and scores them.
+4. **Tidying up and saving:** it closes everything it opened without saving. After every single step it writes the report and compact result files (masks run-length encoded, fills cropped to the filled area), so an interrupted run still leaves data.
 
-   Use the test images listed below.
-3. **Run accuracy test:** builds four scenes whose true background is known (smooth blue wall, brick wall, textured paper, and a hole covering 56% of the frame). It fills them with Content-Aware Fill and scores the result against the truth.
-4. **Save:** pick a folder. It writes `unflatten-probe-report.json` plus every result document as a PSD. Send those back and I'll do the full comparison.
-5. **WebAssembly:** a tiny module test. Save your work first; Photoshop 2025 v26.0 was reported to crash here.
+**Safe vs unsafe**
 
-**Optional comparison with the current engine.** If the engine is running on the same machine (`python -m unflatten_engine.server`), the probe also runs it on the identical masks. It adds those results as hidden layers named "Engine · …" next to Photoshop's, and puts both sets of scores in the report.
+| Test | Where | Runs |
+|---|---|---|
+| Everything above | **Run safe tests** | on the button |
+| Record a command (only if a command is not found) | separate section | by hand, when asked |
+| WebAssembly | separate section marked unsafe; needs two clicks; warns on Photoshop 26.0 | never automatically |
 
-Before release I ran the probe end to end in Node against a simulated Photoshop (`probe/test/harness.js`). That covers its control flow, metrics, report and engine comparison. The simulation says nothing about how Photoshop behaves; that is what your run will show. For reference, the engine's own scores on the probe's synthetic scenes were:
+**Comparison on my side** (`engine/tools/compare_probe.py <results folder>`):
 
-| Scene | Hole | LaMa (dB) | Seam (1 = invisible) |
-|---|---|---|---|
-| Blue wall | 19% | 38.4 | 0.92 |
-| Brick wall | 19% | 24.9 | 1.28 |
-| Paper | 19% | 32.7 | 0.96 |
-| Brick wall | 56% | 21.8 | 1.57 |
+- It decodes the same images, and first checks that Photoshop saw the same pixels.
+- It runs the engine on each image and LaMa on **Photoshop's exact hole**.
+- It reruns the known-truth scenes from the probe's own code.
+- It writes `comparison.md` plus side-by-side images.
 
-**Suggested images for check 2** (all public domain or CC0, from Wikimedia Commons):
+Metrics, chosen for the two priorities:
 
-- Person wearing a baseball cap: *Bogdan Bondarenko2.jpg*, *Robbie Pierce.jpg*
-- Several people: *Portrait of ASTP crews - restoration.jpg*; *Widow, two daughters and three grandchildren of the last Navajo chief…(CHS-3265).jpg*
-- Covers: *This Simian World - book cover.png*, *Cover--Travels in Philadelphia.png*
-- Poster: *We Can Do It!.jpg*
+| Priority | Measured |
+|---|---|
+| Complete, grouped subjects | people in the image vs pieces in Select Subject vs engine person layers; whether the detected cap lies inside the person; agreement between the two subject masks; whether Mask All Objects gives per-object layers |
+| Fully rebuilt backgrounds | anyone still detectable where a subject was removed; seam visibility; colour match with surroundings; texture kept vs blurred; error against the true background on the scenes |
 
-## 6. Migration plan (after the probe results)
+**Validation so far.** The probe and the comparison tool were run end to end here against a simulated Photoshop (`probe/test/harness.js`): eight images and four scenes, a 45-file results folder, and a full comparison report. That validates the plumbing and file formats only; Photoshop's real behaviour is what your run measures.
+
+## 6. Decision principles (agreed)
+
+- **Install once, then one click.** A larger one-time download, an admin prompt at installation, or a one-time permission is acceptable. The everyday experience must be: click **Unflatten**, with no other steps, no second application and no manual startup.
+- **Accuracy before size.** Separation accuracy and complete backgrounds are not traded for a smaller package. The 8-bit model experiment (section 3) stays informational; full-precision models are the default for any AI that ships in the plugin.
+- **No replacement without proof.** The current engine stays as the reference. A Photoshop-native step replaces an engine step only where the probe comparison shows equal or better results on these tests, and the full acceptance set A–D must pass inside Photoshop before the local service is retired.
+- **No Generative Fill or paid cloud processing** at this stage.
+
+## 7. Migration plan (after the probe results)
 
 1. **Background:** Content-Aware Fill in the real plugin, with the engine as fallback during development. Compare on tests A–D.
 2. **Subjects:** native masks plus ported JavaScript grouping, ordering and matte.
