@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.4";
+const PROBE_VERSION = "0.2.5";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -518,6 +518,10 @@ async function checkImage(entry, meta) {
     row.checks.push(await timed(`${meta.id}: Content-Aware Fill behind subject`, () => modal("content-aware fill", async () => {
       if (!subject) return { ok: false, note: "skipped: needs Select Subject" };
       const hole = dilateMask(subject, w, h, Math.max(4, Math.round(0.008 * Math.max(w, h))));
+      // Photoshop 27.1 stops with "not enough source pixels" (an alert, even with
+      // dialogs off) when the hole is nearly the whole image; measured at 97%.
+      const holeCoverage = maskStats(hole, w, h).coverage;
+      if (holeCoverage > 0.85) return { ok: false, note: `skipped: hole covers ${Math.round(holeCoverage * 100)}% of the image` };
       const layer = await newLayerWithPixels(doc, "Probe · Content-Aware Fill", rgb, w, h);
       await selectLayer(layer);
       await setSelection(doc, hole, w, h);
