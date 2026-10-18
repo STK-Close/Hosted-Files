@@ -279,4 +279,7 @@ One plugin, one click.
    - If the check fails, use the next Generative Fill variation; if that fails too, use Content-Aware Fill.
    - Flat graphics (the existing graphic test) go straight to Content-Aware Fill.
 4. **Background, free mode:** Content-Aware Fill in one pass for small and medium holes; the plugin's own inpainter only if it is packaged. It is also the automatic fallback when there is no network, Adobe refuses the image, or there are no credits.
-5. **Still to settle:** how the plugin's own AI (naming, SAM for drawn figures) is packaged. This is the WebAssembly test, which has not been run yet.
+5. **Packaging of the plugin's own AI: hybrid add-on.**
+   - **The test:** the WebAssembly test was run twice on Photoshop 27.11 (UXP 9.4.1, macOS Intel). Both times it stopped at its first step: instantiating a 41-byte module that adds two numbers. Nothing returned in 48 minutes, and Photoshop had to be force-quit both times.
+   - **Conclusion:** WebAssembly is not usable in this host, independent of model size or speed. In a sandbox that mimics UXP, the same ONNX Runtime Web setup ran the SAM 2.1 encoder in 17 s, matching native output exactly. The blocker is the host, not the approach.
+   - **Chosen route:** the plugin's own AI ships as a UXP hybrid add-on (C++ with native ONNX Runtime, built for macOS Apple silicon, macOS Intel and Windows). It runs at native speed and can use several cores. The cost is a one-time install with an administrator prompt, plus code signing and notarisation for distribution.
