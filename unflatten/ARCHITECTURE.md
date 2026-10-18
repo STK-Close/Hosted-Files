@@ -1,11 +1,14 @@
 # Unflatten: architecture, limits, and plan
 
+> **Superseded for the product by version 1 (`plugin/`), October 2026.** Photoshop does the subject masks and the background rebuild; the measurements and the decision are in [`docs/PHOTOSHOP_AUDIT.md`](docs/PHOTOSHOP_AUDIT.md), section 8. This document describes the reference engine, which stays the test oracle and the source of the logic being ported.
+
+
 *One image. Every layer.*
 
 ## 1. Architecture
 
 ```
-Photoshop (UXP panel, plugin/)            Local engine (engine/, Python, 127.0.0.1:7865)
+Photoshop (UXP panel, plugin-engine-client/) Local engine (engine/, Python, 127.0.0.1:7865)
 ──────────────────────────────            ──────────────────────────────────────────────
 [ UNFLATTEN ]                              understand ─► group ─► mask ─► order ─► rebuild bg ─► matte ─► name
   imaging.getPixels (8-bit composite)  ──►
@@ -87,7 +90,7 @@ Libraries: numpy, scipy, OpenCV, Pillow, onnxruntime, tokenizers. Everything run
   - **Missed letters.** A letter missed by text detection on worn cloth can remain in the background (rare after line completion).
 - **Speed** (4-core CPU, no GPU): photos take 17–45 s per image at about 1 MP (OWLv2 4–6 s, SAM prompts, LaMa). Graphics take seconds. A GPU execution provider cuts this several-fold with no code change.
 - **Documents:** 8-bit RGB only in this prototype.
-- **Not verified inside Photoshop yet.** The panel script runs unmodified against the live engine through a recording mock of the UXP API (`plugin/test/harness.js`); the first real test is loading it in Photoshop.
+- **Not verified inside Photoshop yet.** The panel script runs unmodified against the live engine through a recording mock of the UXP API (`plugin-engine-client/test/harness.js`); the first real test is loading it in Photoshop.
 
 ## 3. Acceptance tests
 

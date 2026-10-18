@@ -283,3 +283,24 @@ One plugin, one click.
    - **The test:** the WebAssembly test was run twice on Photoshop 27.11 (UXP 9.4.1, macOS Intel). Both times it stopped at its first step: instantiating a 41-byte module that adds two numbers. Nothing returned in 48 minutes, and Photoshop had to be force-quit both times.
    - **Conclusion:** WebAssembly is not usable in this host, independent of model size or speed. In a sandbox that mimics UXP, the same ONNX Runtime Web setup ran the SAM 2.1 encoder in 17 s, matching native output exactly. The blocker is the host, not the approach.
    - **Chosen route:** the plugin's own AI ships as a UXP hybrid add-on (C++ with native ONNX Runtime, built for macOS Apple silicon, macOS Intel and Windows). It runs at native speed and can use several cores. The cost is a one-time install with an administrator prompt, plus code signing and notarisation for distribution.
+
+### Version 1 built (step 1 of the migration)
+
+`plugin/` is now the Photoshop-native Unflatten. One click runs these steps:
+1. Normalise the colour setup.
+2. Select Subject, then Mask All Objects on a scratch copy.
+3. Choose the layers: scenery dropped, accessories merged into their wearer.
+4. Order them back to front.
+5. Rebuild the background with Generative Fill, check the result, and fall back to Content-Aware Fill if needed.
+6. Compute the exact matte.
+7. Create the layers, with the original hidden at the bottom.
+
+All of this is one Undo step, rolled back on any failure.
+
+**Tests:**
+- `plugin/test/core.test.js`: a synthetic scene with known answers.
+- `plugin/test/harness.js`: the real panel script against a simulated Photoshop that replays recorded Photoshop 27.11 masks and fills.
+
+On the real 27.11 masks and fills, the layers recombine to the original with zero difference on all seven test photos and posters. The previous engine-connected panel is kept in `plugin-engine-client/`.
+
+**Next:** the native add-on (Windows first, then macOS) for descriptive names, covers and graphics, and editable text.

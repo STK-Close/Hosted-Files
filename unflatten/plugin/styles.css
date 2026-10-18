@@ -26,4 +26,5 @@ h1 {
   text-align: center;
   color: var(--uxp-host-text-color-secondary);
 }
+#generative { margin-top: 14px; font-size: 10px; }
 .hidden { display: none; }
