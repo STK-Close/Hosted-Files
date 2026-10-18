@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.3";
+const PROBE_VERSION = "0.2.4";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -96,16 +96,21 @@ const REMOVE_BACKGROUND = () => [...recordedFor(["removeBackground"]),
 // Mask All Objects has no published command name, and a wrong guess makes
 // Photoshop show a "not currently available" alert that stops the run, so it
 // is only replayed once it has been recorded.
-const MASK_ALL_EVENTS = ["autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"];
-// Events a recording also catches that are not Mask All Objects itself.
-const NOT_MASK_ALL = new Set(["select", "set", "historyStateChanged", "toolModalStateChanged", "modalStateChanged",
-  "hostFocusChanged", "layersFiltered", "autoCutout", "fill", "removeBackground", "open", "close", "save",
-  "newDocument", "make", "delete", "show", "hide"]);
+// Photoshop 27.1 reports Layer › Mask All Objects as "autoMaskGenerate". Only
+// these names are replayed: a recording also catches general notices such as
+// "invokeCommand" (a menu click), and replaying one of those raises the alert.
+const MASK_ALL_EVENTS = ["autoMaskGenerate", "autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"];
 const MASK_ALL_OBJECTS = () => {
-  const named = recordedFor(MASK_ALL_EVENTS);
-  if (named.length) return named;
-  const other = [...new Set(report.recorded.map((r) => r.event))].filter((e) => !NOT_MASK_ALL.has(e));
-  return recordedFor(other);
+  const out = [];
+  for (const c of recordedFor(MASK_ALL_EVENTS)) {
+    // first without references to the document it was recorded on, so it acts
+    // on the probe's own document; then exactly as recorded
+    const bare = JSON.parse(JSON.stringify(c.desc));
+    for (const k of ["_target", "documentID", "layerID", "documentId", "layerId"]) delete bare[k];
+    if (JSON.stringify(bare) !== JSON.stringify(c.desc)) out.push({ label: `${c.label} (no target)`, desc: bare });
+    out.push(c);
+  }
+  return out;
 };
 
 // ---------------------------------------------------------------- pixels and masks

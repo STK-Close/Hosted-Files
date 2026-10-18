@@ -130,6 +130,17 @@ const photoshop = {
               else if (doc.selection[i] <= 127) last = i; } }
           return [{}];
         }
+        case "autoMaskGenerate": {
+          // Mask All Objects: one masked layer per object, in a group
+          const group = { id: nextId++, name: "Objects", layers: [] };
+          for (let k = 0; k < 2; k++) {
+            const m = ellipse(doc.width, doc.height).map((v, i) => ((i % doc.width) < doc.width / 2) === (k === 0) ? v : 0);
+            group.layers.push({ id: nextId++, name: `Background Object ${k + 1}`, rgba: null, mask: m });
+          }
+          doc.layers.push(group);
+          return [{}];
+        }
+        case "invokeCommand": throw new Error('The command "<unknown>" is not currently available.');
         default: return [{ _obj: "error", message: `unknown command ${d._obj}` }];
       }
     },
@@ -216,6 +227,16 @@ const probe = sandbox.module.exports;
   if (r.accuracy.length !== 4) fail("scene tests missing");
   if (r.wasm) fail("WebAssembly must not run as part of the safe tests");
   if (fs.readdirSync(dataDir).length === 0 && !r.images.find((i) => i.id === "A_wall").skipped) fail("download cache unused");
+  // second run after a recording like the one made in Photoshop 27.1
+  r.recorded.push({ event: "invokeCommand", descriptor: { commandID: 1234, _isCommand: true } },
+                  { event: "historyStateChanged", descriptor: { name: "Mask All Objects" } },
+                  { event: "autoMaskGenerate", descriptor: { _isCommand: true, documentID: 1, _target: [{ _ref: "document", _id: 1 }] } });
+  r.images.length = 0; r.accuracy.length = 0;
+  await elements.run.handler({ target: elements.run });
+  for (const img of r.images.filter((i) => !i.skipped)) {
+    const mao = img.checks.find((x) => x.name.endsWith("Mask All Objects"));
+    if (!mao || !mao.ok || mao.detail.created < 2) fail(`${img.id} Mask All Objects after recording: ${mao && (mao.error || JSON.stringify(mao.detail))}`);
+  }
   console.log(elements.log.textContent);
   console.log(`results: ${files.length} files in ${r.resultsFolder}`);
   console.log("HARNESS OK");
