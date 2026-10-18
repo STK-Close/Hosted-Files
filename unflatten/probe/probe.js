@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.5";
+const PROBE_VERSION = "0.2.6";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -110,6 +110,8 @@ const MASK_ALL_OBJECTS = () => {
     if (JSON.stringify(bare) !== JSON.stringify(c.desc)) out.push({ label: `${c.label} (no target)`, desc: bare });
     out.push(c);
   }
+  // as recorded in Photoshop 27.1, so no recording is needed there
+  out.push({ label: "autoMaskGenerate (recorded in 27.1)", desc: { _obj: "autoMaskGenerate", sampleAllLayers: false, hardEdge: true } });
   return out;
 };
 
@@ -494,7 +496,6 @@ async function checkImage(entry, meta) {
     // Mask All Objects: per-object masks would tell people apart natively
     row.checks.push(await timed(`${meta.id}: Mask All Objects`, () => modal("mask all objects", async () => {
       const candidates = MASK_ALL_OBJECTS();
-      if (!candidates.length) return { ok: false, note: "not run: needs one recording (see the panel)" };
       await deselect();
       const before = new Set();
       const walk = (ls, f) => ls.forEach((l) => { f(l); if (l.layers) walk(l.layers, f); });
@@ -709,10 +710,6 @@ async function runSafeTests() {
   }
   report.finished = new Date().toISOString();
   await saveReport();
-  if (!MASK_ALL_OBJECTS().length) {
-    log("\nOne optional extra: Mask All Objects needs a recording. Open any photo, click Record a command, " +
-      "choose Layer › Mask All Objects, click Stop recording, then Run safe tests again.");
-  }
   status(`Finished. Send the folder “${RESULTS_NAME} …” from your ${report.resultsFolder.includes("Desktop") ? "Desktop" : "results location below"}.`);
   log(`\nAll safe tests finished.\nResults folder: ${report.resultsFolder}`);
 }

@@ -104,6 +104,51 @@ def union_alpha(layers, result):
     return u
 
 
+PALETTE = [(230, 25, 75), (60, 180, 75), (255, 225, 25), (0, 130, 200), (245, 130, 48), (145, 30, 180),
+           (70, 240, 240), (240, 50, 230), (210, 245, 60), (250, 190, 212), (0, 128, 128), (170, 110, 40)]
+
+
+def paint_masks(rgb, masks):
+    out = (rgb * 0.3).astype(np.float32)
+    for k, m in enumerate(masks):
+        out[m] = 0.45 * rgb[m] + 0.55 * np.array(PALETTE[k % len(PALETTE)], np.float32)
+    return out.astype(np.uint8)
+
+
+def load_objects(results, detail, w, h):
+    objs = []
+    for o in detail.get("objects", []):
+        f = o.get("file")
+        if f and os.path.exists(os.path.join(results, f)):
+            objs.append((o["name"], unrle(os.path.join(results, f), w * h).reshape(h, w) > 127))
+    return objs
+
+
+def match_instances(results, detail, result, w, h):
+    """Pair each engine layer with the Mask All Objects mask it overlaps best
+    (each Photoshop object used once) and report the overlap."""
+    objs = [m for _, m in load_objects(results, detail, w, h)]
+    layers = result.objects()
+    masks = [union_alpha([l], result) for l in layers]
+    pairs = []
+    for i, em in enumerate(masks):
+        for j, pm in enumerate(objs):
+            inter = (em & pm).sum()
+            if inter:
+                pairs.append((inter / (em | pm).sum(), i, j))
+    pairs.sort(reverse=True)
+    used_e, used_p, best = set(), set(), {}
+    for iou, i, j in pairs:
+        if i in used_e or j in used_p:
+            continue
+        used_e.add(i); used_p.add(j); best[i] = iou
+    people = [i for i, l in enumerate(layers) if l.meta.get("subject") == "Person"]
+    return {"ps_objects": len(objs), "engine_layers": len(layers),
+            "matched_050": sum(1 for v in best.values() if v >= 0.5),
+            "people_matched_050": sum(1 for i in people if best.get(i, 0) >= 0.5), "people": len(people),
+            "per_layer": [{"layer": layers[i].name, "iou": round(float(best.get(i, 0)), 2)} for i in range(len(layers))]}
+
+
 def tile(img, h=300):
     im = Image.fromarray(img)
     return im.resize((max(1, int(im.width * h / im.height)), h), Image.LANCZOS)
@@ -192,6 +237,11 @@ def main():
                     row["cap_in_ps_subject"] = round(float(ps_mask[y0:y1, x0:x1].mean()), 2)
                 if eng_people:
                     row["cap_in_engine_person"] = round(float(union_alpha(eng_people, result)[y0:y1, x0:x1].mean()), 2)
+        if mao.get("ok"):
+            row["instances"] = match_instances(a.results, mao["detail"], result, w, h)
+            vis = [rgb, paint_masks(rgb, [m for _, m in load_objects(a.results, mao["detail"], w, h)]),
+                   paint_masks(rgb, [union_alpha([l], result) for l in result.objects()])]
+            strip(vis, ["original", "Photoshop Mask All Objects", "engine layers"]).save(os.path.join(out, f"{iid}_objects.png"))
         subj_rows.append(row)
 
         # ---- background on Photoshop's own hole
@@ -260,6 +310,18 @@ def main():
         md.append(f"| {r['image']} | {r['people']} | {r['ps_select_subject']} | {r['ps_time']} | {r['ps_mask_all_objects']} | "
                   f"{r['engine_people']} | {r.get('agreement_iou', '–')} / {r.get('rb_agreement_iou', '–')} | {cap} |")
     md.append("\nEngine layers per image: " + "; ".join(f"**{r['image']}**: {r['engine_layers']}" for r in subj_rows))
+    inst = [r for r in subj_rows if "instances" in r]
+    if inst:
+        md.append("\n## Separate objects: Photoshop Mask All Objects vs engine layers\n")
+        md.append("Each engine layer is paired with the Photoshop object it overlaps most (each object used once); "
+                  "a pair counts as the same object at IoU ≥ 0.5.\n")
+        md.append("| Image | People | PS objects | Engine layers | Engine people matched by a PS object | All layers matched | Per layer IoU |")
+        md.append("|---|---|---|---|---|---|---|")
+        for r in inst:
+            i = r["instances"]
+            per = ", ".join(f"{p['layer']} {p['iou']}" for p in i["per_layer"])
+            md.append(f"| {r['image']} | {r['people']} | {i['ps_objects']} | {i['engine_layers']} | "
+                      f"{i['people_matched_050']} of {i['people']} | {i['matched_050']} of {i['engine_layers']} | {per} |")
     md.append("\n## Background on Photoshop's own hole\n")
     md.append("| Image | Hole | People left (PS / engine) | Seam (PS / engine) | Match ΔE (PS / engine) | Detail (PS / engine) | PS s | PS changed outside |")
     md.append("|---|---|---|---|---|---|---|---|")

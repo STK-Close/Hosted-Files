@@ -1,6 +1,6 @@
 # Photoshop-first architecture: audit and proof of concept
 
-Status: **audit complete; Photoshop integration test built, awaiting a run in Photoshop.** No part of the pipeline has been migrated yet. The current engine stays as it is, as the reference implementation and the comparison baseline.
+Status: **measured in Photoshop 27.1 (macOS, 18 October 2026); results and recommendation in [section 8](#8-measured-results-photoshop-271).** No part of the pipeline has been migrated yet. The current engine stays as it is, as the reference implementation and the comparison baseline.
 
 ## 1. What the product needs, and where it runs today
 
@@ -71,7 +71,7 @@ Verified against Adobe's UXP reference. "batchPlay" means Photoshop's low-level 
 - **Delivery:** models can live in the package or be fetched automatically on first run, with a progress bar and no user steps.
 - **Decision (agreed):** size is not traded for accuracy; see section 6.
 
-## 4. Provisional architecture (final choice after the Photoshop measurements)
+## 4. Provisional architecture (superseded by the measured recommendation in section 8)
 
 **Photoshop does the pixel work; the plugin carries a small brain.**
 
@@ -162,3 +162,64 @@ Metrics, chosen for the two priorities:
 3. **Labels and instances:** the in-plugin AI (WebAssembly or hybrid), packaged with no separate install.
 4. **Parity:** acceptance tests A–D pass inside Photoshop; then the local service is retired.
 5. **Then priority 2:** editable text, on top of the native text-layer API.
+
+## 8. Measured results (Photoshop 27.1)
+
+Run on Photoshop 27.1.0, UXP 9.0.2, macOS (Intel), probe 0.2.4, on the eight acceptance images and four known-truth scenes. Full tables: [`probe_results/2026-10-18/comparison.md`](probe_results/2026-10-18/comparison.md).
+
+### What runs unattended inside one click
+
+| Operation | Command | Unattended? | Time per image |
+|---|---|---|---|
+| Select Subject | `autoCutout` | yes, on all 8 | 1.9–2.7 s (11 s on one gold-lettered cover) |
+| Remove Background | `removeBackground` | yes, on all 8 | 1.2–2.7 s (10 s on the same cover) |
+| Mask All Objects | `autoMaskGenerate` `{sampleAllLayers: false, hardEdge: true}`, found by recording; not published by Adobe | yes, on all 8 | 4–15 s |
+| Content-Aware Fill | `fill` with `contentAware` + colour adaptation | yes, when the hole leaves enough to sample; changed nothing outside the hole | 1.7–4 s |
+| Editable text layer | documented API | yes | < 0.1 s |
+
+Three things a plugin must handle, all found by this run:
+
+- **Colour setup.** The imaging API refuses to write pixels into grayscale documents, untagged ones, and ones with an embedded profile it does not know ("c2"). Six of the eight images were like that. The fix: convert to RGB and assign sRGB when the profile is unusable. Assigning keeps pixel values unchanged.
+- **Huge holes.** Content-Aware Fill raises an alert when the hole is nearly the whole image ("not enough source pixels"). Dialogs being switched off does not stop this alert. It happened when Select Subject took 97% of a cover.
+- **Unknown commands.** Replaying a command name Photoshop does not know also raises an alert. Only verified descriptors may be used.
+
+### Subjects
+
+| | Photoshop | Engine |
+|---|---|---|
+| Single person, cap kept with the person | Select Subject: yes (cap 75% inside) | yes (75–76%) |
+| Five people (crew) | Select Subject: one piece. **Mask All Objects: 11 objects; all 5 people match engine layers (IoU 0.63–0.94), plus flags, chairs and the table** | 11 named layers |
+| Six people (family) | Select Subject: one piece. **Mask All Objects: 6 objects, one per person (IoU 0.81–0.96)**, visibly cleaner: whole bodies and feet, no specks | 6 people, some speckle and partial legs |
+| Book covers | Mask All Objects returns the whole cover as one object; Select Subject took 97% of one cover | each drawing, title and text line separately |
+| Names | none ("Object 1", "Object 2"…) | descriptive ("Person Wearing Baseball Cap", "Flag 1", "Chair 2") |
+
+So on photos, **Photoshop's Mask All Objects gives better instance masks than the engine's SAM masks**, but no names. On graphics and covers, Photoshop gives nothing usable, and the engine's path is required.
+
+### Backgrounds
+
+On Photoshop's own hole (the whole Select Subject area, so 20–54% of the image):
+
+- **Small and medium holes on photos and posters** (single person; the Rosie poster; the Philadelphia cover): **Content-Aware Fill is better.** Seams are less visible, it keeps texture where the engine's fill (LaMa) blurs, and colour matches as well or better.
+- **Large holes on group photos** (crew 47%, family 49%; the seated man 50%): **neither is acceptable.**
+  - Content-Aware Fill clones recognisable pieces into the hole: flag fragments, the blanket pattern of the people removed, a column of tree. These read as ghosts.
+  - LaMa leaves a dark blur.
+  - The metrics favour Content-Aware Fill here (more "detail") but the pictures show the cloning, so the pictures decide.
+- **Known-truth scenes:**
+  - Plain wall and paper: even.
+  - Brick: the engine is more accurate (24.9 vs 18.8 dB; 21.8 vs 16.5 dB on the 56% hole). Content-Aware Fill bends the brick courses.
+
+### Recommendation
+
+**Photoshop does the photo cut-outs and the everyday background fill; the plugin's own AI names things and handles graphics; large holes get a dedicated strategy before migration.**
+
+1. **Subject masks on photos:** Mask All Objects, plus Select Subject for a single-subject image. The engine's grouping rules (wearing, holding, separate) and the exact-edge matte, ported to the plugin's JavaScript, then work on Photoshop's masks.
+2. **Names:** the in-plugin detector (OWLv2) labels each Photoshop object by overlap. Measured overlap with the engine's people is 0.63–0.96, so matching is reliable.
+3. **Graphics and covers:** the engine's existing path. That is the classical segmentation, the text finder and SAM for drawn figures. Photoshop has no equivalent.
+4. **Background:** Content-Aware Fill for holes up to about a third of the image. For larger holes, decide by a follow-up measurement. Candidates:
+   - fill one object at a time, smallest first, so each hole is small and samples clean background;
+   - LaMa only on the parts Content-Aware Fill cannot sample.
+
+   LaMa stays in the package until that measurement says otherwise.
+5. **Packaging:** still open. The in-plugin AI (OWLv2, CLIP, SAM for covers, perhaps LaMa) needs either WebAssembly or the hybrid add-on. WebAssembly is present in UXP 9.0.2 (`typeof WebAssembly` is "object"), but the unsafe probe test has not been run yet.
+
+The engine remains the reference until acceptance tests A–D pass inside Photoshop (section 6).

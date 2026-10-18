@@ -218,7 +218,7 @@ const probe = sandbox.module.exports;
       if (!c || !c.ok) fail(`${img.id} ${name}: ${c && (c.error || JSON.stringify(c.detail))}`);
     }
     const mao = img.checks.find((x) => x.name.endsWith("Mask All Objects"));
-    if (!mao || mao.ok) fail("Mask All Objects should fail without a recorded command in the simulation");
+    if (!mao || !mao.ok) fail(`${img.id} Mask All Objects with the built-in command: ${mao && (mao.error || JSON.stringify(mao.detail))}`);
   }
   for (const img of tested) {
     if (!files.some((f) => /^.+_thumb_\d+x\d+\.rgb$/.test(f) && f.startsWith(img.id + "_thumb_"))) fail(`${img.id}: thumbnail file missing or misnamed`);
