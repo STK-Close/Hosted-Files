@@ -61,3 +61,19 @@ def test_rejects_bad_upload(base):
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(req)
     assert e.value.code == 400
+
+
+def test_inpaint_endpoint(base):
+    scene = SCENES["shapes"]()
+    img = scene.image()
+    mask = np.zeros((scene.h, scene.w), np.uint8)
+    mask[100:200, 120:260] = 255
+    req = urllib.request.Request(base + "/inpaint", data=img.tobytes() + mask.tobytes(), method="POST",
+                                 headers={"X-Width": str(scene.w), "X-Height": str(scene.h), "X-Components": "3"})
+    with urllib.request.urlopen(req) as r:
+        used = r.headers["X-Inpainter"]
+        out = np.frombuffer(r.read(), np.uint8).reshape(scene.h, scene.w, 3)
+    assert used
+    keep = mask == 0
+    assert np.array_equal(out[keep], img[keep])  # untouched outside the hole
+    assert not np.array_equal(out[~keep], img[~keep])  # rebuilt inside it

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <h1>UNFLATTEN PROBE</h1>
+    <p class="note">Development test. Works on duplicates and its own test documents; your files are not changed.</p>
+
+    <h2>1 · Record Photoshop's commands</h2>
+    <p class="note">Click Record, then do by hand: Select › Subject, Edit › Fill › Content-Aware, Layer › Mask All Objects (if your version has it). Then click Stop.</p>
+    <sp-button id="record" variant="secondary">Record</sp-button>
+
+    <h2>2 · Checks on the open image</h2>
+    <p class="note">Open a photo (a person against a wall works best), then run.</p>
+    <sp-button id="real" variant="cta">Run checks</sp-button>
+
+    <h2>3 · Background rebuild accuracy</h2>
+    <p class="note">Builds test scenes whose true background is known and scores Content-Aware Fill (and the engine, if running).</p>
+    <sp-button id="synthetic" variant="cta">Run accuracy test</sp-button>
+
+    <h2>4 · Save</h2>
+    <sp-button id="save" variant="secondary">Save report and result documents…</sp-button>
+
+    <h2>5 · WebAssembly</h2>
+    <p class="note warn">Photoshop 2025 (26.0) was reported to crash on any WebAssembly. Save your work first.</p>
+    <sp-button id="wasm" variant="secondary">Test WebAssembly</sp-button>
+
+    <pre id="log"></pre>
+  </main>
+  <script src="probe.js"></script>
+</body>
+</html>

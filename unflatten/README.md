@@ -13,6 +13,8 @@ unflatten/
     unflatten_engine/  pipeline, stages/, server, PSD writer, CLI
     tests/             acceptance tests on ground-truth scenes
     download_models.py fetch OWLv2, SAM 2.1, LaMa, CLIP (≈ 1.6 GB, permissive licences)
+  probe/             Photoshop integration test panel (development only)
+  docs/PHOTOSHOP_AUDIT.md  Photoshop-first audit, capability matrix, recommendation
   ARCHITECTURE.md    decisions, limits, costs, acceptance criteria, plan
 ```
 

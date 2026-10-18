@@ -5,6 +5,9 @@
   GET    /jobs/<id>              {"state", "stage", "progress", "error"}
   GET    /jobs/<id>/result       binary: b"UNFL" + uint32 json_len + json + raw RGBA layer data
   DELETE /jobs/<id>
+  POST   /inpaint                pixels then a w*h mask (nonzero = rebuild); returns raw RGB.
+                                 Development aid: compares the engine's background
+                                 reconstruction with Photoshop's on identical masks.
 
 Pixels travel uncompressed and unencoded, in the document's own colour space,
 so values round-trip exactly. Nothing leaves the machine.
@@ -113,26 +116,57 @@ def make_handler(jobs):
                 return self._send(200, {k: job[k] for k in ("state", "stage", "progress", "error")})
             self._send(404, {"error": "not found"})
 
-        def do_POST(self):
-            if self.path.strip("/") != "jobs":
-                return self._send(404, {"error": "not found"})
+        def _read_body(self, extra_per_pixel=0):
+            """Raw pixels (+ optional per-pixel planes) sized by X-Width/X-Height/X-Components."""
             try:
                 w, h = int(self.headers["X-Width"]), int(self.headers["X-Height"])
                 c = int(self.headers.get("X-Components", "4"))
                 n = int(self.headers["Content-Length"])
             except (TypeError, ValueError):
-                return self._send(400, {"error": "X-Width, X-Height and Content-Length are required"})
-            if c not in (3, 4) or w * h > MAX_PIXELS or n != w * h * c:
-                return self._send(400, {"error": f"expected {w}x{h}x{c} bytes of 8-bit pixels, got {n}"})
+                self._send(400, {"error": "X-Width, X-Height and Content-Length are required"})
+                return None
+            want = w * h * (c + extra_per_pixel)
+            if c not in (3, 4) or w * h > MAX_PIXELS or n != want:
+                self._send(400, {"error": f"expected {want} bytes for {w}x{h}x{c}, got {n}"})
+                return None
             buf = bytearray(n)
             view, got = memoryview(buf), 0
             while got < n:
                 k = self.rfile.readinto(view[got:])
                 if not k:
-                    return self._send(400, {"error": "truncated upload"})
+                    self._send(400, {"error": "truncated upload"})
+                    return None
                 got += k
-            image = np.frombuffer(buf, np.uint8).reshape(h, w, c)
-            self._send(202, {"id": jobs.submit(image)})
+            image = np.frombuffer(buf, np.uint8, count=w * h * c).reshape(h, w, c)
+            rest = np.frombuffer(buf, np.uint8, offset=w * h * c).reshape(h, w) if extra_per_pixel else None
+            return image, rest
+
+        def do_POST(self):
+            path = self.path.strip("/")
+            if path == "jobs":
+                body = self._read_body()
+                if body is not None:
+                    self._send(202, {"id": jobs.submit(body[0])})
+                return
+            if path == "inpaint":
+                body = self._read_body(extra_per_pixel=1)
+                if body is None:
+                    return
+                image, mask = body
+                rgb = np.ascontiguousarray(image[..., :3])
+                with jobs.lock:
+                    out, used = jobs.engine.inpainter(rgb, mask > 127)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("X-Inpainter", used)
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Access-Control-Expose-Headers", "X-Inpainter")
+                data = np.ascontiguousarray(out).tobytes()
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            self._send(404, {"error": "not found"})
 
         def do_DELETE(self):
             parts = self.path.strip("/").split("/")
