@@ -1,0 +1,51 @@
+{
+  "_comment": "Real-image acceptance set. Images are downloaded on first use into tests/data/real/ (git-ignored); none are redistributed in this repository.",
+  "A_wall": {
+    "url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=700&q=80",
+    "source": "Unsplash photo 1517841905240-472988babdf9",
+    "license": "Unsplash License",
+    "case": "Person standing against a blue wall"
+  },
+  "B_cap_red": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Bogdan_Bondarenko2.jpg?width=900",
+    "source": "Wikimedia Commons: Bogdan Bondarenko2.jpg",
+    "license": "CC0",
+    "case": "Person wearing a baseball cap, seated outdoors"
+  },
+  "B_cap_black": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Robbie_Pierce.jpg?width=900",
+    "source": "Wikimedia Commons: Robbie Pierce.jpg",
+    "license": "CC0",
+    "case": "Person wearing a baseball cap in front of a busy background"
+  },
+  "C_family": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Widow,_two_daughters_and_three_grandchildren_of_the_last_Navajo_chief,_Chief_Manuelito,_ca.1901_(CHS-3265).jpg?width=900",
+    "source": "Wikimedia Commons, California Historical Society CHS-3265",
+    "license": "Public domain",
+    "case": "Six people standing in front of a textured adobe wall"
+  },
+  "C_crew": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Portrait_of_ASTP_crews_-_restoration.jpg?width=900",
+    "source": "Wikimedia Commons: Portrait of ASTP crews (NASA)",
+    "license": "Public domain",
+    "case": "Five people, flags, chairs and a table in front of a mottled backdrop"
+  },
+  "D_simian": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/This_Simian_World_-_book_cover.png?width=900",
+    "source": "Wikimedia Commons: This Simian World - book cover.png",
+    "license": "Public domain",
+    "case": "Book cover: typography and line drawings on textured cloth"
+  },
+  "D_philadelphia": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/Cover--Travels_in_Philadelphia.png?width=900",
+    "source": "Wikimedia Commons: Cover--Travels in Philadelphia.png",
+    "license": "Public domain",
+    "case": "Book cover: gold typography and an illustration on dark cloth"
+  },
+  "D_rosie": {
+    "url": "https://commons.wikimedia.org/wiki/Special:FilePath/We_Can_Do_It!.jpg?width=900",
+    "source": "Wikimedia Commons: We Can Do It!.jpg (J. Howard Miller, 1943)",
+    "license": "Public domain",
+    "case": "Poster: illustrated figure, speech-bubble banner, headline"
+  }
+}

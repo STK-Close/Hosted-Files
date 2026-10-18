@@ -1,0 +1,8 @@
+engine/models/
+__pycache__/
+*.pyc
+.pytest_cache/
+*_layers/
+
+engine/tests/data/
+probe/wasm/
