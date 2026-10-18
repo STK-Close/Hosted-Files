@@ -85,7 +85,9 @@ class LamaInpainter:
     def __call__(self, rgb, mask, **_):
         out = rgb.copy()
         h, w = mask.shape
-        count, comp, stats, _ = cv2.connectedComponentsWithStats(dilate(mask, 8).astype(np.uint8), connectivity=8)
+        # nearby holes share one model pass (and one context window)
+        reach = max(8, int(0.04 * max(h, w)))
+        count, comp, stats, _ = cv2.connectedComponentsWithStats(dilate(mask, reach).astype(np.uint8), connectivity=8)
         for c in range(1, count):
             x, y, bw, bh = stats[c, :4]
             side = int(max(bw, bh) * 1.6) + 32  # context around the hole

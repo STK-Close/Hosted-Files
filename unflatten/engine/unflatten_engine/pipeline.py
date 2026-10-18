@@ -146,6 +146,7 @@ class Engine:
 
         report("Refining edges", 0.7)
         target = to_float(rgb)
+        covered = np.zeros((h, w), bool)  # pixels some already-built layer paints
         # Background grain level: differences below it are texture, not layer content.
         grain = np.abs(rgb.astype(np.int16) - cv2.medianBlur(rgb, 5).astype(np.int16)).max(-1)
         free = grain[~holes] if (~holes).any() else grain.ravel()
@@ -210,7 +211,7 @@ class Engine:
                 calm = r.mask & ~core & (np.abs(target - below).max(-1) < quiet) & (alpha < 0.5)
                 alpha[calm] = 0.0
             if unc:  # proposal edges are approximate: ignore faint reconstruction error
-                soft = r.mask & ~core
+                soft = r.mask & ~core & ~covered  # only over the background, never over other layers
                 alpha[soft] = np.clip((alpha[soft] - 0.06) / 0.94, 0, 1)
             alpha[core] = 1.0
             fg = solve_foreground(target, below, alpha)
@@ -237,6 +238,7 @@ class Engine:
             rgba[rgba[..., 3] == 0, :3] = 0
             q_rgb, q_a = to_float(rgba[..., :3]), to_float(rgba[..., 3])
             below = over(below, q_rgb, q_a)
+            covered |= q_a > 0
             built.append((r, rgba))
         tick("matte")
 

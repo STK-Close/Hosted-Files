@@ -47,9 +47,10 @@ class SamSegmenter:
         return out, scale, (nh, nw)
 
     def _decode(self, emb, point):
+        pts = np.float32(point).reshape(1, 1, -1, 2)
         feeds = {
-            "input_points": np.float32(point).reshape(1, 1, 1, 2),
-            "input_labels": np.ones((1, 1, 1), np.int64),
+            "input_points": pts,
+            "input_labels": np.ones((1, 1, pts.shape[2]), np.int64),
             "input_boxes": np.zeros((1, 0, 4), np.float32),
             "image_embeddings.0": emb[0], "image_embeddings.1": emb[1], "image_embeddings.2": emb[2],
         }
@@ -78,7 +79,7 @@ class SamSegmenter:
                 hi, lo = (lg > 1.0).sum(), (lg > -1.0).sum()
                 stability = hi / max(lo, 1)
                 area = (lg > 0).sum() / lg.size
-                if iou[m] < self.iou_thresh or stability < self.stability_thresh or area > 0.6 or area < 0.0008:
+                if iou[m] < self.iou_thresh or stability < self.stability_thresh or area > 0.85 or area < 0.0008:
                     continue
                 if best is None or area > best[2]:
                     best = (m, float(iou[m] * stability), area)
@@ -88,19 +89,18 @@ class SamSegmenter:
             props.append((best[1], lg))
             covered |= lg > 0
 
-        # Upsample, de-duplicate (mask IoU > 0.7), drop the backdrop.
+        # Upsample, de-duplicate (mask IoU > 0.7).
         masks = []
         for score, lg in sorted(props, key=lambda p: -p[0]):
             full = cv2.resize(lg, (w, h), interpolation=cv2.INTER_LINEAR) > 0
-            a = full.sum()
-            if a < 0.0008 * n:
-                continue
-            edges = int(full[0].any()) + int(full[-1].any()) + int(full[:, 0].any()) + int(full[:, -1].any())
-            if edges >= 3 and a > 0.35 * n:
+            if full.sum() < 0.0008 * n:
                 continue
             if any((full & m).sum() / (full | m).sum() > 0.7 for m, _ in masks):
                 continue
             masks.append((full, score))
+
+        masks = self._drop_backdrop(masks)
+        masks = self._merge_parts(emb, masks, scale)
 
         lab = to_lab(rgb)
         masks.sort(key=lambda t: -t[0].sum())
@@ -120,3 +120,85 @@ class SamSegmenter:
             r.hard = r.mask.copy()
         kept = [r for r in kept if r.mask.sum() >= 0.0005 * n]
         return kept, {"sam_points": len(grid), "sam_proposals": len(props)}
+
+    def _merge_parts(self, emb, masks, scale, max_pairs=80):
+        """Ask SAM whether touching parts are one object: prompt with a point
+        inside each; if the answer covers both, they are merged."""
+        if len(masks) < 2:
+            return masks
+        from scipy import ndimage
+
+        def inner_point(m):
+            d = ndimage.distance_transform_edt(np.pad(m, 1))[1:-1, 1:-1]
+            y, x = np.unravel_index(np.argmax(d), d.shape)
+            return x * scale, y * scale
+
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        grown = [cv2.dilate(m.astype(np.uint8), k) > 0 for m, _ in masks]
+        pts = [inner_point(m) for m, _ in masks]
+        parent = list(range(len(masks)))
+
+        def find(a):
+            while parent[a] != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+
+        pairs = [(i, j) for i in range(len(masks)) for j in range(i + 1, len(masks))
+                 if (grown[i] & masks[j][0]).any()]
+        h, w = masks[0][0].shape
+        for i, j in pairs[:max_pairs]:
+            if find(i) == find(j):
+                continue
+            iou, logits = self._decode(emb, [pts[i], pts[j]])
+            b = int(np.argmax(iou))
+            if iou[b] < self.iou_thresh:
+                continue
+            nh, nw = int(round(h * scale)), int(round(w * scale))
+            lg = logits[b][:256 * nh // self.size, :256 * nw // self.size]
+            full = cv2.resize(lg, (w, h), interpolation=cv2.INTER_LINEAR) > 0
+            union = masks[i][0] | masks[j][0]
+            if union.sum() > 0.5 * h * w or iou[b] < 0.85:
+                continue
+            if (full & union).sum() / max((full | union).sum(), 1) <= 0.75:
+                continue
+            # A two-point prompt will return the union of two separate things;
+            # require that one part alone, at some granularity, also yields the whole.
+            if any(self._single_covers(emb, pts[k], union, scale) for k in (i, j)):
+                parent[find(j)] = find(i)
+        groups = {}
+        for i in range(len(masks)):
+            groups.setdefault(find(i), []).append(i)
+        out = []
+        for members in groups.values():
+            m = np.zeros_like(masks[0][0])
+            for i in members:
+                m |= masks[i][0]
+            out.append((m, max(masks[i][1] for i in members)))
+        return out
+
+    def _single_covers(self, emb, point, union, scale):
+        h, w = union.shape
+        nh, nw = int(round(h * scale)), int(round(w * scale))
+        iou, logits = self._decode(emb, point)
+        for m in range(3):
+            if iou[m] < 0.7:
+                continue
+            lg = logits[m][:256 * nh // self.size, :256 * nw // self.size]
+            full = cv2.resize(lg, (w, h), interpolation=cv2.INTER_LINEAR) > 0
+            if (full & union).sum() / max((full | union).sum(), 1) > 0.75:
+                return True
+        return False
+
+    @staticmethod
+    def _drop_backdrop(masks):
+        """The backdrop is the one region that owns most of the image border."""
+        if not masks:
+            return masks
+        h, w = masks[0][0].shape
+        perim = 2 * (h + w)
+        contact = [int(m[0].sum() + m[-1].sum() + m[:, 0].sum() + m[:, -1].sum()) for m, _ in masks]
+        i = int(np.argmax(contact))
+        if contact[i] > 0.35 * perim:
+            return masks[:i] + masks[i + 1:]
+        return masks
