@@ -171,7 +171,9 @@ def main():
         row = {"image": iid, "people": img["expected"]["people"],
                "ps_select_subject": "failed" if not ss.get("ok") else f"{ss['detail']['pieces']['significant']} piece(s)",
                "ps_time": round(ss.get("ms", 0) / 1000, 1),
-               "ps_mask_all_objects": (f"{mao['detail']['created']} object layers" if mao.get("ok") else "not available"),
+               "ps_mask_all_objects": (f"{mao['detail']['created']} object layers" if mao.get("ok")
+                                        else "not recorded" if "recording" in str((mao.get("detail") or {}).get("note", ""))
+                                        else "not available"),
                "engine_people": len(eng_people),
                "engine_layers": ", ".join(l.name for l in result.objects())}
         rb_mask = None

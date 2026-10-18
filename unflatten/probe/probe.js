@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.1";
+const PROBE_VERSION = "0.2.2";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -93,9 +93,20 @@ const CONTENT_AWARE = () => [...recordedFor(["fill"]),
   { label: "fill contentAware", desc: { _obj: "fill", using: { _enum: "fillContents", _value: "contentAware" } } }];
 const REMOVE_BACKGROUND = () => [...recordedFor(["removeBackground"]),
   { label: "removeBackground", desc: { _obj: "removeBackground" } }];
-const MASK_ALL_OBJECTS = () => [...recordedFor(["autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"]),
-  { label: "maskAllObjects (guess)", desc: { _obj: "maskAllObjects" } },
-  { label: "autoMaskAllObjects (guess)", desc: { _obj: "autoMaskAllObjects" } }];
+// Mask All Objects has no published command name, and a wrong guess makes
+// Photoshop show a "not currently available" alert that stops the run, so it
+// is only replayed once it has been recorded.
+const MASK_ALL_EVENTS = ["autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"];
+// Events a recording also catches that are not Mask All Objects itself.
+const NOT_MASK_ALL = new Set(["select", "set", "historyStateChanged", "toolModalStateChanged", "modalStateChanged",
+  "hostFocusChanged", "layersFiltered", "autoCutout", "fill", "removeBackground", "open", "close", "save",
+  "newDocument", "make", "delete", "show", "hide"]);
+const MASK_ALL_OBJECTS = () => {
+  const named = recordedFor(MASK_ALL_EVENTS);
+  if (named.length) return named;
+  const other = [...new Set(report.recorded.map((r) => r.event))].filter((e) => !NOT_MASK_ALL.has(e));
+  return recordedFor(other);
+};
 
 // ---------------------------------------------------------------- pixels and masks
 
@@ -344,7 +355,7 @@ function environment() {
   let os = null;
   try { const o = require("os"); os = `${o.platform()} ${o.release()} ${o.arch ? o.arch() : ""}`.trim(); } catch (e) { /* n/a */ }
   return {
-    photoshop: app.version, uxp: uxp.versions && uxp.versions.uxp, os,
+    photoshop: app.version || (uxp.host && uxp.host.version) || null, uxp: uxp.versions && uxp.versions.uxp, os,
     api: {
       "imaging.getSelection": typeof imaging.getSelection, "imaging.putSelection": typeof imaging.putSelection,
       "imaging.getLayerMask": typeof imaging.getLayerMask, "imaging.putLayerMask": typeof imaging.putLayerMask,
@@ -431,11 +442,13 @@ async function checkImage(entry, meta) {
 
     // Mask All Objects: per-object masks would tell people apart natively
     row.checks.push(await timed(`${meta.id}: Mask All Objects`, () => modal("mask all objects", async () => {
+      const candidates = MASK_ALL_OBJECTS();
+      if (!candidates.length) return { ok: false, note: "not run: needs one recording (see the panel)" };
       await deselect();
       const before = new Set();
       const walk = (ls, f) => ls.forEach((l) => { f(l); if (l.layers) walk(l.layers, f); });
       walk(doc.layers, (l) => before.add(l.id));
-      const used = await tryDescriptors(MASK_ALL_OBJECTS());
+      const used = await tryDescriptors(candidates);
       const created = [];
       walk(doc.layers, (l) => { if (!before.has(l.id)) created.push(l); });
       const masks = [];
@@ -641,6 +654,10 @@ async function runSafeTests() {
   }
   report.finished = new Date().toISOString();
   await saveReport();
+  if (!MASK_ALL_OBJECTS().length) {
+    log("\nOne optional extra: Mask All Objects needs a recording. Open any photo, click Record a command, " +
+      "choose Layer › Mask All Objects, click Stop recording, then Run safe tests again.");
+  }
   status(`Finished. Send the folder “${RESULTS_NAME} …” from your ${report.resultsFolder.includes("Desktop") ? "Desktop" : "results location below"}.`);
   log(`\nAll safe tests finished.\nResults folder: ${report.resultsFolder}`);
 }
@@ -717,7 +734,7 @@ function wire() {
   $("run").addEventListener("click", guard(runSafeTests));
   $("record").addEventListener("click", (ev) => toggleRecord(ev.target).catch((e) => log("✗ " + e.message)));
   $("wasm").addEventListener("click", guard(wasmCheck));
-  const v = (app && app.version) || "";
+  const v = (app && app.version) || (uxp.host && uxp.host.version) || "";
   if (v.startsWith("26.0")) $("wasmwarn").textContent = `You are on Photoshop ${v}, the version reported to crash here. Skip this test unless asked.`;
 }
 try { wire(); } catch (e) {
