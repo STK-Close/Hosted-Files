@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.6";
+const PROBE_VERSION = "0.3.0";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -267,11 +267,12 @@ function dilateMask(mask, w, h, r) {
   return out;
 }
 
-async function newLayerWithPixels(doc, name, rgb, w, h) {
+async function newLayerWithPixels(doc, name, rgb, w, h, transparent) {
   const layer = doc.createPixelLayer ? await doc.createPixelLayer({ name }) : await doc.createLayer({ name });
   const rgba = new Uint8Array(w * h * 4);
   for (let i = 0; i < w * h; i++) {
-    rgba[4 * i] = rgb[3 * i]; rgba[4 * i + 1] = rgb[3 * i + 1]; rgba[4 * i + 2] = rgb[3 * i + 2]; rgba[4 * i + 3] = 255;
+    rgba[4 * i] = rgb[3 * i]; rgba[4 * i + 1] = rgb[3 * i + 1]; rgba[4 * i + 2] = rgb[3 * i + 2];
+    rgba[4 * i + 3] = transparent && transparent[i] > 127 ? 0 : 255;
   }
   const opts = { width: w, height: h, components: 4, chunky: true, colorSpace: "RGB" };
   try { if (doc.colorProfileName) opts.colorProfile = doc.colorProfileName; } catch (e) { /* untagged */ }
@@ -446,6 +447,7 @@ async function checkImage(entry, meta) {
   const row = { id: meta.id, case: meta.case, expected: { people: meta.people, cap: meta.cap }, checks: [] };
   report.images.push(row);
   let doc, w, h, rgb, subject = null;
+  const objectMasks = [];
 
   row.checks.push(await timed(`${meta.id}: open`, () => modal("open", async () => {
     doc = await app.open(entry);
@@ -508,6 +510,7 @@ async function checkImage(entry, meta) {
         try {
           const m = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: l.id }), w, h);
           const file = await writeFile(`${meta.id}_object_${masks.length}.rle`, rle(m));
+          objectMasks.push(m);
           masks.push({ name: l.name, file, ...maskStats(m, w, h) });
         } catch (e) { masks.push({ name: l.name, error: e.message }); }
       }
@@ -547,6 +550,12 @@ async function checkImage(entry, meta) {
                seam: seamScore(out, hole, w, h) };
     })));
     await saveReport();
+
+    // Large holes: the same background rebuilt with different fill strategies
+    if (subject) {
+      row.fills = await fillStrategies(doc, rgb, w, h, subject, objectMasks, meta.id);
+      await saveReport();
+    }
 
     // Editable text layer: priority 2, does the API work at all
     if (meta.id === report.images[0].id) {
@@ -596,9 +605,9 @@ function makeScene(kind, w, h) {
   return bg;
 }
 
-function silhouette(w, h, scale) {
+function silhouette(w, h, scale, cxFrac = 0.5) {
   const m = new Uint8Array(w * h);
-  const cx = w / 2, hy = h * (0.5 - 0.28 * scale), hr = h * 0.09 * scale;
+  const cx = w * cxFrac, hy = h * (0.5 - 0.28 * scale), hr = h * 0.09 * scale;
   const bx = w * 0.17 * scale, by = h * 0.3 * scale, bcy = h * (0.5 + 0.12 * scale);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -613,11 +622,15 @@ function silhouette(w, h, scale) {
   return m;
 }
 
-const SCENES = [["blue wall", 1.0], ["brick wall", 1.0], ["paper", 1.0], ["brick wall", 2.1]];
+// [background, figure scale, figures across]; the last two are the large holes
+const SCENES = [["blue wall", 1.0], ["brick wall", 1.0], ["paper", 1.0], ["brick wall", 2.1], ["brick wall", 0.85, 3]];
 
-function buildScene(kind, scale, w, h) {
+function buildScene(kind, scale, w, h, figures = 1) {
   const bg = makeScene(kind, w, h);
-  const sil = silhouette(w, h, scale);
+  const objects = [];
+  for (let f = 0; f < figures; f++) objects.push(silhouette(w, h, scale, figures === 1 ? 0.5 : 0.2 + (0.6 * f) / (figures - 1)));
+  const sil = new Uint8Array(w * h);
+  for (const o of objects) for (let i = 0; i < w * h; i++) if (o[i] > sil[i]) sil[i] = o[i];
   const comp = new Uint8Array(w * h * 3);
   for (let i = 0; i < w * h; i++) {
     const a = sil[i] / 255;
@@ -625,13 +638,13 @@ function buildScene(kind, scale, w, h) {
     comp[3 * i + 1] = Math.round(30 * a + bg[3 * i + 1] * (1 - a));
     comp[3 * i + 2] = Math.round(45 * a + bg[3 * i + 2] * (1 - a));
   }
-  return { bg, comp, hole: dilateMask(sil, w, h, 5) };
+  return { bg, comp, hole: dilateMask(sil, w, h, 5), objects };
 }
 
-async function sceneTest(kind, scale, index) {
+async function sceneTest(kind, scale, index, figures = 1) {
   const w = 900, h = 600;
-  const label = `${kind}${scale > 1.5 ? ", large hole" : ""}`;
-  const { bg, comp, hole } = buildScene(kind, scale, w, h);
+  const label = `${kind}${figures > 1 ? `, ${figures} figures` : scale > 1.5 ? ", large hole" : ""}`;
+  const { bg, comp, hole, objects } = buildScene(kind, scale, w, h, figures);
   let holeFrac = 0;
   for (let i = 0; i < w * h; i++) if (hole[i] > 127) holeFrac++;
   const row = { scene: label, index, hole: +(holeFrac / (w * h)).toFixed(3) };
@@ -649,6 +662,7 @@ async function sceneTest(kind, scale, index) {
     await writeFile(`scene${index}_caf.rgb`, out);
     return { used: used.used, psnr: psnr(out, bg, hole), seam: seamScore(out, hole, w, h) };
   }));
+  if (doc && (figures > 1 || scale > 1.5)) row.fills = await fillStrategies(doc, comp, w, h, hole, objects, `scene${index}`, bg);
   if (doc) await modal("close", async () => { try { await doc.closeWithoutSaving(); } catch (e) { /* closed */ } });
   row.photoshop = run.ok ? { ms: run.ms, ...run.detail } : { error: run.error };
 
@@ -680,6 +694,131 @@ async function engineInpaint(rgb, mask, w, h) {
   return { rgb: new Uint8Array(await r.arrayBuffer()), used: r.headers.get("X-Inpainter") };
 }
 
+
+// ---------------------------------------------------------------- large holes: fill strategies
+
+// Content-Aware Fill on one big hole clones recognisable pieces (flags, the
+// pattern of the people removed). These strategies rebuild the same hole in
+// different ways; each runs on its own layer and is saved for comparison.
+//   all at once              the whole hole in one fill (what run 1 measured)
+//   all at once, cleared     the hole's pixels deleted first, so nothing of the
+//                            removed subjects can be sampled
+//   one object at a time     cleared; each object's area filled separately,
+//                            smallest first, then whatever is left
+//   rings from the edge      cleared; filled in bands from the hole's edge
+//                            inward, so each fill only continues what is next to it
+const STRATEGIES = ["all at once", "all at once, cleared", "one object at a time", "rings from the edge"];
+
+function andNot(a, b) { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] > 127 && !(b[i] > 127) ? 255 : 0; return o; }
+function and(a, b) { const o = new Uint8Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i] > 127 && b[i] > 127 ? 255 : 0; return o; }
+function orInto(a, b) { for (let i = 0; i < a.length; i++) if (b[i] > 127) a[i] = 255; return a; }
+function count(m) { let n = 0; for (let i = 0; i < m.length; i++) if (m[i] > 127) n++; return n; }
+function invert(m) { const o = new Uint8Array(m.length); for (let i = 0; i < m.length; i++) o[i] = m[i] > 127 ? 0 : 255; return o; }
+
+// The hole all strategies share: everything Select Subject and Mask All Objects
+// found, slightly enlarged so no rim of the subjects is left behind.
+function strategyHole(subject, objects, w, h) {
+  const u = subject.slice();
+  for (const m of objects) if (count(m) < 0.85 * w * h) orInto(u, m);
+  return dilateMask(u, w, h, Math.max(4, Math.round(0.008 * Math.max(w, h))));
+}
+
+// The fills a strategy makes, in order: a list of selection masks.
+function strategySteps(name, hole, objects, w, h) {
+  if (name.startsWith("all at once")) return [hole];
+  const steps = [];
+  let remaining = hole.slice();
+  if (name === "one object at a time") {
+    const r = Math.max(4, Math.round(0.008 * Math.max(w, h)));
+    const parts = objects.map((m) => and(dilateMask(m, w, h, r), hole)).filter((m) => count(m) > 0.002 * w * h)
+      .sort((a, b) => count(a) - count(b));
+    for (const p of parts) {
+      const step = and(p, remaining);
+      if (count(step) > 0.0005 * w * h) { steps.push(step); remaining = andNot(remaining, step); }
+    }
+  } else {
+    const band = Math.max(12, Math.round(0.04 * Math.min(w, h)));
+    for (let k = 0; k < 10 && count(remaining) > 0; k++) {
+      const ring = and(remaining, dilateMask(invert(remaining), w, h, band));
+      if (!count(ring)) break;
+      steps.push(ring);
+      remaining = andNot(remaining, ring);
+    }
+  }
+  if (count(remaining) > 0) steps.push(remaining);
+  return steps;
+}
+
+// A layer holding the image with the hole's pixels transparent (written
+// directly, documented API): transparent pixels are not used as fill source.
+async function newLayerWithHole(doc, name, rgb, w, h, clear) {
+  if (!clear) return newLayerWithPixels(doc, name, rgb, w, h);
+  return newLayerWithPixels(doc, name, rgb, w, h, clear);
+}
+
+async function runStrategy(doc, rgb, w, h, hole, objects, name) {
+  const steps = strategySteps(name, hole, objects, w, h);
+  const layer = await newLayerWithHole(doc, `Probe · ${name}`, rgb, w, h, name === "all at once" ? null : hole);
+  await selectLayer(layer);
+  let used = null;
+  for (const step of steps) {
+    await setSelection(doc, step, w, h);
+    used = (await tryDescriptors(CONTENT_AWARE())).used;
+    await deselect();
+  }
+  const got = await imaging.getPixels({ documentID: doc.id, layerID: layer.id, componentSize: 8 });
+  const comps = got.imageData.components;
+  const alpha = comps === 4 ? await toCanvasAlpha(got, w, h) : null;
+  const out = alpha ? alpha.rgb : await toCanvasRGB(got, w, h);
+  let unfilled = 0;
+  if (alpha) for (let i = 0; i < w * h; i++) if (hole[i] > 127 && alpha.a[i] < 250) unfilled++;
+  try { await layer.delete(); } catch (e) { /* leave it; the document is closed unsaved */ }
+  return { used, fills: steps.length, out, unfilled: +(unfilled / Math.max(count(hole), 1)).toFixed(4) };
+}
+
+async function toCanvasAlpha(got, w, h) {
+  const data = await got.imageData.getData({ chunky: true });
+  const b = got.sourceBounds || { left: 0, top: 0 }, gw = got.imageData.width;
+  const rgb = new Uint8Array(w * h * 3), a = new Uint8Array(w * h);
+  for (let y = 0; y < got.imageData.height; y++) {
+    for (let x = 0; x < gw; x++) {
+      const s = (y * gw + x) * 4, d = (y + b.top) * w + (x + b.left);
+      if (d < 0 || d >= w * h) continue;
+      rgb[3 * d] = data[s]; rgb[3 * d + 1] = data[s + 1]; rgb[3 * d + 2] = data[s + 2]; a[d] = data[s + 3];
+    }
+  }
+  got.imageData.dispose();
+  return { rgb, a };
+}
+
+async function fillStrategies(doc, rgb, w, h, subject, objects, id, truth) {
+  const hole = strategyHole(subject, objects, w, h);
+  const coverage = count(hole) / (w * h);
+  const rows = [];
+  if (coverage > 0.85) return [{ note: `skipped: hole covers ${Math.round(coverage * 100)}% of the image` }];
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for (let i = 0; i < w * h; i++) if (hole[i] > 127) {
+    const x = i % w, y = (i / w) | 0;
+    if (x < x0) x0 = x; if (x >= x1) x1 = x + 1; if (y < y0) y0 = y; if (y >= y1) y1 = y + 1;
+  }
+  const bbox = [x0, y0, x1, y1];
+  await writeFile(`${id}_fill_hole.rle`, rle(hole));
+  for (let k = 0; k < STRATEGIES.length; k++) {
+    const name = STRATEGIES[k];
+    const r = await timed(`${id}: fill strategy "${name}"`, () => modal(`fill: ${name}`, async () => {
+      const res = await runStrategy(doc, rgb, w, h, hole, objects, name);
+      const file = await writeFile(`${id}_fill${k}_${bbox.join("_")}.rgb`, cropRGB(res.out, w, bbox));
+      const scored = { used: res.used, fills: res.fills, unfilled: res.unfilled, file, bbox,
+                       holeCoverage: +coverage.toFixed(3), seam: seamScore(res.out, hole, w, h) };
+      if (truth) scored.psnr = psnr(res.out, truth, hole);
+      return scored;
+    }));
+    rows.push({ strategy: name, ok: r.ok, ms: r.ms, ...(r.ok ? r.detail : { error: r.error }) });
+    await saveReport();
+  }
+  return rows;
+}
+
 // ---------------------------------------------------------------- the one button
 
 async function runSafeTests() {
@@ -706,7 +845,7 @@ async function runSafeTests() {
   }
   for (let i = 0; i < SCENES.length; i++) {
     status(`Testing background scene ${++step} of ${total}`);
-    await sceneTest(SCENES[i][0], SCENES[i][1], i);
+    await sceneTest(SCENES[i][0], SCENES[i][1], i, SCENES[i][2] || 1);
   }
   report.finished = new Date().toISOString();
   await saveReport();
@@ -742,6 +881,30 @@ async function toggleRecord(btn) {
 // ---------------------------------------------------------------- optional: WebAssembly (unsafe)
 
 let wasmArmed = false;
+
+// Decides how the plugin's own AI can ship with no separate application:
+// WebAssembly inside the plugin, or a native (hybrid) add-on. Each step is
+// written to the report before it runs, so if Photoshop closes, the report
+// names the step that closed it. Runs only on two deliberate clicks.
+const WASM_ADD = [0, 97, 115, 109, 1, 0, 0, 0, 1, 7, 1, 96, 2, 127, 127, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 97, 100, 100, 0, 0,
+  10, 9, 1, 7, 0, 32, 0, 32, 1, 106, 11]; // add(a, b)
+const WASM_SIMD = [0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 127, 3, 2, 1, 0, 7, 5, 1, 1, 102, 0, 0, 10, 46, 1, 44, 0, 253, 12,
+  2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 253, 12, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 253, 174, 1, 253, 27, 0, 11]; // 2+3 in a vector
+
+async function pluginFile(name, binary) {
+  const folder = await (await uxp.storage.localFileSystem.getPluginFolder()).getEntry("wasm");
+  const f = await folder.getEntry(name);
+  return binary ? f.read({ format: uxp.storage.formats.binary }) : f.read();
+}
+
+function stats(t) {
+  const d = t.data; let sum = 0, sq = 0;
+  for (let i = 0; i < d.length; i++) { sum += d[i]; sq += d[i] * d[i]; }
+  const mean = sum / d.length;
+  return { dims: t.dims, mean: +mean.toFixed(6), std: +Math.sqrt(Math.max(sq / d.length - mean * mean, 0)).toFixed(6),
+           first: Array.from(d.slice(0, 4)).map((v) => +Number(v).toFixed(5)) };
+}
+
 async function wasmCheck(btn) {
   if (!wasmArmed) {
     wasmArmed = true;
@@ -752,17 +915,122 @@ async function wasmCheck(btn) {
   btn.textContent = "WebAssembly test";
   report.environment = report.environment || environment();
   await openResultsFolder();
-  report.wasm = { started: true, photoshop: app.version };
-  await saveReport(); // if Photoshop crashes now, the report still says the test was attempted
-  // (module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))
-  const bytes = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 7, 1, 96, 2, 127, 127, 1, 127, 3, 2, 1, 0, 7, 7, 1, 3, 97, 100, 100, 0, 0,
-    10, 9, 1, 7, 0, 32, 0, 32, 1, 106, 11]);
-  report.wasm = await timed("WebAssembly instantiate + call", async () => {
+  report.wasm = { photoshop: app.version || (uxp.host && uxp.host.version), steps: [], running: null };
+  const step = async (name, fn) => {
+    status(`WebAssembly test: ${name}`);
+    report.wasm.running = name; // if Photoshop closes now, the report says where
+    await saveReport();
+    const r = await timed(`WebAssembly: ${name}`, fn);
+    report.wasm.steps.push(r);
+    report.wasm.running = null;
+    await saveReport();
+    return r;
+  };
+
+  const basic = await step("instantiate and call", async () => {
     if (typeof WebAssembly === "undefined") return { ok: false, note: "WebAssembly not defined" };
-    const { instance } = await WebAssembly.instantiate(bytes);
-    return { ok: instance.exports.add(2, 3) === 5 };
+    const { instance } = await WebAssembly.instantiate(new Uint8Array(WASM_ADD));
+    return { add: instance.exports.add(2, 3) };
   });
+  if (!basic.ok) return finishWasm();
+
+  let simd = false;
+  await step("capabilities", async () => {
+    let cores = null;
+    try { cores = require("os").cpus().length; } catch (e) { try { cores = navigator.hardwareConcurrency; } catch (e2) { /* n/a */ } }
+    simd = WebAssembly.validate(new Uint8Array(WASM_SIMD));
+    let simdResult = null;
+    if (simd) simdResult = (await WebAssembly.instantiate(new Uint8Array(WASM_SIMD))).instance.exports.f();
+    return { simd, simdResult, sharedArrayBuffer: typeof SharedArrayBuffer, atomics: typeof Atomics,
+             worker: typeof Worker, cores, instantiateStreaming: typeof WebAssembly.instantiateStreaming };
+  });
+
+  await step("memory up to 3.5 GB", async () => {
+    let mem = new WebAssembly.Memory({ initial: 256, maximum: 65536 });
+    const reached = [];
+    for (const gb of [0.5, 1, 2, 3.5]) {
+      report.wasm.running = `memory ${gb} GB`;
+      await saveReport();
+      try { mem.grow(Math.round((gb * 1024 * 1024 * 1024) / 65536) - mem.buffer.byteLength / 65536); reached.push(gb); } catch (e) { break; }
+    }
+    mem = null;
+    return { reachedGB: reached.length ? reached[reached.length - 1] : 0 };
+  });
+
+  let ortLib = null;
+  const loaded = await step("load ONNX Runtime Web", async () => {
+    ortLib = require("./wasm/ort.js");
+    return { version: ortLib.env && ortLib.env.versions ? ortLib.env.versions : "loaded" };
+  });
+  if (!loaded.ok) return finishWasm();
+
+  // ONNX Runtime fetches its .wasm by URL; inside a plugin that file is served
+  // from the plugin folder instead.
+  const realFetch = globalThis.fetch;
+  const fetchShim = async (url, opts) => {
+    const m = String(url).match(/^plugin:\/wasm\/(.+)$/);
+    if (!m) return realFetch(url, opts);
+    const buf = await pluginFile(m[1], true);
+    return { ok: true, status: 200, url: String(url), arrayBuffer: async () => buf };
+  };
+  let streaming = null;
+  try { streaming = WebAssembly.instantiateStreaming; WebAssembly.instantiateStreaming = undefined; } catch (e) { /* read-only */ }
+  globalThis.fetch = fetchShim;
+  // ONNX Runtime only fetches its .wasm where it sees a browser-style window
+  const addedWindow = typeof window === "undefined";
+  if (addedWindow) globalThis.window = globalThis;
+  try {
+    const ort = ortLib;
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.simd = simd;
+    ort.env.wasm.proxy = false;
+    ort.env.wasm.wasmPaths = "plugin:/wasm/";
+
+    let embeddings = null, encoder = null;
+    await step("SAM 2.1 image encoder (the heavy model): load", async () => {
+      const bytes = new Uint8Array(await pluginFile("sam2_vision_encoder.onnx", true));
+      encoder = await ort.InferenceSession.create(bytes);
+      return { modelMB: +(bytes.length / 1048576).toFixed(1) };
+    });
+    if (encoder) {
+      await step("SAM 2.1 image encoder: run on a 1024 x 1024 image", async () => {
+        const px = new ort.Tensor("float32", new Float32Array(3 * 1024 * 1024).fill(0.1), [1, 3, 1024, 1024]);
+        const t = Date.now();
+        embeddings = await encoder.run({ pixel_values: px });
+        const ms = Date.now() - t;
+        const out = {};
+        for (const k of Object.keys(embeddings)) out[k] = stats(embeddings[k]);
+        return { runMs: ms, outputs: out };
+      });
+    }
+    await step("SAM 2.1 mask decoder: load and run", async () => {
+      const dec = await ort.InferenceSession.create(new Uint8Array(await pluginFile("sam2_prompt_encoder_mask_decoder.onnx", true)));
+      const zero = (dims) => new ort.Tensor("float32", new Float32Array(dims.reduce((a, b) => a * b, 1)), dims);
+      const feeds = {
+        "image_embeddings.0": embeddings ? embeddings["image_embeddings.0"] : zero([1, 32, 256, 256]),
+        "image_embeddings.1": embeddings ? embeddings["image_embeddings.1"] : zero([1, 64, 128, 128]),
+        "image_embeddings.2": embeddings ? embeddings["image_embeddings.2"] : zero([1, 256, 64, 64]),
+        input_points: new ort.Tensor("float32", new Float32Array([512, 512]), [1, 1, 1, 2]),
+        input_labels: new ort.Tensor("int64", new BigInt64Array([1n]), [1, 1, 1]),
+        input_boxes: new ort.Tensor("float32", new Float32Array([300, 300, 700, 700]), [1, 1, 4]),
+      };
+      const t = Date.now();
+      const d = await dec.run(feeds);
+      return { runMs: Date.now() - t, iou: stats(d.iou_scores), masks: stats(d.pred_masks), fromEncoder: !!embeddings };
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+    if (addedWindow) delete globalThis.window;
+    try { if (streaming) WebAssembly.instantiateStreaming = streaming; } catch (e) { /* read-only */ }
+  }
+  return finishWasm();
+}
+
+async function finishWasm() {
+  report.wasm.finished = new Date().toISOString();
   await saveReport();
+  status("WebAssembly test finished. Send the newest results folder.");
+  log(`\nWebAssembly test finished.\nResults folder: ${report.resultsFolder}`);
 }
 
 // ---------------------------------------------------------------- wiring

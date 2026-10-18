@@ -11,7 +11,7 @@
       Content-Aware Fill on its own test images. Your open documents are not touched.</p>
 
     <sp-button id="run" variant="cta">Run safe tests</sp-button>
-    <p id="status" class="status">Takes about 5 to 15 minutes. Documents will open and close by themselves.</p>
+    <p id="status" class="status">Takes about 10 to 25 minutes. Documents will open and close by themselves.</p>
 
     <div class="block">
       <p class="heading">Only if asked: record a command</p>
@@ -22,8 +22,8 @@
 
     <div class="block">
       <p class="heading warn">Unsafe test: WebAssembly (may close Photoshop)</p>
-      <p class="note warn" id="wasmwarn">Photoshop 2025 (26.0) was reported to crash on this test.
-        Save and close your work first. Needs two clicks.</p>
+      <p class="note warn" id="wasmwarn">Runs a real AI model inside Photoshop (1 to 3 minutes). Photoshop 2025 (26.0)
+        was reported to crash on WebAssembly. Save and close your work first. Needs two clicks.</p>
       <sp-button id="wasm" variant="secondary">WebAssembly test</sp-button>
     </div>
 

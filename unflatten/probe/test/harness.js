@@ -21,7 +21,10 @@ fs.mkdirSync(dataDir, { recursive: true });
 function fileEntry(p) {
   return {
     isFile: true, name: path.basename(p), nativePath: p,
-    async read(opts) { const b = fs.readFileSync(p); return opts && opts.format === "binary" ? b.buffer : b.toString("utf8"); },
+    async read(opts) {
+      const b = fs.readFileSync(p);
+      return opts && opts.format === "binary" ? b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) : b.toString("utf8");
+    },
     async write(data) { fs.writeFileSync(p, typeof data === "string" ? data : Buffer.from(data)); },
   };
 }
@@ -88,7 +91,10 @@ function composite(doc) {
 }
 const current = () => docs.filter((d) => !d.closed).slice(-1)[0];
 const docById = (id) => docs.find((d) => d.id === id);
-const layerById = (doc, id) => doc.layers.find((l) => l.id === id);
+const layerById = (doc, id, ls = doc.layers) => {
+  for (const l of ls) { if (l.id === id) return l; const inner = l.layers && layerById(doc, id, l.layers); if (inner) return inner; }
+  return undefined;
+};
 const imageData = (data, w, h, comps, colorSpace) => ({ width: w, height: h, components: comps, colorSpace,
   getData: async () => data, dispose() {} });
 function downsample(rgb, w, h, tw) {
@@ -127,7 +133,7 @@ const photoshop = {
           for (let y = 0; y < h; y++) { let last = null;
             for (let x = 0; x < w; x++) { const i = y * w + x;
               if (doc.selection[i] > 127 && last !== null) px.set(px.subarray(4 * last, 4 * last + 4), 4 * i);
-              else if (doc.selection[i] <= 127) last = i; } }
+              else if (doc.selection[i] <= 127 && px[4 * i + 3] > 0) last = i; } }
           return [{}];
         }
         case "autoMaskGenerate": {
@@ -193,16 +199,36 @@ const sandbox = {
   require: (m) => {
     if (m === "photoshop") return photoshop;
     if (m === "uxp") return { versions: { uxp: "mock" }, storage: { localFileSystem, formats: { binary: "binary", utf8: "utf8" } } };
-    if (m === "os") return { homedir: () => home, platform: () => "mock", release: () => "0", arch: () => "x64" };
+    if (m === "os") return { homedir: () => home, platform: () => "mock", release: () => "0", arch: () => "x64", cpus: () => [1, 2, 3, 4] };
+    // ONNX Runtime Web is a browser script: run it inside the sandbox, as UXP would
+    if (m === "./wasm/ort.js") return vm.runInContext(fs.readFileSync(path.join(PROBE, "wasm", "ort.js"), "utf8") + "\n;ort", sandbox);
     return require(m);
   },
   document: { getElementById: el }, fetch: fakeFetch, console, Date, JSON, Math, String, Uint8Array, Error, Set,
   Object, Promise, WebAssembly, module: { exports: {} },
+  setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask, TextDecoder, TextEncoder, performance,
+  navigator: { userAgent: "UXP mock" },
 };
 vm.runInNewContext(fs.readFileSync(path.join(PROBE, "probe.js"), "utf8"), sandbox);
 const probe = sandbox.module.exports;
 
+async function wasmOnly() {
+  // HARNESS_WASM=1: the unsafe test only, with the real ONNX Runtime Web and
+  // models from probe/wasm (built by tools/build_wasm_assets.sh)
+  const r = probe.report;
+  await elements.wasm.handler({ target: elements.wasm }); // first click only arms it
+  if (r.wasm) { console.error("FAIL: WebAssembly ran on the first click"); process.exit(1); }
+  await elements.wasm.handler({ target: elements.wasm });
+  console.log(elements.log.textContent);
+  const bad = r.wasm.steps.filter((x) => !x.ok);
+  if (!r.wasm.finished || bad.length) { console.error("FAIL:", JSON.stringify(bad)); process.exit(1); }
+  const saved = JSON.parse(fs.readFileSync(path.join(r.resultsFolder, "unflatten-probe-report.json"), "utf8"));
+  if (!saved.wasm || saved.wasm.steps.length !== r.wasm.steps.length) { console.error("FAIL: WebAssembly steps not saved"); process.exit(1); }
+  console.log("HARNESS WASM OK");
+}
+
 (async () => {
+  if (process.env.HARNESS_WASM) return wasmOnly();
   await elements.run.handler({ target: elements.run });
   const r = probe.report;
   const fail = (m) => { console.error("FAIL:", m, "\n", elements.log.textContent); process.exit(1); };
@@ -224,7 +250,7 @@ const probe = sandbox.module.exports;
     if (!files.some((f) => /^.+_thumb_\d+x\d+\.rgb$/.test(f) && f.startsWith(img.id + "_thumb_"))) fail(`${img.id}: thumbnail file missing or misnamed`);
   }
   if (docs.some((d) => !d.closed)) fail("probe left documents open");
-  if (r.accuracy.length !== 4) fail("scene tests missing");
+  if (r.accuracy.length !== probe.SCENES.length) fail("scene tests missing");
   if (r.wasm) fail("WebAssembly must not run as part of the safe tests");
   if (fs.readdirSync(dataDir).length === 0 && !r.images.find((i) => i.id === "A_wall").skipped) fail("download cache unused");
   // second run after a recording like the one made in Photoshop 27.1

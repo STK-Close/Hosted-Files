@@ -16,8 +16,8 @@ const sandbox = {
 vm.runInNewContext(fs.readFileSync(path.join(__dirname, "..", "probe.js"), "utf8"), sandbox);
 const { buildScene, SCENES } = sandbox.module.exports;
 const w = 900, h = 600;
-SCENES.forEach(([kind, scale], i) => {
-  const { bg, comp, hole } = buildScene(kind, scale, w, h);
+SCENES.forEach(([kind, scale, figures], i) => {
+  const { bg, comp, hole } = buildScene(kind, scale, w, h, figures || 1);
   fs.writeFileSync(path.join(out, `scene${i}_comp.rgb`), Buffer.from(comp));
   fs.writeFileSync(path.join(out, `scene${i}_truth.rgb`), Buffer.from(bg));
   fs.writeFileSync(path.join(out, `scene${i}_hole.u8`), Buffer.from(hole));

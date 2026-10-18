@@ -4,7 +4,7 @@ The probe is a small test panel for Photoshop. It checks what Photoshop's own to
 
 It uses its own test images. **It does not open, change or save any of your files.**
 
-You need **Photoshop 2023 (version 24.2) or newer** and about **10 minutes for setup** (one time only) plus **5–15 minutes** for the test to run.
+You need **Photoshop 2023 (version 24.2) or newer** and about **10 minutes for setup** (one time only) plus **10–25 minutes** for the test to run.
 
 ---
 
@@ -61,9 +61,14 @@ You need **Photoshop 2023 (version 24.2) or newer** and about **10 minutes for s
 
 ---
 
-### Please don't run unless asked
+### The WebAssembly test (only when I ask for it)
 
-The panel has a section at the bottom marked **Unsafe test: WebAssembly**. It may close Photoshop (a known issue in Photoshop 2025, version 26.0). It never runs on its own. Skip it unless I ask for it.
+This test runs one of Unflatten's real AI models inside Photoshop. It decides how the plugin's AI can be installed with no separate application. It may close Photoshop (a known issue in Photoshop 2025, version 26.0), so it never runs on its own.
+
+1. **Save and close your own work** in Photoshop.
+2. After the safe tests have finished, click **WebAssembly test** at the bottom of the panel, then click it **again** to confirm.
+3. Wait until the panel says **WebAssembly test finished** (1 to 3 minutes; Photoshop may seem busy).
+4. Its results go into the same results folder. If Photoshop closes, that is a result too: the report notes the step it reached. Reopen Photoshop and send the folder anyway.
 
 ### Only if the results ask for it
 

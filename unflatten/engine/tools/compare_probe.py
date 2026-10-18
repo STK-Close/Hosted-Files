@@ -149,6 +149,64 @@ def match_instances(results, detail, result, w, h):
             "per_layer": [{"layer": layers[i].name, "iou": round(float(best.get(i, 0)), 2)} for i in range(len(layers))]}
 
 
+STRATEGY_NAMES = ["all at once", "all at once, cleared", "one object at a time", "rings from the edge"]
+
+
+def score_strategies(results, prefix, rgb, fills, engine, out, truth=None):
+    """Score each Content-Aware Fill strategy the probe ran on one hole, plus the
+    engine's inpainter on the same hole; save a side-by-side."""
+    h, w = rgb.shape[:2]
+    f = os.path.join(results, f"{prefix}_fill_hole.rle")
+    if not os.path.exists(f):
+        return None
+    hole = unrle(f, w * h).reshape(h, w) > 127
+    rows, images, labels = [], [rgb], ["original"]
+    for k, r in enumerate(fills):
+        if not r.get("ok"):
+            rows.append({"strategy": r.get("strategy"), "error": r.get("error") or r.get("note")})
+            continue
+        x0, y0, x1, y1 = r["bbox"]
+        img = rgb.copy()
+        img[y0:y1, x0:x1] = np.fromfile(os.path.join(results, r["file"]), np.uint8).reshape(y1 - y0, x1 - x0, 3)
+        rows.append(score_fill(r["strategy"], img, hole, engine, truth, r))
+        images.append(img); labels.append(f"PS: {r['strategy']}")
+    lama, used = engine.inpainter(rgb, hole)
+    rows.append(score_fill(f"engine ({used})", lama, hole, engine, truth, None))
+    images.append(lama); labels.append(f"engine {used}")
+    strip(images, labels, 260).save(os.path.join(out, f"{prefix}_strategies.png"))
+    return {"hole": round(float(hole.mean()), 3), "rows": rows}
+
+
+def score_fill(name, img, hole, engine, truth, r):
+    de, detail = match_and_detail(img, hole)
+    row = {"strategy": name, "seam": round(seam(img, hole), 3), "match_dE": round(de, 1),
+           "detail": round(detail, 2) if detail is not None else None,
+           "people_left": len(leftovers(engine, img, hole)) if truth is None else None}
+    if r:
+        row.update({"fills": r.get("fills"), "s": round(r.get("ms", 0) / 1000, 1), "unfilled": r.get("unfilled")})
+    if truth is not None:
+        row["psnr"] = round(psnr(to_float(img), to_float(truth), hole), 2)
+    return row
+
+
+def wasm_reference():
+    """The same SAM 2.1 encoder run natively on the same constant input."""
+    import time
+    import onnxruntime as ort
+    path = os.path.join(ENGINE_DIR, "models", "sam2", "vision_encoder.onnx")
+    if not os.path.exists(path):
+        return None
+    x = np.full((1, 3, 1024, 1024), 0.1, np.float32)
+    ref = {}
+    for th in (1, os.cpu_count() or 1):
+        so = ort.SessionOptions(); so.intra_op_num_threads = th
+        sess = ort.InferenceSession(path, so, providers=["CPUExecutionProvider"])
+        outs = sess.run(None, {"pixel_values": x})
+        t = time.time(); sess.run(None, {"pixel_values": x}); ref[f"native_{th}_threads_ms"] = round((time.time() - t) * 1000)
+    ref["outputs"] = {o.name: {"mean": float(v.mean()), "std": float(v.std())} for o, v in zip(sess.get_outputs(), outs)}
+    return ref
+
+
 def tile(img, h=300):
     im = Image.fromarray(img)
     return im.resize((max(1, int(im.width * h / im.height)), h), Image.LANCZOS)
@@ -178,7 +236,7 @@ def main():
     md = ["# Photoshop vs engine\n",
           f"Photoshop {report['environment']['photoshop']} · UXP {report['environment'].get('uxp')} · "
           f"{report['environment'].get('os')} · probe {report['probe']}\n"]
-    subj_rows, bg_rows, notes = [], [], []
+    subj_rows, bg_rows, notes, strat_rows = [], [], [], []
 
     for img in report["images"]:
         if img.get("skipped"):
@@ -244,6 +302,12 @@ def main():
             strip(vis, ["original", "Photoshop Mask All Objects", "engine layers"]).save(os.path.join(out, f"{iid}_objects.png"))
         subj_rows.append(row)
 
+        # ---- large holes: fill strategies on one shared hole
+        if img.get("fills"):
+            sc = score_strategies(a.results, iid, rgb, img["fills"], engine, out)
+            if sc:
+                strat_rows.append({"image": iid, **sc})
+
         # ---- background on Photoshop's own hole
         caf = checks.get("Content-Aware Fill behind subject", {})
         if not caf.get("ok"):
@@ -300,6 +364,10 @@ def main():
         if ps_img is not None:
             strip([comp, truth, ps_img, lama], ["scene", "true background", "Photoshop", "engine"], 220).save(
                 os.path.join(out, f"scene{i}.png"))
+        if row.get("fills"):
+            sc = score_strategies(a.results, f"scene{i}", comp, row["fills"], engine, out, truth)
+            if sc:
+                strat_rows.append({"image": f"scene: {row['scene']}", **sc})
 
     # ---- write up
     md.append("\n## Subjects\n")
@@ -337,14 +405,44 @@ def main():
     md.append("|---|---|---|---|---|---|")
     for r in scene_rows:
         md.append(f"| {r['scene']} | {r['hole']} | {r['ps_psnr']} | {r['engine_psnr']} | {r['ps_seam']} / {r['engine_seam']} | {r['ps_time']} |")
+    if strat_rows:
+        md.append("\n## Large holes: fill strategies on the same hole\n")
+        md.append("Seam: 1.0 = invisible. Match ΔE: colour difference to the surroundings. Detail: texture vs the surroundings "
+                  "(1.0 = same; low = blurred; well above 1 can mean pasted structure). People left: anyone still detectable. "
+                  "On scenes, PSNR against the true background (higher is better). Judge with the pictures too.\n")
+        md.append("| Image | Hole | Strategy | Fills | s | Seam | Match ΔE | Detail | People left / PSNR |")
+        md.append("|---|---|---|---|---|---|---|---|---|")
+        for r in strat_rows:
+            for x in r["rows"]:
+                if "error" in x:
+                    md.append(f"| {r['image']} | {r['hole']} | {x['strategy']} | failed: {x['error']} | | | | | |")
+                    continue
+                last = x["psnr"] if x.get("psnr") is not None else x.get("people_left")
+                md.append(f"| {r['image']} | {r['hole']} | {x['strategy']} | {x.get('fills', '–')} | {x.get('s', '–')} | "
+                          f"{x['seam']} | {x['match_dE']} | {x['detail']} | {last} |")
     if report.get("wasm"):
-        md.append(f"\nWebAssembly: {json.dumps(report['wasm'])}")
+        wz = report["wasm"]
+        md.append("\n## WebAssembly inside Photoshop\n")
+        md.append("| Step | Result | s | Details |")
+        md.append("|---|---|---|---|")
+        for st in wz.get("steps", []):
+            md.append(f"| {st['name'].replace('WebAssembly: ', '')} | {'ok' if st['ok'] else 'failed'} | {st['ms'] / 1000:.1f} | "
+                      f"{(st.get('error') or json.dumps(st.get('detail')))[:400]} |")
+        if wz.get("running"):
+            md.append(f"\n**Photoshop stopped during: {wz['running']}**")
+        ref = wasm_reference()
+        enc = next((st for st in wz.get("steps", []) if "run on a 1024" in st["name"] and st["ok"]), None)
+        if ref and enc:
+            outs = enc["detail"]["outputs"]
+            diffs = [abs(outs[k]["mean"] - ref["outputs"][k]["mean"]) for k in outs if k in ref["outputs"]]
+            md.append(f"\nSame model natively on the comparison machine: {ref}. "
+                      f"Largest difference in output means: {max(diffs):.2e} (identical results ≈ 0).")
     if report.get("recorded"):
         md.append(f"\nRecorded commands: {sorted(set(r['event'] for r in report['recorded']))}")
     if notes or report.get("notes"):
         md.append("\n## Notes\n" + "\n".join(f"- {n}" for n in notes + report.get("notes", [])))
     open(os.path.join(out, "comparison.md"), "w").write("\n".join(md) + "\n")
-    json.dump({"subjects": subj_rows, "background": bg_rows, "scenes": scene_rows},
+    json.dump({"subjects": subj_rows, "background": bg_rows, "scenes": scene_rows, "strategies": strat_rows},
               open(os.path.join(out, "comparison.json"), "w"), indent=1, default=str)
     print(f"wrote {out}/comparison.md")
 
