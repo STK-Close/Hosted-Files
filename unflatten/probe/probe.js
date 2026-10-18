@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.4.0";
+const PROBE_VERSION = "0.4.1";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -100,17 +100,57 @@ const REMOVE_BACKGROUND = () => [...recordedFor(["removeBackground"]),
 // these names are replayed: a recording also catches general notices such as
 // "invokeCommand" (a menu click), and replaying one of those raises the alert.
 const MASK_ALL_EVENTS = ["autoMaskGenerate", "autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"];
-// Each recorded command first without references to the document it was
-// recorded on, so it acts on the probe's own document; then exactly as recorded.
+// Each recorded command exactly as recorded, then without references to the
+// document it was recorded on. In Photoshop 27.11 Generative Fill only runs
+// with its references (without them it raises "not currently available"), so
+// replay() also points them at the current document first.
 function replayable(candidates) {
   const out = [];
   for (const c of candidates) {
+    out.push(c);
     const bare = JSON.parse(JSON.stringify(c.desc));
     for (const k of ["_target", "documentID", "layerID", "documentId", "layerId"]) delete bare[k];
     if (JSON.stringify(bare) !== JSON.stringify(c.desc)) out.push({ label: `${c.label} (no target)`, desc: bare });
-    out.push(c);
   }
   return out;
+}
+
+// Recorded commands during one run: the variant that worked is reused, and a
+// command that failed is not tried again (each failed attempt can raise an
+// alert that stops the run until someone clicks OK).
+const replays = {};
+function retarget(desc, doc, layer) {
+  const d = JSON.parse(JSON.stringify(desc));
+  if ("documentID" in d) d.documentID = doc.id;
+  if (layer && typeof d.layerID === "number") d.layerID = layer.id;
+  return d;
+}
+async function replay(name, candidates, doc, layer) {
+  const st = replays[name] || (replays[name] = { winner: null, failed: null });
+  if (st.failed) throw new Error(`not tried again after failing earlier in this run: ${st.failed}`);
+  const variants = [];
+  for (const c of st.winner ? [st.winner] : candidates) {
+    if ("documentID" in c.desc || "layerID" in c.desc) {
+      variants.push({ label: `${c.label} (this document)`, desc: retarget(c.desc, doc, layer), base: c });
+    }
+    if (!st.winner || !st.winner.retargeted) variants.push({ ...c, base: c });
+  }
+  const errors = [];
+  for (const v of variants) {
+    try {
+      const res = await batch({ ...v.desc, _options: NO_DIALOG });
+      const err = res && res[0] && res[0]._obj === "error" ? res[0].message || "error" : null;
+      if (!err) {
+        st.winner = { ...v.base, retargeted: v.label.endsWith("(this document)") };
+        return { used: v.label };
+      }
+      errors.push(`${v.label}: ${err}`);
+    } catch (e) {
+      errors.push(`${v.label}: ${(e && e.message) || e}`);
+    }
+  }
+  st.failed = errors.join(" | ") || "no candidates";
+  throw new Error(st.failed);
 }
 const MASK_ALL_OBJECTS = () => [...replayable(recordedFor(MASK_ALL_EVENTS)),
   // as recorded in Photoshop 27.1, so no recording is needed there
@@ -945,7 +985,7 @@ async function maskAllObjectMasks(doc, w, h) {
 
 // One fill of `hole` on a fresh copy of the image; the result is read from
 // the composite, so a command that adds its own layer is measured the same.
-async function fillWith(doc, rgb, w, h, hole, label, candidates, file, bbox, truth) {
+async function fillWith(doc, rgb, w, h, hole, label, candidates, file, bbox, truth, recorded) {
   return timed(`${file}: ${label}`, () => modal(label, async () => {
     activate(doc);
     const ids = new Set();
@@ -954,7 +994,7 @@ async function fillWith(doc, rgb, w, h, hole, label, candidates, file, bbox, tru
     const layer = await newLayerWithPixels(doc, `Probe · ${label}`, rgb, w, h);
     await selectLayer(layer);
     await setSelection(doc, hole, w, h);
-    const used = await tryDescriptors(candidates);
+    const used = recorded ? await replay(label, candidates, doc, layer) : await tryDescriptors(candidates);
     await deselect();
     const out = await compositeRGB(doc.id, w, h);
     const added = [];
@@ -976,18 +1016,30 @@ async function generativeFills(doc, rgb, w, h, hole, id, truth) {
   const bbox = bboxOf(hole, w, h);
   await writeFile(`${id}_gen_hole.rle`, rle(hole));
   const rows = [];
-  const kinds = [["Generative Fill", GENERATIVE_FILL()], ["Remove tool", REMOVE_TOOL()], ["Content-Aware Fill", CONTENT_AWARE()]];
+  const kinds = [["Generative Fill", GENERATIVE_FILL(), true], ["Remove tool", REMOVE_TOOL(), true],
+    ["Content-Aware Fill", CONTENT_AWARE(), false]];
   for (let k = 0; k < kinds.length; k++) {
-    const [label, candidates] = kinds[k];
+    const [label, candidates, recorded] = kinds[k];
     if (!candidates.length) { rows.push({ strategy: label, ok: false, note: "not recorded yet" }); continue; }
-    const r = await fillWith(doc, rgb, w, h, hole, label, candidates, `${id}_gen${k}`, bbox, truth);
+    if (replays[label] && replays[label].failed) { rows.push({ strategy: label, ok: false, note: "skipped: failed earlier in this run" }); continue; }
+    const r = await fillWith(doc, rgb, w, h, hole, label, candidates, `${id}_gen${k}`, bbox, truth, recorded);
     rows.push({ ok: r.ok, ms: r.ms, ...(r.ok ? r.detail : { strategy: label, error: r.error }) });
     await saveReport();
   }
   return rows;
 }
 
+// Enhance Edge (27.11) keeps the mask and makes a new layer whose edge colours
+// are cleaned of background fringe, so it is measured on colour along the
+// edge as well as on the mask; both cut-outs are saved for a visual check.
+async function layerRGBA(doc, layer, w, h) {
+  const got = await imaging.getPixels({ documentID: doc.id, layerID: layer.id, componentSize: 8 });
+  if (got.imageData.components === 4) return toCanvasAlpha(got, w, h);
+  return { rgb: await toCanvasRGB(got, w, h), a: null };
+}
+
 async function enhanceEdgeTest(doc, rgb, w, h, id) {
+  if (replays["Enhance Edge"] && replays["Enhance Edge"].failed) return { ok: false, error: "skipped: failed earlier in this run" };
   return timed(`${id}: Enhance Edge`, () => modal("enhance edge", async () => {
     activate(doc);
     await deselect();
@@ -995,22 +1047,32 @@ async function enhanceEdgeTest(doc, rgb, w, h, id) {
     await selectLayer(layer);
     await tryDescriptors(REMOVE_BACKGROUND());
     const plain = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: layer.id }), w, h);
-    const used = await tryDescriptors(ENHANCE_EDGE());
-    // Enhance Edge may refine the mask in place or add a layer: take the top layer's mask
+    const used = await replay("Enhance Edge", ENHANCE_EDGE(), doc, layer);
     const top = doc.layers[0];
-    let refined, from = "same layer";
-    try { refined = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: layer.id }), w, h); } catch (e) { /* none */ }
-    if (top && top.id !== layer.id) {
-      try { refined = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: top.id }), w, h); from = "new layer"; } catch (e) { /* none */ }
+    const target = top && top.id !== layer.id ? top : layer;
+    let refined = plain;
+    try { refined = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: target.id }), w, h); } catch (e) { /* no mask */ }
+    const px = await layerRGBA(doc, target, w, h);
+    // the edge band: pixels near the mask boundary
+    const edge = andNot(dilateMask(plain, w, h, 3), invertDilated(plain, w, h, 3));
+    let n = 0, colourDiff = 0, maskChanged = 0;
+    for (let i = 0; i < w * h; i++) {
+      if (Math.abs(refined[i] - plain[i]) > 8) maskChanged++;
+      if (!(edge[i] > 127)) continue;
+      n++;
+      colourDiff += Math.abs(px.rgb[3 * i] - rgb[3 * i]) + Math.abs(px.rgb[3 * i + 1] - rgb[3 * i + 1]) + Math.abs(px.rgb[3 * i + 2] - rgb[3 * i + 2]);
     }
     await writeFile(`${id}_edge_plain.rle`, rle(plain));
-    if (!refined) return { ok: false, used: used.used, note: "no mask found after Enhance Edge" };
     await writeFile(`${id}_edge_enhanced.rle`, rle(refined));
-    let changed = 0;
-    for (let i = 0; i < w * h; i++) if (Math.abs(refined[i] - plain[i]) > 8) changed++;
-    return { used: used.used, from, changedPixels: changed, plain: maskStats(plain, w, h).coverage, enhanced: maskStats(refined, w, h).coverage };
+    const bbox = bboxOf(dilateMask(plain, w, h, 4), w, h);
+    const colours = await saveCrop(`${id}_edge_colours`, px.rgb, w, h, bbox);
+    return { used: used.used, layer: target.id === layer.id ? "same layer" : "new layer", maskChangedPixels: maskChanged,
+             edgePixels: n, meanColourChangeOnEdge: +(colourDiff / Math.max(n, 1) / 3).toFixed(2), colours, bbox };
   }));
 }
+
+// pixels at least r away from the mask's outside (its eroded core)
+function invertDilated(m, w, h, r) { return invert(dilateMask(invert(m), w, h, r)); }
 
 async function runGenerativeTests() {
   report.environment = report.environment || environment();
@@ -1020,6 +1082,7 @@ async function runGenerativeTests() {
     log("Nothing recorded yet for Generative Fill, the Remove tool or Enhance Edge. Record each once, then click again.");
     return;
   }
+  for (const k of Object.keys(replays)) delete replays[k];
   await openResultsFolder();
   const gen = report.generative = { started: new Date().toISOString(), recorded: {
     fill: GENERATIVE_FILL().map((c) => c.label), remove: REMOVE_TOOL().map((c) => c.label), edge: ENHANCE_EDGE().map((c) => c.label) },

@@ -398,10 +398,16 @@ def main():
             p1 = os.path.join(a.results, f"{g['id']}_edge_enhanced.rle")
             if os.path.exists(p0) and os.path.exists(p1):
                 hh, ww = rgb.shape[:2]
+                e = g["edge"]
+                enhanced_rgb = rgb.copy()
+                if e.get("colours") and e.get("bbox"):
+                    x0, y0, x1, y1 = e["bbox"]
+                    enhanced_rgb[y0:y1, x0:x1] = load_crop(a.results, {"file": e["colours"], "bbox": e["bbox"]})
                 cuts = []
-                for pth in (p0, p1):
+                for pth, src in ((p0, rgb), (p1, enhanced_rgb)):
                     m = unrle(pth, ww * hh).reshape(hh, ww).astype(np.float32)[..., None] / 255
-                    cuts.append((rgb * m + np.array([255, 0, 255], np.float32) * (1 - m)).astype(np.uint8))
+                    # on magenta, so any leftover background colour along the edge shows
+                    cuts.append((src * m + np.array([255, 0, 255], np.float32) * (1 - m)).astype(np.uint8))
                 strip([rgb] + cuts, ["original", "Remove Background", "Remove Background + Enhance Edge"], 420).save(
                     os.path.join(out, f"{g['id']}_edge.png"))
     if gen.get("scenes"):
@@ -484,13 +490,15 @@ def main():
                           f"{x['detail']} | {x.get('changed_outside', '–')} | {last} |")
     if edge_rows:
         md.append("\n## Enhance Edge vs plain Remove Background\n")
-        md.append("| Image | s | Pixels changed | Coverage plain → enhanced | Where |")
-        md.append("|---|---|---|---|---|")
+        md.append("Enhance Edge makes a new layer with the same mask and cleaned edge colours; see the `_edge.png` cut-outs on magenta.\n")
+        md.append("| Image | s | Result on | Mask pixels changed | Edge pixels | Mean colour change on the edge (0–255) |")
+        md.append("|---|---|---|---|---|---|")
         for r in edge_rows:
             if "error" in r:
-                md.append(f"| {r['image']} | failed: {r['error']} | | | |")
+                md.append(f"| {r['image']} | failed: {r['error']} | | | | |")
                 continue
-            md.append(f"| {r['image']} | {r.get('ms', 0) / 1000:.1f} | {r.get('changedPixels')} | {r.get('plain')} → {r.get('enhanced')} | {r.get('from')} |")
+            md.append(f"| {r['image']} | {r.get('ms', 0) / 1000:.1f} | {r.get('layer')} | {r.get('maskChangedPixels')} | "
+                      f"{r.get('edgePixels')} | {r.get('meanColourChangeOnEdge')} |")
     if gen.get("recorded"):
         md.append(f"\nGenerative commands replayed from recordings: {gen['recorded']}")
     if report.get("wasm"):

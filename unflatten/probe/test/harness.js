@@ -49,6 +49,7 @@ const localFileSystem = {
 
 // ---- simulated Photoshop
 let nextId = 1;
+let alerts = 0;
 const docs = [];
 function ellipse(w, h) {
   const m = new Uint8Array(w * h);
@@ -160,6 +161,8 @@ const photoshop = {
         }
         case "invokeCommand": throw new Error('The command "<unknown>" is not currently available.');
         case "syntheticFill": case "contentAwareRemove": {
+          // as in Photoshop 27.11: without its document reference Generative Fill is refused with an alert
+          if (d._obj === "syntheticFill" && !d._target) { alerts++; throw new Error('The command "Generative Fill" is not currently available.'); }
           // generative stand-ins: a new layer holding the mean colour around the hole
           if (!doc.selection) return [{ _obj: "error", message: "no selection" }];
           const { width: w, height: h } = doc, src = doc.active.rgba, mean = [0, 0, 0];
@@ -170,9 +173,12 @@ const photoshop = {
           doc.layers.push(l);
           return [{}];
         }
-        case "enhanceEdge": {
-          if (!doc.active.mask) return [{ _obj: "error", message: "no mask" }];
-          doc.active.mask = doc.active.mask.map((v, i) => (i % 7 === 0 ? 255 - v : v));
+        case "modernRefineEdge": {
+          // as in 27.11: a new layer, same mask, edge colours changed
+          const a = doc.active;
+          if (!a.mask) return [{ _obj: "error", message: "no mask" }];
+          const l = { id: nextId++, name: `${a.name} - Enhanced edge`, rgba: a.rgba.map((v, i) => (i % 4 === 3 ? v : Math.max(0, v - 20))), mask: a.mask.slice() };
+          doc.layers.unshift(l);
           return [{}];
         }
         default: return [{ _obj: "error", message: `unknown command ${d._obj}` }];
@@ -240,9 +246,11 @@ const sandbox = {
 if (process.env.HARNESS_GEN) {
   fs.writeFileSync(path.join(dataDir, "recordings.json"), JSON.stringify([
     { event: "invokeCommand", descriptor: { commandID: 1 } },
-    { event: "syntheticFill", descriptor: { _obj: "syntheticFill", prompt: "", documentID: 1, layerID: 2, _isCommand: true } },
+    { event: "syntheticFill", descriptor: { _obj: "syntheticFill", _target: [{ _ref: "document", _enum: "ordinal", _value: "targetEnum" }],
+      documentID: 727, layerID: 2, prompt: "", serviceID: "clio", _isCommand: true } },
     { event: "contentAwareRemove", descriptor: { _obj: "contentAwareRemove" } },
-    { event: "enhanceEdge", descriptor: { _obj: "enhanceEdge" } },
+    { event: "modernRefineEdge", descriptor: { _obj: "modernRefineEdge", _isCommand: true } },
+    { event: "owlAction", descriptor: { owlCommand: "getApplicationFrameInfo" } },
     { event: "historyStateChanged", descriptor: {} }]));
 }
 vm.runInNewContext(fs.readFileSync(path.join(PROBE, "probe.js"), "utf8"), sandbox);
@@ -282,12 +290,16 @@ async function generativeOnly() {
       if (!files.includes(f.file)) { console.error(`FAIL: ${img.id} ${f.strategy}: ${f.file} not written`); process.exit(1); }
       if (f.changedOutside > 0) { console.error(`FAIL: ${img.id} ${f.strategy} changed pixels outside the hole`); process.exit(1); }
     }
-    if (["A_wall", "B_cap_red", "C_family"].includes(img.id) && !(img.edge && img.edge.changedPixels > 0)) {
+    if (["A_wall", "B_cap_red", "C_family"].includes(img.id) && !(img.edge && img.edge.meanColourChangeOnEdge > 0 && img.edge.layer === "new layer")) {
       console.error(`FAIL: ${img.id} Enhance Edge: ${JSON.stringify(img.edge)}`); process.exit(1);
     }
   }
   if (g.scenes.length !== 2 || g.scenes.some((x) => x.fills.some((f) => !f.ok || f.psnr == null))) { console.error("FAIL: scenes", JSON.stringify(g.scenes)); process.exit(1); }
   if (docs.some((d) => !d.closed)) { console.error("FAIL: documents left open"); process.exit(1); }
+  if (alerts) { console.error(`FAIL: ${alerts} "not currently available" alerts`); process.exit(1); }
+  if (!g.images.every((x) => x.fills[0].note || x.fills[0].used === "recorded syntheticFill #1 (this document)")) {
+    console.error("FAIL: Generative Fill was not replayed against the current document"); process.exit(1);
+  }
   console.log(`results: ${files.length} files`);
   console.log("HARNESS GENERATIVE OK");
 }
