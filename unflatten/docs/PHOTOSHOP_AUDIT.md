@@ -144,6 +144,8 @@ Metrics, chosen for the two priorities:
 | Complete, grouped subjects | people in the image vs pieces in Select Subject vs engine person layers; whether the detected cap lies inside the person; agreement between the two subject masks; whether Mask All Objects gives per-object layers |
 | Fully rebuilt backgrounds | anyone still detectable where a subject was removed; seam visibility; colour match with surroundings; texture kept vs blurred; error against the true background on the scenes |
 
+**Load check.** `unflatten/probe-hello` is a panel with no permissions and no buttons. If the probe fails to load, loading this one tells a problem in the probe apart from a problem in the Photoshop and UXP Developer Tools setup.
+
 **Validation so far.** The probe and the comparison tool were run end to end here against a simulated Photoshop (`probe/test/harness.js`): eight images and four scenes, a 45-file results folder, and a full comparison report. That validates the plumbing and file formats only; Photoshop's real behaviour is what your run measures.
 
 ## 6. Decision principles (agreed)

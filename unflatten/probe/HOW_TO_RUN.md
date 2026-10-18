@@ -20,23 +20,33 @@ You need **Photoshop 2023 (version 24.2) or newer** and about **10 minutes for s
 - Your computer may ask for your password. This is normal and only happens once.
 
 **3. Unzip the probe.**
-- Unzip `unflatten-probe.zip`, for example into your **Documents** folder.
-- You now have a folder called `unflatten-probe`.
+- Unzip `unflatten-probe.zip` into your **Documents** folder (keep it on your main drive, not an external one).
+- You now have two folders: `unflatten-probe` (the test) and `unflatten-hello` (a tiny check plugin, only needed if loading fails).
 
 ## Run the test
 
-**4. Open Photoshop.** Leave it running. You don't need to open any image.
+**4. Open Photoshop.** Leave it running. You don't need to open any image. Make sure no dialog box is open in Photoshop.
 
 **5. Load the probe.**
 - In **UXP Developer Tools**, click the blue **Add Plugin** button.
 - Choose the file **manifest.json** inside the `unflatten-probe` folder.
 - **Unflatten Probe** appears in the list. Click the **•••** button next to it and choose **Load**.
+- If you loaded an earlier copy of the probe before, first remove the old entry: **••• › Unload**, then **••• › Remove**. Then add the new **manifest.json**.
 - In Photoshop, the **Unflatten Probe** panel opens. If it doesn't, use **Plugins › Unflatten Probe**.
 
 **6. Click "Run safe tests".**
 - Then leave Photoshop alone until the panel says **Finished**. Images will open, change and close by themselves.
 - If Photoshop shows a message (for example about downloading a selection model, or choosing device or cloud), choose **OK**, or **Device** if asked. Then mention it when you send the results.
 - If something goes wrong partway, nothing is lost. Results are saved after every step.
+
+### If UXP Developer Tools says "Plugin Load Failed"
+
+1. In Photoshop, open **Preferences › Plugins** and check that **Enable Developer Mode** is ticked. Quit and restart Photoshop.
+2. Remove the probe from the list in UXP Developer Tools (**••• › Remove**), click **Add Plugin** again and choose the probe's **manifest.json**, then **••• › Load**.
+3. Still failing? Load the small check plugin instead: **Add Plugin**, choose **manifest.json** inside the `unflatten-hello` folder, then **••• › Load**.
+   - If a panel says **"It works"**, Photoshop can load test plugins and the problem is in the probe.
+   - If it fails too, the problem is in the Photoshop and UXP Developer Tools setup, not the probe.
+4. Send me which of the two loaded, plus a screenshot of the UXP Developer Tools window after the failure.
 
 ## Send the results
 

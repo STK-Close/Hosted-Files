@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.2.0";
+const PROBE_VERSION = "0.2.1";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -712,14 +712,18 @@ function guard(fn) {
   };
 }
 
-$("run").addEventListener("click", guard(runSafeTests));
-$("record").addEventListener("click", (ev) => toggleRecord(ev.target).catch((e) => log("✗ " + e.message)));
-$("wasm").addEventListener("click", guard(wasmCheck));
-try {
-  const v = app.version || "";
+// Startup never throws: any problem is shown in the panel instead.
+function wire() {
+  $("run").addEventListener("click", guard(runSafeTests));
+  $("record").addEventListener("click", (ev) => toggleRecord(ev.target).catch((e) => log("✗ " + e.message)));
+  $("wasm").addEventListener("click", guard(wasmCheck));
+  const v = (app && app.version) || "";
   if (v.startsWith("26.0")) $("wasmwarn").textContent = `You are on Photoshop ${v}, the version reported to crash here. Skip this test unless asked.`;
-} catch (e) { /* no app */ }
+}
+try { wire(); } catch (e) {
+  try { status("Startup problem: " + ((e && e.message) || e)); } catch (e2) { /* no panel */ }
+}
 
-if (typeof module !== "undefined") {
+if (typeof module !== "undefined" && module) {
   module.exports = { runSafeTests, wasmCheck, toggleRecord, report, buildScene, SCENES, psnr, seamScore, maskStats, rle };
 }
