@@ -72,9 +72,19 @@ function makeDoc(title, w, h, rgb) {
   const base = { id: nextId++, name: "Background", rgba: new Uint8Array(w * h * 4), mask: null };
   for (let i = 0; i < w * h; i++) { base.rgba.set(rgb ? rgb.subarray(3 * i, 3 * i + 3) : [255, 255, 255], 4 * i); base.rgba[4 * i + 3] = 255; }
   doc.layers.push(base);
-  doc.createPixelLayer = async ({ name }) => { const l = { id: nextId++, name, rgba: new Uint8Array(w * h * 4), mask: null }; doc.layers.push(l); return l; };
+  doc.createPixelLayer = async ({ name }) => {
+    const l = { id: nextId++, name, rgba: new Uint8Array(w * h * 4), mask: null };
+    l.delete = async () => { doc.layers = doc.layers.filter((x) => x !== l); };
+    doc.layers.push(l);
+    return l;
+  };
   doc.createTextLayer = async ({ name }) => { const l = { id: nextId++, name, kind: "text" }; doc.layers.push(l); return l; };
   doc.closeWithoutSaving = () => { doc.closed = true; };
+  // saveAs.jpg: writes a PPM image (PIL reads it whatever the extension)
+  doc.saveAs = { async jpg(entry) {
+    const c = composite(doc);
+    fs.writeFileSync(entry.nativePath, Buffer.concat([Buffer.from(`P6\n${doc.width} ${doc.height}\n255\n`), Buffer.from(c)]));
+  } };
   docs.push(doc);
   return doc;
 }
@@ -115,6 +125,8 @@ const photoshop = {
       return makeDoc(id, meta.width, meta.height, new Uint8Array(fs.readFileSync(path.join(decodedDir, `${id}.rgb`))));
     },
     async createDocument({ name, width: w, height: h }) { return makeDoc(name, w, h, null); },
+    get activeDocument() { return current(); },
+    set activeDocument(d) { const i = docs.indexOf(d); if (i >= 0) { docs.splice(i, 1); docs.push(d); } },
   },
   constants: { ChangeMode: { RGB: "RGB" } },
   core: { executeAsModal: async (fn) => fn({ hostControl: {}, reportProgress() {} }) },
@@ -147,6 +159,22 @@ const photoshop = {
           return [{}];
         }
         case "invokeCommand": throw new Error('The command "<unknown>" is not currently available.');
+        case "syntheticFill": case "contentAwareRemove": {
+          // generative stand-ins: a new layer holding the mean colour around the hole
+          if (!doc.selection) return [{ _obj: "error", message: "no selection" }];
+          const { width: w, height: h } = doc, src = doc.active.rgba, mean = [0, 0, 0];
+          let n = 0;
+          for (let i = 0; i < w * h; i++) if (doc.selection[i] <= 127) { for (let c = 0; c < 3; c++) mean[c] += src[4 * i + c]; n++; }
+          const l = { id: nextId++, name: d._obj, rgba: new Uint8Array(w * h * 4), mask: null };
+          for (let i = 0; i < w * h; i++) if (doc.selection[i] > 127) l.rgba.set([mean[0] / n, mean[1] / n, mean[2] / n, 255], 4 * i);
+          doc.layers.push(l);
+          return [{}];
+        }
+        case "enhanceEdge": {
+          if (!doc.active.mask) return [{ _obj: "error", message: "no mask" }];
+          doc.active.mask = doc.active.mask.map((v, i) => (i % 7 === 0 ? 255 - v : v));
+          return [{}];
+        }
         default: return [{ _obj: "error", message: `unknown command ${d._obj}` }];
       }
     },
@@ -209,6 +237,14 @@ const sandbox = {
   setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask, TextDecoder, TextEncoder, performance,
   navigator: { userAgent: "UXP mock" },
 };
+if (process.env.HARNESS_GEN) {
+  fs.writeFileSync(path.join(dataDir, "recordings.json"), JSON.stringify([
+    { event: "invokeCommand", descriptor: { commandID: 1 } },
+    { event: "syntheticFill", descriptor: { _obj: "syntheticFill", prompt: "", documentID: 1, layerID: 2, _isCommand: true } },
+    { event: "contentAwareRemove", descriptor: { _obj: "contentAwareRemove" } },
+    { event: "enhanceEdge", descriptor: { _obj: "enhanceEdge" } },
+    { event: "historyStateChanged", descriptor: {} }]));
+}
 vm.runInNewContext(fs.readFileSync(path.join(PROBE, "probe.js"), "utf8"), sandbox);
 const probe = sandbox.module.exports;
 
@@ -227,8 +263,38 @@ async function wasmOnly() {
   console.log("HARNESS WASM OK");
 }
 
+async function generativeOnly() {
+  // HARNESS_GEN=1: recordings remembered from an earlier session, then the
+  // generative tests with stand-in commands
+  const r = probe.report;
+  await new Promise((res) => setTimeout(res, 50)); // loadRecordings at startup
+  if (!r.recorded.some((x) => x.event === "syntheticFill")) { console.error("FAIL: remembered recordings not loaded"); process.exit(1); }
+  await elements.generative.handler({ target: elements.generative });
+  console.log(elements.log.textContent);
+  const g = r.generative;
+  if (!g || !g.finished) { console.error("FAIL: generative tests did not finish"); process.exit(1); }
+  const files = fs.readdirSync(r.resultsFolder);
+  for (const img of g.images) {
+    if (img.error || img.note) { console.error(`FAIL: ${img.id}: ${img.error || img.note}`); process.exit(1); }
+    for (const f of img.fills) {
+      if (f.note) continue;
+      if (!f.ok) { console.error(`FAIL: ${img.id} ${f.strategy}: ${f.error}`); process.exit(1); }
+      if (!files.includes(f.file)) { console.error(`FAIL: ${img.id} ${f.strategy}: ${f.file} not written`); process.exit(1); }
+      if (f.changedOutside > 0) { console.error(`FAIL: ${img.id} ${f.strategy} changed pixels outside the hole`); process.exit(1); }
+    }
+    if (["A_wall", "B_cap_red", "C_family"].includes(img.id) && !(img.edge && img.edge.changedPixels > 0)) {
+      console.error(`FAIL: ${img.id} Enhance Edge: ${JSON.stringify(img.edge)}`); process.exit(1);
+    }
+  }
+  if (g.scenes.length !== 2 || g.scenes.some((x) => x.fills.some((f) => !f.ok || f.psnr == null))) { console.error("FAIL: scenes", JSON.stringify(g.scenes)); process.exit(1); }
+  if (docs.some((d) => !d.closed)) { console.error("FAIL: documents left open"); process.exit(1); }
+  console.log(`results: ${files.length} files`);
+  console.log("HARNESS GENERATIVE OK");
+}
+
 (async () => {
   if (process.env.HARNESS_WASM) return wasmOnly();
+  if (process.env.HARNESS_GEN) return generativeOnly();
   await elements.run.handler({ target: elements.run });
   const r = probe.report;
   const fail = (m) => { console.error("FAIL:", m, "\n", elements.log.textContent); process.exit(1); };

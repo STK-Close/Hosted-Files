@@ -61,6 +61,25 @@ You need **Photoshop 2023 (version 24.2) or newer** and about **10 minutes for s
 
 ---
 
+### The generative tests (use Adobe credits)
+
+These compare Generative Fill, the Remove tool and Enhance Edge with the free methods on the same test images. They use generative credits, roughly 100 to 200 in all; check your balance at account.adobe.com before and after if you want the exact figure. They never run as part of the safe tests.
+
+**Record the three commands once** (the probe remembers them, even after Photoshop restarts):
+
+1. Open one of the probe's own test photos: **File › Open**, then `unflatten-probe/testimages/B_cap_red.jpg`.
+2. Click **Record a command** in the panel.
+3. **Generative Fill:** choose **Select › Subject**, then click **Generative Fill** in the bar under the selection. Leave the prompt **empty** and click **Generate**. Wait until it finishes.
+4. **Remove:** choose **Select › Subject** again, then click **Remove** in the bar under the selection (it may sit under the bar's **•••** menu). Wait until it finishes. If you can't find it, skip this step.
+5. **Enhance Edge:** in the Layers panel, click the photo's layer. Click **Remove background** in the bar, then **Enhance Edge** in the bar that follows. Wait until it finishes.
+6. Click **Stop recording**. The panel lists what it captured.
+7. Close that photo without saving.
+
+**Run them:**
+
+8. Click **Run generative tests (uses credits)** and leave Photoshop alone until the panel says **Generative tests finished** (about 15 to 30 minutes).
+9. Zip the newest **Unflatten Probe Results** folder and send it. These results are saved as JPEGs, so the zip should be small enough to send in one piece.
+
 ### The WebAssembly test (only when I ask for it)
 
 This test runs one of Unflatten's real AI models inside Photoshop. It decides how the plugin's AI can be installed with no separate application. It may close Photoshop (a known issue in Photoshop 2025, version 26.0), so it never runs on its own.

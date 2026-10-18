@@ -223,3 +223,17 @@ On Photoshop's own hole (the whole Select Subject area, so 20–54% of the image
 5. **Packaging:** still open. The in-plugin AI (OWLv2, CLIP, SAM for covers, perhaps LaMa) needs either WebAssembly or the hybrid add-on. WebAssembly is present in UXP 9.0.2 (`typeof WebAssembly` is "object"), but the unsafe probe test has not been run yet.
 
 The engine remains the reference until acceptance tests A–D pass inside Photoshop (section 6).
+
+### Second run: Photoshop 27.11, fill strategies (18 October 2026)
+
+Photoshop 27.11.0 with UXP 9.4.1, probe 0.3.0. Select Subject, Remove Background and Mask All Objects behaved as on 27.1 (same coverage and same object counts; Mask All Objects took 6–22 s). Four Content-Aware Fill strategies were run on one shared hole per image:
+
+- **Clearing the hole first changes nothing.** "All at once" and "all at once, cleared" gave identical pixels, so Content-Aware Fill already ignores the selected pixels. The blanket-pattern ghost on the family photo is sampled from outside the hole.
+- **Splitting the fill makes it worse.** Filling one object at a time, or in rings from the edge, produced patchy blocks and visible steps on the group photos. On the known-truth brick scenes it scored lower: 13.5–15.1 dB, against 16.1–16.3 dB for a single fill and 21.8–23.1 dB for the engine.
+- **Mask All Objects also returns scenery** (the steps behind the seated man), which made that hole 88% of the image. Probe 0.4.0 leaves out objects that touch three image edges and lie mostly outside Select Subject's selection.
+
+Conclusion for the free path: a single Content-Aware Fill for small and medium holes; nothing tested so far rebuilds large group holes acceptably without credits.
+
+### Direction agreed after the second run
+
+Unflatten is one plugin with two background methods: **generative** (Generative Fill and possibly Enhance Edge; uses Adobe credits; the main target, since it will be used where credits are plentiful) and **free** (Content-Aware Fill and the plugin's own AI). The free method is the automatic fallback when there is no network, an outage, a refusal by Adobe's content filters, or no credits. Probe 0.4.0 measures the generative method on the same holes.

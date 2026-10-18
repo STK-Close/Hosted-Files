@@ -152,28 +152,37 @@ def match_instances(results, detail, result, w, h):
 STRATEGY_NAMES = ["all at once", "all at once, cleared", "one object at a time", "rings from the edge"]
 
 
-def score_strategies(results, prefix, rgb, fills, engine, out, truth=None):
-    """Score each Content-Aware Fill strategy the probe ran on one hole, plus the
-    engine's inpainter on the same hole; save a side-by-side."""
+def load_crop(results, r):
+    x0, y0, x1, y1 = r["bbox"]
+    path = os.path.join(results, r["file"])
+    if path.endswith(".rgb"):
+        return np.fromfile(path, np.uint8).reshape(y1 - y0, x1 - x0, 3)
+    return np.asarray(Image.open(path).convert("RGB"))[: y1 - y0, : x1 - x0]
+
+
+def score_strategies(results, prefix, rgb, fills, engine, out, truth=None, hole_name="fill_hole", tag="strategies"):
+    """Score each fill the probe made on one shared hole, plus the engine's
+    inpainter on the same hole; save a side-by-side."""
     h, w = rgb.shape[:2]
-    f = os.path.join(results, f"{prefix}_fill_hole.rle")
+    f = os.path.join(results, f"{prefix}_{hole_name}.rle")
     if not os.path.exists(f):
         return None
     hole = unrle(f, w * h).reshape(h, w) > 127
     rows, images, labels = [], [rgb], ["original"]
     for k, r in enumerate(fills):
         if not r.get("ok"):
-            rows.append({"strategy": r.get("strategy"), "error": r.get("error") or r.get("note")})
+            if r.get("strategy"):
+                rows.append({"strategy": r.get("strategy"), "error": r.get("error") or r.get("note")})
             continue
         x0, y0, x1, y1 = r["bbox"]
         img = rgb.copy()
-        img[y0:y1, x0:x1] = np.fromfile(os.path.join(results, r["file"]), np.uint8).reshape(y1 - y0, x1 - x0, 3)
+        img[y0:y1, x0:x1] = load_crop(results, r)
         rows.append(score_fill(r["strategy"], img, hole, engine, truth, r))
         images.append(img); labels.append(f"PS: {r['strategy']}")
     lama, used = engine.inpainter(rgb, hole)
     rows.append(score_fill(f"engine ({used})", lama, hole, engine, truth, None))
     images.append(lama); labels.append(f"engine {used}")
-    strip(images, labels, 260).save(os.path.join(out, f"{prefix}_strategies.png"))
+    strip(images, labels, 260).save(os.path.join(out, f"{prefix}_{tag}.png"))
     return {"hole": round(float(hole.mean()), 3), "rows": rows}
 
 
@@ -183,7 +192,8 @@ def score_fill(name, img, hole, engine, truth, r):
            "detail": round(detail, 2) if detail is not None else None,
            "people_left": len(leftovers(engine, img, hole)) if truth is None else None}
     if r:
-        row.update({"fills": r.get("fills"), "s": round(r.get("ms", 0) / 1000, 1), "unfilled": r.get("unfilled")})
+        row.update({"fills": r.get("fills"), "s": round(r.get("ms", 0) / 1000, 1), "unfilled": r.get("unfilled"),
+                    "changed_outside": r.get("changedOutside")})
     if truth is not None:
         row["psnr"] = round(psnr(to_float(img), to_float(truth), hole), 2)
     return row
@@ -369,6 +379,43 @@ def main():
             if sc:
                 strat_rows.append({"image": f"scene: {row['scene']}", **sc})
 
+    # ---- generative tests (Generative Fill, Remove tool, Content-Aware Fill on one hole; Enhance Edge)
+    gen_rows, edge_rows = [], []
+    gen = report.get("generative") or {}
+    for g in gen.get("images", []):
+        if not g.get("fills") or g.get("error"):
+            continue
+        rgb = load_original(g["id"])
+        if g.get("size") and tuple(g["size"]) != (rgb.shape[1], rgb.shape[0]):
+            notes.append(f"{g['id']}: generative test saw size {g['size']}; skipped")
+            continue
+        sc = score_strategies(a.results, g["id"], rgb, g["fills"], engine, out, hole_name="gen_hole", tag="generative")
+        if sc:
+            gen_rows.append({"image": g["id"], **sc})
+        if g.get("edge"):
+            edge_rows.append({"image": g["id"], **g["edge"]})
+            p0 = os.path.join(a.results, f"{g['id']}_edge_plain.rle")
+            p1 = os.path.join(a.results, f"{g['id']}_edge_enhanced.rle")
+            if os.path.exists(p0) and os.path.exists(p1):
+                hh, ww = rgb.shape[:2]
+                cuts = []
+                for pth in (p0, p1):
+                    m = unrle(pth, ww * hh).reshape(hh, ww).astype(np.float32)[..., None] / 255
+                    cuts.append((rgb * m + np.array([255, 0, 255], np.float32) * (1 - m)).astype(np.uint8))
+                strip([rgb] + cuts, ["original", "Remove Background", "Remove Background + Enhance Edge"], 420).save(
+                    os.path.join(out, f"{g['id']}_edge.png"))
+    if gen.get("scenes"):
+        sdir = os.path.join(out, "scenes")
+        meta = json.load(open(os.path.join(sdir, "scenes.json")))
+        sw, sh = meta["width"], meta["height"]
+        for g in gen["scenes"]:
+            i = g["index"]
+            comp = np.fromfile(os.path.join(sdir, f"scene{i}_comp.rgb"), np.uint8).reshape(sh, sw, 3)
+            truth = np.fromfile(os.path.join(sdir, f"scene{i}_truth.rgb"), np.uint8).reshape(sh, sw, 3)
+            sc = score_strategies(a.results, f"scene{i}", comp, g["fills"], engine, out, truth, hole_name="gen_hole", tag="generative")
+            if sc:
+                gen_rows.append({"image": f"scene: {g['scene']}", **sc})
+
     # ---- write up
     md.append("\n## Subjects\n")
     md.append("| Image | People | Photoshop Select Subject | s | Mask All Objects | Engine people | Agreement IoU (Select Subject / Remove Background) | Cap in subject (PS / engine) |")
@@ -420,6 +467,32 @@ def main():
                 last = x["psnr"] if x.get("psnr") is not None else x.get("people_left")
                 md.append(f"| {r['image']} | {r['hole']} | {x['strategy']} | {x.get('fills', '–')} | {x.get('s', '–')} | "
                           f"{x['seam']} | {x['match_dE']} | {x['detail']} | {last} |")
+    for title, rows in (("Generative: Generative Fill, Remove tool and Content-Aware Fill on one hole", gen_rows),):
+        if not rows:
+            continue
+        md.append(f"\n## {title}\n")
+        md.append("Same measures as the fill strategies above. Changed outside: share of pixels outside the hole the command altered (should be 0).\n")
+        md.append("| Image | Hole | Method | s | Seam | Match ΔE | Detail | Changed outside | People left / PSNR |")
+        md.append("|---|---|---|---|---|---|---|---|---|")
+        for r in rows:
+            for x in r["rows"]:
+                if "error" in x:
+                    md.append(f"| {r['image']} | {r['hole']} | {x['strategy']} | failed: {x['error']} | | | | | |")
+                    continue
+                last = x["psnr"] if x.get("psnr") is not None else x.get("people_left")
+                md.append(f"| {r['image']} | {r['hole']} | {x['strategy']} | {x.get('s', '–')} | {x['seam']} | {x['match_dE']} | "
+                          f"{x['detail']} | {x.get('changed_outside', '–')} | {last} |")
+    if edge_rows:
+        md.append("\n## Enhance Edge vs plain Remove Background\n")
+        md.append("| Image | s | Pixels changed | Coverage plain → enhanced | Where |")
+        md.append("|---|---|---|---|---|")
+        for r in edge_rows:
+            if "error" in r:
+                md.append(f"| {r['image']} | failed: {r['error']} | | | |")
+                continue
+            md.append(f"| {r['image']} | {r.get('ms', 0) / 1000:.1f} | {r.get('changedPixels')} | {r.get('plain')} → {r.get('enhanced')} | {r.get('from')} |")
+    if gen.get("recorded"):
+        md.append(f"\nGenerative commands replayed from recordings: {gen['recorded']}")
     if report.get("wasm"):
         wz = report["wasm"]
         md.append("\n## WebAssembly inside Photoshop\n")
@@ -442,7 +515,8 @@ def main():
     if notes or report.get("notes"):
         md.append("\n## Notes\n" + "\n".join(f"- {n}" for n in notes + report.get("notes", [])))
     open(os.path.join(out, "comparison.md"), "w").write("\n".join(md) + "\n")
-    json.dump({"subjects": subj_rows, "background": bg_rows, "scenes": scene_rows, "strategies": strat_rows},
+    json.dump({"subjects": subj_rows, "background": bg_rows, "scenes": scene_rows, "strategies": strat_rows,
+               "generative": gen_rows, "edges": edge_rows},
               open(os.path.join(out, "comparison.json"), "w"), indent=1, default=str)
     print(f"wrote {out}/comparison.md")
 

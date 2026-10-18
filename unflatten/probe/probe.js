@@ -11,7 +11,7 @@ const ps = require("photoshop");
 const { app, core, action, imaging, constants } = ps;
 const uxp = require("uxp");
 
-const PROBE_VERSION = "0.3.0";
+const PROBE_VERSION = "0.4.0";
 const ENGINE = "http://127.0.0.1:7865"; // optional; only used if a developer runs it
 const NO_DIALOG = { dialogOptions: "dontDisplay" };
 const RESULTS_NAME = "Unflatten Probe Results";
@@ -100,20 +100,35 @@ const REMOVE_BACKGROUND = () => [...recordedFor(["removeBackground"]),
 // these names are replayed: a recording also catches general notices such as
 // "invokeCommand" (a menu click), and replaying one of those raises the alert.
 const MASK_ALL_EVENTS = ["autoMaskGenerate", "autoMaskAllObjects", "maskAllObjects", "objectFinderMaskAll"];
-const MASK_ALL_OBJECTS = () => {
+// Each recorded command first without references to the document it was
+// recorded on, so it acts on the probe's own document; then exactly as recorded.
+function replayable(candidates) {
   const out = [];
-  for (const c of recordedFor(MASK_ALL_EVENTS)) {
-    // first without references to the document it was recorded on, so it acts
-    // on the probe's own document; then exactly as recorded
+  for (const c of candidates) {
     const bare = JSON.parse(JSON.stringify(c.desc));
     for (const k of ["_target", "documentID", "layerID", "documentId", "layerId"]) delete bare[k];
     if (JSON.stringify(bare) !== JSON.stringify(c.desc)) out.push({ label: `${c.label} (no target)`, desc: bare });
     out.push(c);
   }
-  // as recorded in Photoshop 27.1, so no recording is needed there
-  out.push({ label: "autoMaskGenerate (recorded in 27.1)", desc: { _obj: "autoMaskGenerate", sampleAllLayers: false, hardEdge: true } });
   return out;
-};
+}
+const MASK_ALL_OBJECTS = () => [...replayable(recordedFor(MASK_ALL_EVENTS)),
+  // as recorded in Photoshop 27.1, so no recording is needed there
+  { label: "autoMaskGenerate (recorded in 27.1)", desc: { _obj: "autoMaskGenerate", sampleAllLayers: false, hardEdge: true } }];
+
+// Generative commands have no published names either; they are found among
+// recorded events by name. Notices every recording catches are never replayed.
+const NOISE = new Set(["select", "set", "historyStateChanged", "toolModalStateChanged", "modalStateChanged", "hostFocusChanged",
+  "layersFiltered", "invokeCommand", "open", "close", "save", "newDocument", "make", "delete", "show", "hide", "move",
+  "autoCutout", "fill", "removeBackground", "autoMaskGenerate", "selectNoLayers", "addTo", "subtract", "intersectWith",
+  "convertJSONdescriptor", "toggleContextualTaskBar", "contextualTaskBarAction"]);
+function recordedMatching(test) {
+  const names = [...new Set(report.recorded.map((r) => r.event))].filter((n) => !NOISE.has(n) && test(n));
+  return replayable(recordedFor(names));
+}
+const GENERATIVE_FILL = () => recordedMatching((n) => /synthetic|generative|firefly/i.test(n) && !/upscale|expand|image$/i.test(n));
+const ENHANCE_EDGE = () => recordedMatching((n) => /enhance|edge|refine|matt|decontam/i.test(n));
+const REMOVE_TOOL = () => recordedMatching((n) => /remove|distraction|heal|eras/i.test(n) && n !== "removeBackground");
 
 // ---------------------------------------------------------------- pixels and masks
 
@@ -719,8 +734,22 @@ function invert(m) { const o = new Uint8Array(m.length); for (let i = 0; i < m.l
 // found, slightly enlarged so no rim of the subjects is left behind.
 function strategyHole(subject, objects, w, h) {
   const u = subject.slice();
-  for (const m of objects) if (count(m) < 0.85 * w * h) orInto(u, m);
+  for (const m of objects) if (count(m) < 0.85 * w * h && !backgroundLike(m, subject, w, h)) orInto(u, m);
   return dilateMask(u, w, h, Math.max(4, Math.round(0.008 * Math.max(w, h))));
+}
+
+// Mask All Objects also returns scenery (steps, a wall, the floor): an object
+// touching three image edges that lies mostly outside Select Subject's
+// selection is treated as background, not as something to remove.
+function backgroundLike(m, subject, w, h) {
+  let top = false, bottom = false, left = false, right = false, n = 0, inside = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (!(m[i] > 127)) continue;
+    n++; if (subject[i] > 127) inside++;
+    const x = i % w, y = (i / w) | 0;
+    if (y === 0) top = true; if (y === h - 1) bottom = true; if (x === 0) left = true; if (x === w - 1) right = true;
+  }
+  return top + bottom + left + right >= 3 && inside < 0.5 * n;
 }
 
 // The fills a strategy makes, in order: a list of selection masks.
@@ -853,12 +882,246 @@ async function runSafeTests() {
   log(`\nAll safe tests finished.\nResults folder: ${report.resultsFolder}`);
 }
 
+
+// ---------------------------------------------------------------- generative tests (use Adobe credits)
+
+// A separate button: these use generative credits, so they never run as part
+// of the safe tests. Each command must have been recorded once (Record a
+// command, do it by hand, Stop recording); recordings are remembered.
+//   Generative Fill   the same hole as the fill strategies, empty prompt
+//   Remove tool       the same hole, the tool's own model (cloud or device)
+//   Content-Aware Fill on that same hole, as the free reference
+//   Enhance Edge      after Remove Background, on photos with hair
+const EDGE_IMAGES = ["A_wall", "B_cap_red", "C_family"];
+
+// Results are saved as maximum-quality JPEGs written by Photoshop itself
+// (several times smaller than raw pixels); raw if that fails.
+async function saveCrop(name, rgb, w, h, bbox) {
+  const crop = cropRGB(rgb, w, bbox), cw = bbox[2] - bbox[0], ch = bbox[3] - bbox[1];
+  let tmp;
+  try {
+    tmp = await app.createDocument({ name: "Unflatten Probe – export", width: cw, height: ch, resolution: 72,
+      mode: (constants.NewDocumentMode && constants.NewDocumentMode.RGB) || "RGBColorMode",
+      fill: (constants.DocumentFill && constants.DocumentFill.WHITE) || "white" });
+    await newLayerWithPixels(tmp, "crop", crop, cw, ch);
+    const folder = await openResultsFolder();
+    const f = await folder.createFile(`${name}.jpg`, { overwrite: true });
+    await tmp.saveAs.jpg(f, { quality: 12 }, true);
+    return `${name}.jpg`;
+  } catch (e) {
+    return writeFile(`${name}.rgb`, crop);
+  } finally {
+    if (tmp) { try { await tmp.closeWithoutSaving(); } catch (e) { /* closed */ } }
+  }
+}
+
+// Saving a crop opens and closes a temporary document; commands act on the
+// active document, so the test document is made active again.
+function activate(doc) { try { if (app.activeDocument !== doc) app.activeDocument = doc; } catch (e) { /* only one open */ } }
+
+function bboxOf(m, w, h) {
+  let x0 = w, y0 = h, x1 = 0, y1 = 0;
+  for (let i = 0; i < w * h; i++) if (m[i] > 127) {
+    const x = i % w, y = (i / w) | 0;
+    if (x < x0) x0 = x; if (x >= x1) x1 = x + 1; if (y < y0) y0 = y; if (y >= y1) y1 = y + 1;
+  }
+  return x1 ? [x0, y0, x1, y1] : [0, 0, w, h];
+}
+
+async function maskAllObjectMasks(doc, w, h) {
+  const before = new Set();
+  const walk = (ls, f) => ls.forEach((l) => { f(l); if (l.layers) walk(l.layers, f); });
+  walk(doc.layers, (l) => before.add(l.id));
+  await deselect();
+  await tryDescriptors(MASK_ALL_OBJECTS());
+  const masks = [], created = [];
+  walk(doc.layers, (l) => { if (!before.has(l.id)) created.push(l); });
+  for (const l of created) {
+    try { masks.push(await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: l.id }), w, h)); } catch (e) { /* group */ }
+  }
+  for (const l of created.reverse()) { try { await l.delete(); } catch (e) { /* already gone */ } }
+  return masks;
+}
+
+// One fill of `hole` on a fresh copy of the image; the result is read from
+// the composite, so a command that adds its own layer is measured the same.
+async function fillWith(doc, rgb, w, h, hole, label, candidates, file, bbox, truth) {
+  return timed(`${file}: ${label}`, () => modal(label, async () => {
+    activate(doc);
+    const ids = new Set();
+    const walk = (ls) => ls.forEach((l) => { ids.add(l.id); if (l.layers) walk(l.layers); });
+    walk(doc.layers);
+    const layer = await newLayerWithPixels(doc, `Probe · ${label}`, rgb, w, h);
+    await selectLayer(layer);
+    await setSelection(doc, hole, w, h);
+    const used = await tryDescriptors(candidates);
+    await deselect();
+    const out = await compositeRGB(doc.id, w, h);
+    const added = [];
+    const walk2 = (ls) => ls.forEach((l) => { if (!ids.has(l.id)) added.push(l); if (l.layers) walk2(l.layers); });
+    walk2(doc.layers);
+    for (const l of added.reverse()) { try { await l.delete(); } catch (e) { /* gone */ } }
+    let changedOutside = 0;
+    for (let i = 0; i < w * h; i++) if (!(hole[i] > 127) && (out[3 * i] !== rgb[3 * i] || out[3 * i + 1] !== rgb[3 * i + 1] || out[3 * i + 2] !== rgb[3 * i + 2])) changedOutside++;
+    const saved = await saveCrop(file, out, w, h, bbox);
+    activate(doc);
+    const r = { strategy: label, used: used.used, fills: 1, file: saved, bbox, unfilled: 0,
+                changedOutside: +(changedOutside / (w * h)).toFixed(4), seam: seamScore(out, hole, w, h) };
+    if (truth) r.psnr = psnr(out, truth, hole);
+    return r;
+  }));
+}
+
+async function generativeFills(doc, rgb, w, h, hole, id, truth) {
+  const bbox = bboxOf(hole, w, h);
+  await writeFile(`${id}_gen_hole.rle`, rle(hole));
+  const rows = [];
+  const kinds = [["Generative Fill", GENERATIVE_FILL()], ["Remove tool", REMOVE_TOOL()], ["Content-Aware Fill", CONTENT_AWARE()]];
+  for (let k = 0; k < kinds.length; k++) {
+    const [label, candidates] = kinds[k];
+    if (!candidates.length) { rows.push({ strategy: label, ok: false, note: "not recorded yet" }); continue; }
+    const r = await fillWith(doc, rgb, w, h, hole, label, candidates, `${id}_gen${k}`, bbox, truth);
+    rows.push({ ok: r.ok, ms: r.ms, ...(r.ok ? r.detail : { strategy: label, error: r.error }) });
+    await saveReport();
+  }
+  return rows;
+}
+
+async function enhanceEdgeTest(doc, rgb, w, h, id) {
+  return timed(`${id}: Enhance Edge`, () => modal("enhance edge", async () => {
+    activate(doc);
+    await deselect();
+    const layer = await newLayerWithPixels(doc, "Probe · Enhance Edge", rgb, w, h);
+    await selectLayer(layer);
+    await tryDescriptors(REMOVE_BACKGROUND());
+    const plain = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: layer.id }), w, h);
+    const used = await tryDescriptors(ENHANCE_EDGE());
+    // Enhance Edge may refine the mask in place or add a layer: take the top layer's mask
+    const top = doc.layers[0];
+    let refined, from = "same layer";
+    try { refined = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: layer.id }), w, h); } catch (e) { /* none */ }
+    if (top && top.id !== layer.id) {
+      try { refined = await toCanvasMask(await imaging.getLayerMask({ documentID: doc.id, layerID: top.id }), w, h); from = "new layer"; } catch (e) { /* none */ }
+    }
+    await writeFile(`${id}_edge_plain.rle`, rle(plain));
+    if (!refined) return { ok: false, used: used.used, note: "no mask found after Enhance Edge" };
+    await writeFile(`${id}_edge_enhanced.rle`, rle(refined));
+    let changed = 0;
+    for (let i = 0; i < w * h; i++) if (Math.abs(refined[i] - plain[i]) > 8) changed++;
+    return { used: used.used, from, changedPixels: changed, plain: maskStats(plain, w, h).coverage, enhanced: maskStats(refined, w, h).coverage };
+  }));
+}
+
+async function runGenerativeTests() {
+  report.environment = report.environment || environment();
+  const have = { fill: GENERATIVE_FILL().length, remove: REMOVE_TOOL().length, edge: ENHANCE_EDGE().length };
+  if (!have.fill && !have.remove && !have.edge) {
+    status("Record the generative commands first (see HOW_TO_RUN): Generative Fill, Remove, Enhance Edge.");
+    log("Nothing recorded yet for Generative Fill, the Remove tool or Enhance Edge. Record each once, then click again.");
+    return;
+  }
+  await openResultsFolder();
+  const gen = report.generative = { started: new Date().toISOString(), recorded: {
+    fill: GENERATIVE_FILL().map((c) => c.label), remove: REMOVE_TOOL().map((c) => c.label), edge: ENHANCE_EDGE().map((c) => c.label) },
+    images: [], scenes: [] };
+  log(`Generative tests · Photoshop ${report.environment.photoshop} · results: ${report.resultsFolder}`);
+  await saveReport();
+
+  const { folder, images } = await loadManifest();
+  const scenes = SCENES.map((s, i) => [s, i]).filter(([s]) => (s[2] || 1) > 1 || s[1] > 1.5);
+  const total = images.length + scenes.length;
+  let step = 0;
+  for (const meta of images) {
+    status(`Generative tests: image ${++step} of ${total}: ${meta.case}`);
+    const row = { id: meta.id, case: meta.case, fills: [], edge: null };
+    gen.images.push(row);
+    let doc;
+    try {
+      const entry = await imageEntry(folder, meta);
+      let w, h, rgb, subject, objects;
+      const opened = await timed(`${meta.id}: open and find subjects`, () => modal("open", async () => {
+        doc = await app.open(entry);
+        w = doc.width; h = doc.height;
+        await normalize(doc);
+        rgb = await compositeRGB(doc.id, w, h);
+        await deselect();
+        await tryDescriptors(SELECT_SUBJECT());
+        subject = await selectionMask(doc.id, w, h);
+        objects = await maskAllObjectMasks(doc, w, h);
+        return { width: w, height: h, objects: objects.length };
+      }));
+      if (!opened.ok || !subject) { row.note = opened.error || "no subject"; continue; }
+      row.size = [w, h];
+      const hole = strategyHole(subject, objects, w, h);
+      const coverage = count(hole) / (w * h);
+      row.holeCoverage = +coverage.toFixed(3);
+      if (coverage > 0.85) row.fills.push({ note: `skipped: hole covers ${Math.round(coverage * 100)}% of the image` });
+      else row.fills = await generativeFills(doc, rgb, w, h, hole, meta.id);
+      if (have.edge && EDGE_IMAGES.includes(meta.id)) {
+        const e = await enhanceEdgeTest(doc, rgb, w, h, meta.id);
+        row.edge = e.ok ? { ms: e.ms, ...e.detail } : { error: e.error };
+      }
+    } catch (e) {
+      row.error = (e && e.message) || String(e);
+    } finally {
+      if (doc) await modal("close", async () => { try { await doc.closeWithoutSaving(); } catch (e) { /* closed */ } });
+      await saveReport();
+    }
+  }
+  for (const [[kind, scale, figures], i] of scenes) {
+    status(`Generative tests: scene ${++step} of ${total}`);
+    const w = 900, h = 600;
+    const { bg, comp, hole, objects } = buildScene(kind, scale, w, h, figures || 1);
+    const row = { scene: kind + (figures > 1 ? `, ${figures} figures` : ", large hole"), index: i, fills: [] };
+    gen.scenes.push(row);
+    let doc;
+    try {
+      await modal("scene", async () => {
+        doc = await app.createDocument({ name: `Unflatten Probe – scene ${i}`, width: w, height: h, resolution: 72,
+          mode: (constants.NewDocumentMode && constants.NewDocumentMode.RGB) || "RGBColorMode",
+          fill: (constants.DocumentFill && constants.DocumentFill.WHITE) || "white" });
+        await newLayerWithPixels(doc, "Scene", comp, w, h);
+      });
+      row.fills = await generativeFills(doc, comp, w, h, strategyHole(hole, objects, w, h), `scene${i}`, bg);
+    } catch (e) {
+      row.error = (e && e.message) || String(e);
+    } finally {
+      if (doc) await modal("close", async () => { try { await doc.closeWithoutSaving(); } catch (e) { /* closed */ } });
+      await saveReport();
+    }
+  }
+  gen.finished = new Date().toISOString();
+  await saveReport();
+  status("Generative tests finished. Send the newest results folder.");
+  log(`\nGenerative tests finished.\nResults folder: ${report.resultsFolder}`);
+}
+
 // ---------------------------------------------------------------- optional: recording
 
 let recording = false;
 function onEvent(event, descriptor) {
   report.recorded.push({ event, descriptor });
   log(`● recorded ${event}`);
+}
+
+// Recordings are kept in the plugin's data folder, so they survive reloads.
+const RECORDINGS = "recordings.json";
+async function saveRecordings() {
+  try {
+    const data = await uxp.storage.localFileSystem.getDataFolder();
+    const f = await data.createFile(RECORDINGS, { overwrite: true });
+    await f.write(JSON.stringify(report.recorded));
+  } catch (e) { log("✗ could not keep the recording: " + e.message); }
+}
+async function loadRecordings() {
+  try {
+    const data = await uxp.storage.localFileSystem.getDataFolder();
+    const list = JSON.parse(await (await data.getEntry(RECORDINGS)).read());
+    if (Array.isArray(list) && list.length) {
+      report.recorded.push(...list);
+      log(`Remembered recordings: ${[...new Set(list.map((r) => r.event))].filter((n) => !NOISE.has(n)).join(", ") || "none"}`);
+    }
+  } catch (e) { /* none yet */ }
 }
 async function toggleRecord(btn) {
   if (!recording) {
@@ -872,6 +1135,7 @@ async function toggleRecord(btn) {
     try { await action.removeNotificationListener(["all"], onEvent); } catch (e) { /* list form */ }
     recording = false;
     btn.textContent = "Record a command";
+    await saveRecordings();
     await openResultsFolder();
     await saveReport();
     log(`Stopped. Captured: ${[...new Set(report.recorded.map((r) => r.event))].join(", ") || "nothing"}`);
@@ -1054,6 +1318,8 @@ function wire() {
   $("run").addEventListener("click", guard(runSafeTests));
   $("record").addEventListener("click", (ev) => toggleRecord(ev.target).catch((e) => log("✗ " + e.message)));
   $("wasm").addEventListener("click", guard(wasmCheck));
+  $("generative").addEventListener("click", guard(runGenerativeTests));
+  loadRecordings().catch(() => {});
   const v = (app && app.version) || (uxp.host && uxp.host.version) || "";
   if (v.startsWith("26.0")) $("wasmwarn").textContent = `You are on Photoshop ${v}, the version reported to crash here. Skip this test unless asked.`;
 }
@@ -1062,5 +1328,5 @@ try { wire(); } catch (e) {
 }
 
 if (typeof module !== "undefined" && module) {
-  module.exports = { runSafeTests, wasmCheck, toggleRecord, report, buildScene, SCENES, psnr, seamScore, maskStats, rle };
+  module.exports = { runSafeTests, runGenerativeTests, wasmCheck, toggleRecord, report, buildScene, SCENES, psnr, seamScore, maskStats, rle };
 }
