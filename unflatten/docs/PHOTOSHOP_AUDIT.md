@@ -1,6 +1,6 @@
 # Photoshop-first architecture: audit and proof of concept
 
-Status: **measured in Photoshop 27.1 (macOS, 18 October 2026); results and recommendation in [section 8](#8-measured-results-photoshop-271).** No part of the pipeline has been migrated yet. The current engine stays as it is, as the reference implementation and the comparison baseline.
+Status: **measured in Photoshop 27.1 and 27.11 (macOS, 18 October 2026), free and generative methods; results in [section 8](#8-measured-results-photoshop-271), current recommendation at the end of that section.** No part of the pipeline has been migrated yet. The current engine stays as it is, as the reference implementation and the comparison baseline.
 
 ## 1. What the product needs, and where it runs today
 
@@ -237,3 +237,46 @@ Conclusion for the free path: a single Content-Aware Fill for small and medium h
 ### Direction agreed after the second run
 
 Unflatten is one plugin with two background methods: **generative** (Generative Fill and possibly Enhance Edge; uses Adobe credits; the main target, since it will be used where credits are plentiful) and **free** (Content-Aware Fill and the plugin's own AI). The free method is the automatic fallback when there is no network, an outage, a refusal by Adobe's content filters, or no credits. Probe 0.4.0 measures the generative method on the same holes.
+
+### Third run: generative methods, Photoshop 27.11 (18 October 2026)
+
+Probe 0.4.1 replayed recorded commands on the same holes as Content-Aware Fill and the engine. Pictures and tables: [`probe_results/2026-10-18-run3-generative/`](probe_results/2026-10-18-run3-generative/comparison.md).
+
+**Driving it from a plugin.**
+- Generative Fill is `syntheticFill` with an empty prompt, workflow `in_painting`.
+- It runs from a plugin only when its recorded `_target`, `documentID` and `layerID` are kept and pointed at the current document. Without them Photoshop raises "Generative Fill is not currently available", an alert that dialog settings do not suppress.
+- About 8–12 s per fill.
+- Enhance Edge is `modernRefineEdge`. It writes a new layer, about 7 s, 20 credits.
+
+**Backgrounds: Generative Fill is the best method measured on photos.**
+
+| | Generative Fill | Content-Aware Fill | Engine (LaMa) |
+|---|---|---|---|
+| Brick wall, 56% hole (PSNR vs truth) | **22.8 dB** | 16.1 dB | 21.8 dB |
+| Brick wall, three figures | **26.1 dB** | 16.3 dB | 23.1 dB |
+| Family photo | clean brick wall, faint marks at the ground | blanket-pattern ghost | dark blur |
+| Crew photo | believable backdrop, both flags intact | cloned flag pieces | smeared flag edge |
+| Man on the steps | steps and railing continued | tree column cloned in | washed out |
+| Woman against the wall | clean | clean | dark smudge |
+| Rosie poster (flat artwork) | **invents a teal shape** in the empty yellow | clean | clean |
+
+- **Visible seams:** Generative Fill had the least visible seams on six of the seven images.
+- **Pixels outside the hole:** it also changes 0.3–2.7% of pixels just outside the hole. Unflatten takes the fill only inside the hole, so this does not matter.
+- **Flat artwork:** on flat artwork, an empty prompt makes it add something. The poster failure is caught by the measures already computed: colour difference to the surroundings ΔE 20.4, against 1–9 elsewhere, and texture 1.31 against the surroundings.
+
+**Enhance Edge: not adopted for now.** It keeps the mask and rewrites the edge colours on a new layer. At full zoom the edges are softer, not clearly cleaner ([zoom](probe_results/2026-10-18-run3-generative/enhance_edge_zoom.jpg)). The probe saved the layer's colours but not its transparency, so the comparison is incomplete. At 20 credits per subject (120 for a six-person photo) it is not worth adding before a fair test. The exact-edge matte already guarantees that layers recombine to the original without fringes.
+
+### Recommendation after three runs
+
+One plugin, one click.
+
+1. **Subjects (photos):**
+   - Mask All Objects for separate people and objects, plus Select Subject for single-subject images.
+   - The plugin names them by overlap with its own detector, and applies the ported grouping rules and exact-edge matte.
+2. **Subjects (covers, posters, graphics):** the engine's classical segmentation and text finder, ported to the plugin. Photoshop returns the whole cover as one object.
+3. **Background, generative mode (default where credits are available):**
+   - Generative Fill on the combined hole, then an automatic check of the result's colour and texture against the surroundings.
+   - If the check fails, use the next Generative Fill variation; if that fails too, use Content-Aware Fill.
+   - Flat graphics (the existing graphic test) go straight to Content-Aware Fill.
+4. **Background, free mode:** Content-Aware Fill in one pass for small and medium holes; the plugin's own inpainter only if it is packaged. It is also the automatic fallback when there is no network, Adobe refuses the image, or there are no credits.
+5. **Still to settle:** how the plugin's own AI (naming, SAM for drawn figures) is packaged. This is the WebAssembly test, which has not been run yet.
