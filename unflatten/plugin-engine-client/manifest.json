@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 5,
+  "id": "com.unflatten.engine-client",
+  "name": "Unflatten (engine client, development)",
+  "version": "0.1.0",
+  "main": "index.html",
+  "host": { "app": "PS", "minVersion": "24.1.0" },
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "unflattenPanel",
+      "label": { "default": "Unflatten" },
+      "minimumSize": { "width": 200, "height": 160 },
+      "maximumSize": { "width": 2000, "height": 2000 },
+      "preferredDockedSize": { "width": 240, "height": 200 },
+      "preferredFloatingSize": { "width": 260, "height": 220 }
+    }
+  ],
+  "requiredPermissions": {
+    "network": { "domains": ["http://127.0.0.1:7865", "http://localhost:7865"] }
+  }
+}

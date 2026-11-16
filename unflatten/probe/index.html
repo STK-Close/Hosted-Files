@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+    <h1>UNFLATTEN PROBE</h1>
+    <p class="note">Tests Photoshop's built-in Select Subject, Remove Background, Mask All Objects and
+      Content-Aware Fill on its own test images. Your open documents are not touched.</p>
+
+    <sp-button id="run" variant="cta">Run safe tests</sp-button>
+    <p id="status" class="status">Takes about 10 to 25 minutes. Documents will open and close by themselves.</p>
+
+    <div class="block">
+      <p class="heading">Generative tests (use Adobe credits)</p>
+      <p class="note">Generative Fill, the Remove tool and Enhance Edge on the same test images. Record each
+        command once first (see HOW_TO_RUN); recordings are remembered.</p>
+      <sp-button id="record" variant="secondary">Record a command</sp-button>
+      <sp-button id="generative" variant="secondary">Run generative tests (uses credits)</sp-button>
+    </div>
+
+    <div class="block">
+      <p class="heading warn">Unsafe test: WebAssembly (may close Photoshop)</p>
+      <p class="note warn" id="wasmwarn">Runs a real AI model inside Photoshop (1 to 3 minutes). Photoshop 2025 (26.0)
+        was reported to crash on WebAssembly. Save and close your work first. Needs two clicks.</p>
+      <sp-button id="wasm" variant="secondary">WebAssembly test</sp-button>
+    </div>
+
+    <div id="log" class="log"></div>
+  </div>
+  <script src="probe.js"></script>
+</body>
+</html>

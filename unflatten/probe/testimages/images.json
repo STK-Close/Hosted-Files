@@ -1,0 +1,77 @@
+{
+ "images": [
+  {
+   "id": "A_wall",
+   "file": null,
+   "url": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=700&q=80",
+   "case": "A: person against a blue wall",
+   "people": 1,
+   "cap": false,
+   "source": "Unsplash photo 1517841905240-472988babdf9 (downloaded at run time, not redistributed)",
+   "license": "Unsplash License"
+  },
+  {
+   "id": "B_cap_red",
+   "file": "B_cap_red.jpg",
+   "case": "B: person wearing a baseball cap",
+   "people": 1,
+   "cap": true,
+   "source": "Wikimedia Commons: Bogdan Bondarenko2.jpg",
+   "license": "CC0"
+  },
+  {
+   "id": "B_cap_black",
+   "file": "B_cap_black.jpg",
+   "case": "B: person wearing a baseball cap, busy background",
+   "people": 1,
+   "cap": true,
+   "source": "Wikimedia Commons: Robbie Pierce.jpg",
+   "license": "CC0"
+  },
+  {
+   "id": "C_crew",
+   "file": "C_crew.jpg",
+   "case": "C: five people, flags, chairs, table",
+   "people": 5,
+   "cap": false,
+   "source": "Wikimedia Commons: Portrait of ASTP crews - restoration.jpg (NASA)",
+   "license": "Public domain"
+  },
+  {
+   "id": "C_family",
+   "file": "C_family.jpg",
+   "case": "C: six people in front of a textured wall",
+   "people": 6,
+   "cap": false,
+   "source": "Wikimedia Commons: CHS-3265 (California Historical Society, ca. 1901)",
+   "license": "Public domain"
+  },
+  {
+   "id": "D_simian",
+   "file": "D_simian.jpg",
+   "case": "D: book cover, type and line drawings on cloth",
+   "people": 0,
+   "cap": false,
+   "source": "Wikimedia Commons: This Simian World - book cover.png",
+   "license": "Public domain"
+  },
+  {
+   "id": "D_philadelphia",
+   "file": "D_philadelphia.jpg",
+   "case": "D: book cover, gold type and illustration",
+   "people": 0,
+   "cap": false,
+   "source": "Wikimedia Commons: Cover--Travels in Philadelphia.png",
+   "license": "Public domain"
+  },
+  {
+   "id": "D_rosie",
+   "file": "D_rosie.jpg",
+   "case": "D: poster, illustrated figure and headline",
+   "people": 1,
+   "cap": false,
+   "source": "Wikimedia Commons: We Can Do It!.jpg (J. Howard Miller, 1943)",
+   "license": "Public domain"
+  }
+ ]
+}
