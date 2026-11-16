@@ -322,3 +322,25 @@ On the real 27.11 masks and fills, the layers recombine to the original with zer
 **Open:** quality of the decomposition model on real covers (an upload to a third-party demo from the build machine was not permitted, so it is untested); whether Convert to Text Layers is scriptable; where the decomposition model runs (hosted API with a key, or a GPU machine).
 
 Sources: Canva Magic Layers launch (petapixel.com, businesswire.com, March 2026); github.com/QwenLM/Qwen-Image-Layered; fal.ai/models/fal-ai/qwen-image-layered; Adobe blog, 10 November 2026.
+
+### Layer-decomposition models: first measurements and options (16 November 2026)
+
+Requirement from the owner: no dependence on an outside paid service in normal use; the technology should ship with the plugin. A hosted API (fal.ai) may be used for testing only, within a 10 USD budget.
+
+**Qwen-Image-Layered on the book cover** (fal.ai, 0.05 USD and about 1 minute per run, output 512 × 800 for a 1125 × 1771 input):
+- 8 layers with a caption: title and tagline on one clean layer, author name on another, the knife as one complete object (including the part behind the title), smoke and rocks as atmosphere layers, a text-free scene.
+- 6 layers without a caption: similar text separation, but the knife in two pieces.
+- In both runs the hand with the bracelets stayed in the scene layer.
+- On the Rosie poster (6 layers, 50 steps, no acceleration, no caption) the result was poor: one layer was the whole image.
+
+It understands the design far better than version 1, but is low-resolution, varies between runs, and cannot ship in a plugin: Canva's PixelART paper measures it at 213 s and 72 GB on an H200.
+
+**Candidates that could ship with the plugin:**
+
+| Model | Released? | Size and speed (PixelART paper, H200, 1024 px) | Notes |
+|---|---|---|---|
+| LayerD (CyberAgent, ICCV 2025) | yes, Apache-2.0 code and weights; repository archived 30 Oct 2026 | 15 s, 3.4 GB; 0.2 B-parameter matting model plus LaMa (about 200 MB) | built for graphic designs; runs on CPU; output at input resolution; iterative "peel the top layer, fill behind it" |
+| PixelART (Tsinghua and Canva Research, Sept 2026) | no code or weights | 3.1 s, 6.6 GB, plus a layout detector | probably close to what Magic Layers uses; not available |
+| Qwen-Image-Layered | yes, Apache-2.0 | 213 s, 72 GB | self-hosting needs a large GPU server |
+
+**Not yet tested:** LayerD on the book cover. Installing it on the build machine was blocked by the session's permission settings and needs the owner's approval.
