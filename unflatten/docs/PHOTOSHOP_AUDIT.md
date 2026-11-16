@@ -344,3 +344,11 @@ It understands the design far better than version 1, but is low-resolution, vari
 | Qwen-Image-Layered | yes, Apache-2.0 | 213 s, 72 GB | self-hosting needs a large GPU server |
 
 **Not yet tested:** LayerD on the book cover. Installing it on the build machine was blocked by the session's permission settings and needs the owner's approval.
+
+**LayerD and local text cut-out on the book cover (16 November 2026, build machine, CPU only):**
+- **LayerD** (needs `transformers` below 5; 75 s for 1125 × 1771) peeled the flat lettering (author name, tagline, series line) cleanly at full resolution, then stopped. It did not detect the stylised gold title, the knife or the hand. A 1024 × 1024 matting size, `fg_refine` off, and running it on a crop of the title region alone all gave the same result. It is not sufficient alone.
+- **SAM 2.1 with word boxes from PP-OCR** selected the gold title's letters accurately. SAM is the model already in the engine. The test used a crop of the title region with one box prompt per word; mask IoU estimates were 0.82–0.88.
+
+So a text-first pipeline can run entirely on local, small models: PP-OCR finds and reads the lines (13 MB, 2 s), then SAM box prompts and/or LayerD cut the letters.
+
+**Not yet tested:** filling behind the lifted text, and separating the knife and hand on the text-free image.
