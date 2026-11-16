@@ -304,3 +304,21 @@ All of this is one Undo step, rolled back on any failure.
 On the real 27.11 masks and fills, the layers recombine to the original with zero difference on all seven test photos and posters. The previous engine-connected panel is kept in `plugin-engine-client/`.
 
 **Next:** the native add-on (Windows first, then macOS) for descriptive names, covers and graphics, and editable text.
+
+## 9. Version 1 on a real cover, and the "Magic Layers" direction (November 2026)
+
+**Version 1 failed on a real book cover** (photographic art with lettering across it). Mask All Objects cut the author name, series line and part of the title into the knife's layer; Generative Fill then redrew the half-covered letters as nonsense; the hand's edge came out ragged. The reference engine did no better on the same cover (one "Sword" layer covering most of the frame). Stitching general selection tools together does not understand a design.
+
+**How the reference product works.** Canva's Magic Layers (public beta, March 2026) is built on a proprietary design model that treats the image as a design: it returns objects, background and live, editable text boxes. The open equivalent of the decomposition step is Qwen-Image-Layered (Alibaba, CVPR 2026, Apache 2.0): one model that turns an image into up to 10 RGBA layers, with hidden areas already painted in. It needs a GPU; hosted, it costs about $0.05 per image (fal.ai). Its layers are raster, at 640 or 1024 px, with text as pixels.
+
+**New in Photoshop (Adobe MAX, 10 November 2026).** The Photoshop beta app gained Convert to Text Layers (beta): it extracts text from a flattened image into an editable type layer. Font matching, limits and credit use are not stated. The Remove tool now also removes shadows and reflections of what it removes. Adobe previewed MCP integrations for third-party agents (early 2027).
+
+**Proposed version 2 (not yet tested):**
+1. Text first: Convert to Text Layers if a plugin can drive it; otherwise PP-OCR finds and reads the lines (verified on the cover: every line found in 2 s) and Match Font sets the type.
+2. A decomposition model plans the layers: which elements exist, their rough shapes, what is hidden.
+3. Photoshop finishes at full resolution: masks refined against the original pixels, hidden areas by Generative Fill, the exact matte so layers recombine to the original.
+4. A vision model names the layers.
+
+**Open:** quality of the decomposition model on real covers (an upload to a third-party demo from the build machine was not permitted, so it is untested); whether Convert to Text Layers is scriptable; where the decomposition model runs (hosted API with a key, or a GPU machine).
+
+Sources: Canva Magic Layers launch (petapixel.com, businesswire.com, March 2026); github.com/QwenLM/Qwen-Image-Layered; fal.ai/models/fal-ai/qwen-image-layered; Adobe blog, 10 November 2026.
