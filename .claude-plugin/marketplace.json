@@ -1,0 +1,11 @@
+{
+  "name": "lumina-art-house",
+  "owner": { "name": "Lumina Art House, LLC" },
+  "plugins": [
+    {
+      "name": "chat-meter",
+      "source": "./mods/chat-meter",
+      "description": "Shows how full the current chat is, and carries a short summary into a fresh chat."
+    }
+  ]
+}

@@ -26,6 +26,18 @@ The meter costs nothing. Each handoff makes one small Claude request, which
 counts toward your normal usage. The summary is kept in the mod's own storage
 and is not sent anywhere else.
 
+## Install
+
+In the Claude desktop app: click + next to the prompt box, then Plugins, then
+Add marketplace. Enter `STK-Close/Hosted-Files`, then choose Add plugin.
+
+In Claude Code in a terminal, type this at the prompt, then answer `y` and
+press Enter:
+
+```
+/plugin install chat-meter --marketplace STK-Close/Hosted-Files
+```
+
 ## Legal
 
 Copyright (c) 2026 Lumina Art House, LLC. All rights reserved.
