@@ -352,3 +352,9 @@ It understands the design far better than version 1, but is low-resolution, vari
 So a text-first pipeline can run entirely on local, small models: PP-OCR finds and reads the lines (13 MB, 2 s), then SAM box prompts and/or LayerD cut the letters.
 
 **Not yet tested:** filling behind the lifted text, and separating the knife and hand on the text-free image.
+
+**Text-first prototype on three covers (16 November 2026, local models, CPU).** Code: `engine/tools/text_first/`.
+- PP-OCR at scales 1.0, 0.5 and 0.3 found and read every line and title word. At full scale alone it boxed only parts of very large titles ("ISE", "RK", "HR").
+- One SAM box prompt per line cut the letters. LaMa then removed the lettering cleanly on all three covers, in 7–11 s per cover.
+- The lifted text layer still carries a dark fringe from the hole margin. The product target is live type layers.
+- Subjects on the text-free image, using the engine as a stand-in for Photoshop's masks: good for a portrait and moon, and for a crown and castle; poor for the hand and knife.
