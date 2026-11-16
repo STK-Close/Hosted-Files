@@ -1,0 +1,8 @@
+{
+  "name": "chat-meter",
+  "version": "0.1.0",
+  "description": "Shows how full the current chat is, and carries a short summary into a fresh chat.",
+  "author": { "name": "Lumina Art House, LLC" },
+  "license": "UNLICENSED",
+  "types": "./types/index.d.ts"
+}
