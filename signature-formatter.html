@@ -32,33 +32,40 @@
             --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
             --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
             --rounded-md: 0.375rem; --rounded-xl: 0.75rem;
+
+            /* Accessibility sizes, defined once */
+            --text-sm: 13px;          /* smallest text anywhere */
+            --target-min: 44px;       /* smallest tap target */
+            --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.55);
         }
 
         html, body { height: 100vh; margin: 0; overflow: hidden; }
         body { font-family: 'Open Sans', sans-serif; background-color: var(--slate-50); color: var(--slate-700); font-size: 13px; display: flex; flex-direction: column; }
 
-        .main-container { flex-grow: 1; display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; width: 100%; max-width: 1800px; margin: 0 auto; padding: 1.5rem; box-sizing: border-box; min-height: 0; }
+        .main-container { flex-grow: 1; display: grid; grid-template-columns: 320px 1fr; gap: 1rem; width: 100%; max-width: 1800px; margin: 0 auto; padding: 1rem; box-sizing: border-box; min-height: 0; }
         .controls-column, .workspace-column { display: flex; flex-direction: column; min-height: 0; height: 100%; }
         .card { background: var(--white); border-radius: var(--rounded-xl); box-shadow: var(--shadow-md); display: flex; flex-direction: column; flex-grow: 1; min-height: 0; overflow: hidden; }
         .card-header { font-size: 1rem; font-weight: 600; color: var(--slate-700); padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--slate-100); flex-shrink: 0; }
-        .controls-container { display: flex; flex-direction: column; gap: 0.75rem; flex-grow: 1; overflow-y: auto; padding: 1rem 1.25rem; }
+        .controls-container { display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1; overflow-y: auto; padding: 1rem; }
 
         .input-group { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; position: relative; }
         .input-label { font-weight: 700; font-size: 0.85rem; color: var(--blue-900); }
-        .input-helper { font-size: 0.8rem; color: var(--slate-600); }
+        .input-helper { font-size: var(--text-sm); color: var(--slate-600); }
 
-        input, select { width: 100%; padding: 8px 10px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); font-size: 12px; box-sizing: border-box; background-color: var(--white); color: var(--slate-700); font-family: 'Open Sans', sans-serif; resize: none; }
-        input:focus, select:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 1px var(--blue-500); }
-        input[type="range"] { padding: 0; }
+        input, select { width: 100%; min-height: var(--target-min); padding: 8px 10px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); font-size: var(--text-sm); box-sizing: border-box; background-color: var(--white); color: var(--slate-700); font-family: 'Open Sans', sans-serif; resize: none; }
+        input:focus, select:focus { outline: none; border-color: var(--blue-500); box-shadow: var(--focus-ring); }
+        input[type="range"] { padding: 0; min-height: var(--target-min); cursor: pointer; }
 
+        #signature-text { padding-right: var(--target-min); }
         #clear-text-btn {
-            position: absolute; right: 10px; top: 32px;
-            color: var(--slate-400); cursor: pointer; display: none;
+            position: absolute; right: 0; bottom: 0; width: var(--target-min); height: var(--target-min);
+            min-height: 0; padding: 0; background: transparent; color: var(--slate-500);
+            display: none; align-items: center; justify-content: center; font-size: 16px;
         }
-        #clear-text-btn:hover { color: var(--slate-600); }
+        #clear-text-btn:hover:not(:disabled) { background: transparent; color: var(--slate-700); }
 
 
-        #drop-area { border: 2px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 1rem; text-align: center; color: var(--slate-600); cursor: pointer; transition: background-color 0.2s, border-color 0.2s; background-color: #fcfcfc;}
+        #drop-area { border: 2px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 0.75rem; text-align: center; color: var(--slate-600); cursor: pointer; transition: background-color 0.2s, border-color 0.2s; background-color: #fcfcfc;}
         #drop-area.highlight { background-color: #eff6ff; border-color: var(--kpmg-blue); }
         #drop-area p { margin: 0 0 0.75rem 0; font-size: 0.9rem; pointer-events: none; }
 
@@ -82,33 +89,37 @@
         #drawing-canvas { position: absolute; top: 0; left: 0; cursor: crosshair; }
         #typed-signature-preview { padding: 20px; text-align: center; color: var(--black); font-size: 70px; }
 
-        button { background-color: var(--kpmg-blue); color: white; padding: 8px 14px; border: none; border-radius: var(--rounded-md); cursor: pointer; font-size: 12px; font-weight: 600; transition: background-color 0.2s, box-shadow 0.2s; text-align: center; white-space: nowrap; }
+        button { background-color: var(--kpmg-blue); color: white; padding: 8px 14px; border: none; border-radius: var(--rounded-md); cursor: pointer; font-size: var(--text-sm); min-height: var(--target-min); font-weight: 600; font-family: 'Open Sans', sans-serif; transition: background-color 0.2s, box-shadow 0.2s; text-align: center; white-space: nowrap; }
+        button:focus-visible, .font-preview-item:focus-visible { outline: none; box-shadow: var(--focus-ring); }
         button:hover:not(:disabled) { background-color: var(--blue-900); }
-        button:disabled { background-color: var(--slate-300); cursor: not-allowed; pointer-events: none; }
+        button:disabled { background-color: var(--slate-200); color: var(--slate-600); cursor: not-allowed; pointer-events: none; }
 
         #mode-selection-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
         #mode-selection-buttons button { font-size: 0.9rem; padding: 10px 8px; border: 1px solid var(--slate-300); background-color: var(--slate-100); color: var(--slate-700); box-shadow: none; }
         #mode-selection-buttons button:hover { background-color: var(--slate-200); }
         #mode-selection-buttons button.active { background-color: var(--kpmg-blue); color: #ffffff; border-color: var(--kpmg-blue); }
 
-        .control-panel { display: none; margin-top: 0.75rem; }
+        .control-panel { display: none; margin-top: 0.25rem; }
         .control-panel.active { display: block; }
 
-        .color-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; }
-        .color-buttons button { height: 28px; border: 2px solid transparent; border-radius: var(--rounded-md); }
+        .color-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+        .color-buttons button { height: var(--target-min); min-height: var(--target-min); padding: 0; border: 2px solid transparent; border-radius: var(--rounded-md); }
         .color-buttons button.active { box-shadow: 0 0 0 2px var(--kpmg-blue); }
         #color-black { background-color: #000000; }
         #color-white { background-color: #ffffff; border: 1px solid var(--slate-300); }
         #color-kpmg-blue { background-color: #00338d; } #color-cobalt { background-color: #3b82f6; } #color-purple { background-color: #7c3aed; } #color-pink { background-color: #ec4899; }
 
         .name-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-        #error-message { color: var(--red-500); font-size: 0.875rem; margin-top: 0.5rem; display: none; text-align: center; }
+        .upload-message { color: #b91c1c; font-size: var(--text-sm); margin: 0.5rem 0 0 0; text-align: center; }
+        .upload-message:empty { display: none; }
+        #error-message { color: #b91c1c; font-size: 0.875rem; margin-top: 0.5rem; display: none; text-align: center; }
         .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .input-error { animation: shake 0.5s; border-color: var(--red-500) !important; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
 
-        #font-preview-list { width: 100%; height: 100%; overflow-y: auto; text-align: center; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
-        .font-preview-item { font-size: 2.5rem; padding: 0.75rem; cursor: pointer; }
+        #font-preview-list { width: 100%; height: 100%; overflow-y: auto; text-align: center; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .font-preview-item { font-size: 2.5rem; padding: 0.75rem; cursor: pointer; background: transparent; border: none; font-weight: 400; white-space: normal; border-radius: var(--rounded-md); }
+        .font-preview-item:hover:not(:disabled) { background: transparent; }
         .font-preview-item:hover {
             text-decoration: underline;
             text-decoration-thickness: 1px;
@@ -132,16 +143,17 @@
         .welcome-card h2 { margin: 0 0 6px 0; font-size: 1.35rem; color: var(--kpmg-blue); font-weight: 700; }
         .welcome-card .lede { color: var(--slate-700); font-size: 0.9rem; margin: 0 0 18px 0; line-height: 1.45; }
         .welcome-steps { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin: 0 0 18px 0; }
-        .welcome-step-num { background: var(--kpmg-blue); color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+        .welcome-step-num { background: var(--kpmg-blue); color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); font-weight: 700; flex-shrink: 0; }
         .welcome-step-text { color: var(--slate-700); font-size: 0.85rem; line-height: 1.4; padding-top: 2px; }
         .welcome-step-text b { color: var(--kpmg-blue); }
         .welcome-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--slate-200); padding-top: 16px; flex-wrap: wrap; }
-        .welcome-actions label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--slate-700); margin-right: auto; cursor: pointer; white-space: nowrap; }
+        .welcome-actions label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); min-height: var(--target-min); color: var(--slate-700); margin-right: auto; cursor: pointer; white-space: nowrap; }
+        .welcome-actions input[type="checkbox"] { width: 20px; min-height: 20px; height: 20px; }
         .welcome-card button.primary { background: var(--kpmg-blue); color: white; border: none; padding: 8px 18px; border-radius: var(--rounded-md); font-weight: 600; cursor: pointer; font-size: 0.85rem; font-family: 'Open Sans', sans-serif; }
         .welcome-card button.primary:hover { background: var(--blue-900); }
         .welcome-card button.secondary { background: transparent; color: var(--kpmg-blue); border: 1px solid var(--kpmg-blue); padding: 8px 18px; border-radius: var(--rounded-md); font-weight: 600; cursor: pointer; font-size: 0.85rem; font-family: 'Open Sans', sans-serif; }
         .welcome-card button.secondary:hover { background: rgba(0, 51, 141, 0.05); }
-        #show-help-btn { position: fixed; bottom: 20px; right: 20px; z-index: 100; background: var(--white); border: 1px solid var(--slate-300); color: var(--slate-700); padding: 8px 12px; border-radius: 999px; font-size: 0.75rem; cursor: pointer; box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 6px; font-family: 'Open Sans', sans-serif; }
+        #show-help-btn { position: fixed; bottom: 20px; right: 20px; z-index: 100; background: var(--white); border: 1px solid var(--slate-300); color: var(--slate-700); padding: 8px 12px; border-radius: 999px; font-size: var(--text-sm); min-height: var(--target-min); cursor: pointer; box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 6px; font-family: 'Open Sans', sans-serif; }
         #show-help-btn:hover { color: var(--kpmg-blue); border-color: var(--blue-500); }
         .tour-backdrop { position: fixed; inset: 0; z-index: 1900; pointer-events: none; display: none; }
         .tour-backdrop.visible { display: block; }
@@ -150,14 +162,14 @@
         .tour-highlight.visible { display: block; }
         .tour-tooltip { position: fixed; z-index: 1902; background: var(--white); border-radius: var(--rounded-md); box-shadow: 0 10px 25px rgba(0,0,0,0.25); padding: 16px 18px; max-width: 320px; font-family: 'Open Sans', sans-serif; transition: all 0.25s ease; display: none; }
         .tour-tooltip.visible { display: block; }
-        .tour-tooltip .step-counter { font-size: 0.7rem; color: var(--slate-500); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .tour-tooltip .step-counter { font-size: var(--text-sm); color: var(--slate-500); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
         .tour-tooltip h4 { margin: 0 0 6px 0; color: var(--kpmg-blue); font-size: 1rem; font-weight: 700; }
         .tour-tooltip p { margin: 0 0 14px 0; color: var(--slate-700); font-size: 0.85rem; line-height: 1.45; }
         .tour-tooltip .tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-        .tour-tooltip .tour-skip { background: transparent; border: none; color: var(--slate-500); font-size: 0.75rem; cursor: pointer; padding: 4px 6px; font-family: 'Open Sans', sans-serif; }
+        .tour-tooltip .tour-skip { background: transparent; border: none; color: var(--slate-600); font-size: var(--text-sm); cursor: pointer; padding: 4px 8px; font-family: 'Open Sans', sans-serif; }
         .tour-tooltip .tour-skip:hover { color: var(--kpmg-blue); }
         .tour-tooltip .tour-nav { display: flex; gap: 6px; }
-        .tour-tooltip .tour-nav button { padding: 6px 14px; border-radius: var(--rounded-md); font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: 'Open Sans', sans-serif; }
+        .tour-tooltip .tour-nav button { padding: 6px 14px; border-radius: var(--rounded-md); font-size: var(--text-sm); font-weight: 600; cursor: pointer; font-family: 'Open Sans', sans-serif; }
         .tour-tooltip .tour-back { background: transparent; color: var(--slate-700); border: 1px solid var(--slate-300); }
         .tour-tooltip .tour-back:hover { background: var(--slate-200); color: var(--kpmg-blue); }
         .tour-tooltip .tour-back:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -168,6 +180,11 @@
         .tour-tooltip[data-arrow="right"]::before { top: 24px; right: -16px; border-left-color: var(--white); }
         .tour-tooltip[data-arrow="top"]::before { left: 24px; top: -16px; border-bottom-color: var(--white); }
         .tour-tooltip[data-arrow="bottom"]::before { left: 24px; bottom: -16px; border-top-color: var(--white); }
+
+        /* Respect the device's reduce motion setting */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; animation: none !important; }
+        }
     </style>
 </head>
 <body>
@@ -177,7 +194,7 @@
        fits with no scrollbars. Phones use the stacked one-column layout instead. */
     (function () {
         const FIT_MIN_WIDTH = 900;    // smallest width the two-column layout fits in
-        const FIT_MIN_HEIGHT = 640;   // smallest height with every control visible
+        const FIT_MIN_HEIGHT = 720;   // smallest height with every control and message visible
         const FIT_MIN_SCALE = 0.55;   // below this, text gets too small; stack instead
         window.fitScale = 1;
         function fitToFrame() {
@@ -203,10 +220,10 @@
             <div class="controls-container">
                 <div class="input-group">
                     <label class="input-label">1. Method</label>
-                    <div id="mode-selection-buttons">
-                        <button data-mode="upload" class="active">Upload</button>
-                        <button data-mode="draw">Draw</button>
-                        <button data-mode="type">Type</button>
+                    <div id="mode-selection-buttons" role="group" aria-label="Method">
+                        <button type="button" data-mode="upload" class="active" aria-pressed="true">Upload</button>
+                        <button type="button" data-mode="draw" aria-pressed="false">Draw</button>
+                        <button type="button" data-mode="type" aria-pressed="false">Type</button>
                     </div>
                 </div>
 
@@ -218,6 +235,7 @@
                             <button id="browse-btn">Or browse files</button>
                             <input type="file" id="fileElem" accept="image/*" style="display:none">
                         </div>
+                        <p id="upload-message" class="upload-message" role="status" aria-live="polite"></p>
                     </div>
                     <div id="draw-panel" class="control-panel">
                         <p style="text-align: center; margin-top: 0; margin-bottom: 1rem;">Draw in the preview area</p>
@@ -229,34 +247,34 @@
                     <div id="type-panel" class="control-panel">
                         <div class="input-group">
                             <label for="signature-text" class="input-helper">Your name</label>
-                            <input type="text" id="signature-text" placeholder="Type your name...">
-                            <i class="fas fa-times-circle" id="clear-text-btn"></i>
+                            <input type="text" id="signature-text" placeholder="Type your name">
+                            <button type="button" id="clear-text-btn" aria-label="Clear name"><i class="fas fa-times-circle" aria-hidden="true"></i></button>
                         </div>
                          <p id="type-mode-instruction" class="input-helper" style="text-align:center; margin-top: 0.5rem; display:none;">Type your full name above, then click your preferred style on the right.</p>
                     </div>
 
-                    <div class="input-group" style="margin-top: 0.75rem;">
+                    <div class="input-group" style="margin-top: 0.5rem;">
                         <label class="input-helper">Color</label>
-                        <div class="color-buttons" id="color-selectors">
-                            <button id="color-kpmg-blue" title="KPMG Blue"></button>
-                            <button id="color-cobalt" title="Cobalt"></button>
-                            <button id="color-purple" title="Purple"></button>
-                            <button id="color-pink" title="Pink"></button>
-                            <button id="color-black" title="Black"></button>
-                            <button id="color-white" title="White"></button>
+                        <div class="color-buttons" id="color-selectors" role="group" aria-label="Color">
+                            <button type="button" id="color-kpmg-blue" title="KPMG Blue" aria-label="KPMG Blue" aria-pressed="false"></button>
+                            <button type="button" id="color-cobalt" title="Cobalt" aria-label="Cobalt" aria-pressed="false"></button>
+                            <button type="button" id="color-purple" title="Purple" aria-label="Purple" aria-pressed="false"></button>
+                            <button type="button" id="color-pink" title="Pink" aria-label="Pink" aria-pressed="false"></button>
+                            <button type="button" id="color-black" title="Black" aria-label="Black" aria-pressed="false"></button>
+                            <button type="button" id="color-white" title="White" aria-label="White" aria-pressed="false"></button>
                         </div>
                     </div>
 
                     <div id="contextual-controls">
-                        <div id="sensitivity-control" class="input-group" style="display:none; margin-top: 0.75rem;">
+                        <div id="sensitivity-control" class="input-group" style="display:none; margin-top: 0.5rem;">
                             <label for="sensitivity-slider" class="input-helper">Background removal</label>
                             <input type="range" id="sensitivity-slider" min="0" max="100" value="50">
                         </div>
-                        <div id="smoothing-control" class="input-group" style="display:none; margin-top: 0.75rem;">
+                        <div id="smoothing-control" class="input-group" style="display:none; margin-top: 0.5rem;">
                             <label for="smoothing-slider" class="input-helper">Smoothing (reduces grain &amp; jagged edges)</label>
                             <input type="range" id="smoothing-slider" min="0" max="100" value="40">
                         </div>
-                        <div id="size-control" class="input-group" style="display:none; margin-top: 0.75rem;">
+                        <div id="size-control" class="input-group" style="display:none; margin-top: 0.5rem;">
                             <label for="size-slider" class="input-helper">Pen size</label>
                             <input type="range" id="size-slider" min="1" max="100" value="20">
                         </div>
@@ -266,10 +284,10 @@
                 <div class="input-group">
                     <label class="input-label">3. Export</label>
                     <div class="name-inputs">
-                        <input type="text" id="firstName" placeholder="First Name">
-                        <input type="text" id="lastName" placeholder="Last Name">
+                        <input type="text" id="firstName" placeholder="First name" aria-label="First name" autocomplete="given-name">
+                        <input type="text" id="lastName" placeholder="Last name" aria-label="Last name" autocomplete="family-name">
                     </div>
-                    <p id="error-message">First and last name are required</p>
+                    <p id="error-message" role="alert">First and last name are required</p>
                     <div class="export-buttons-wrapper" style="margin-top: 0.5rem;">
                         <div class="export-buttons">
                             <button id="download-btn" disabled><i class="fas fa-download"></i> Download</button>
@@ -284,8 +302,8 @@
                 <div class="preview-area" id="preview-area">
                     <img id="preview-image" src="" alt="Signature preview">
                     <div id="typed-signature-preview"></div>
-                    <div id="font-preview-list"></div>
-                    <canvas id="drawing-canvas"></canvas>
+                    <div id="font-preview-list" role="group" aria-label="Font styles"></div>
+                    <canvas id="drawing-canvas" role="img" aria-label="Drawing area. Draw your signature here with a mouse, pen or finger."></canvas>
                 </div>
             </div>
         </div>
@@ -295,18 +313,18 @@
 
     <!-- Welcome panel — auto-shows on every visit -->
     <div id="welcome-overlay" class="welcome-overlay">
-        <div class="welcome-card">
-            <h2>Welcome to Creative Services' Signature Formatter</h2>
+        <div class="welcome-card" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+            <h2 id="welcome-title">Welcome to Creative Services' Signature Formatter</h2>
             <p class="lede">Three ways to make a clean, brand-colored signature for emails and documents: upload a scan, draw it yourself, or type it in a cursive font.</p>
             <div class="welcome-steps">
                 <div class="welcome-step-num">1</div>
-                <div class="welcome-step-text"><b>Choose a method</b> — upload a photo or scan, draw with your mouse or finger, or type your name and pick a font.</div>
+                <div class="welcome-step-text"><b>Choose a method</b>: upload a photo or scan, draw with your mouse or finger, or type your name and pick a font.</div>
                 <div class="welcome-step-num">2</div>
-                <div class="welcome-step-text"><b>Pick a color</b> — KPMG Blue, Cobalt, Purple, Pink, Black, or White.</div>
+                <div class="welcome-step-text"><b>Pick a color</b>: KPMG Blue, Cobalt, Purple, Pink, Black, or White.</div>
                 <div class="welcome-step-num">3</div>
-                <div class="welcome-step-text"><b>Fine-tune</b> — adjust background removal and smoothing for crisp, clean output.</div>
+                <div class="welcome-step-text"><b>Fine-tune</b>: adjust background removal and smoothing for crisp, clean output.</div>
                 <div class="welcome-step-num">4</div>
-                <div class="welcome-step-text"><b>Enter your name and download</b> — your file is named automatically.</div>
+                <div class="welcome-step-text"><b>Enter your name and download</b>: your file is named automatically.</div>
             </div>
             <div class="welcome-actions">
                 <label>
@@ -395,15 +413,16 @@
         function setupModeSwitcher() {
             dom.modeButtons.forEach(button => button.addEventListener('click', (e) => {
                 state.mode = e.currentTarget.dataset.mode;
-                dom.modeButtons.forEach(btn => btn.classList.remove('active'));
+                dom.modeButtons.forEach(btn => { btn.classList.remove('active'); btn.setAttribute('aria-pressed', 'false'); });
                 e.currentTarget.classList.add('active');
+                e.currentTarget.setAttribute('aria-pressed', 'true');
                 resetUIForMode(state.mode);
             }));
         }
 
         function resetUIForMode(mode) {
             state.hasContent = false; state.originalImageData = null; state.drawPoints = []; state.fontChosen = false;
-            dom.fileElem.value = ""; dom.signatureText.value = ""; dom.firstName.value = ""; dom.lastName.value = "";
+            dom.fileElem.value = ""; dom.signatureText.value = ""; setUploadMessage('');
             hideError();
             clearDrawing();
             [dom.previewImage, dom.typedSignaturePreview, dom.drawingCanvas, dom.fontPreviewList].forEach(el => el.style.display = 'none');
@@ -425,26 +444,51 @@
             ['dragover', 'drop'].forEach(evt => window.addEventListener(evt, (e) => e.preventDefault()));
             dom.browseBtn.addEventListener('click', () => dom.fileElem.click());
             dom.fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
-            dom.sensitivitySlider.addEventListener('input', processUploadedImage);
-            dom.smoothingSlider.addEventListener('input', processUploadedImage);
+            dom.sensitivitySlider.addEventListener('input', scheduleProcess);
+            dom.smoothingSlider.addEventListener('input', scheduleProcess);
+        }
+
+        // Large phone photos are shrunk to this many pixels on the longest side. That
+        // keeps the sliders responsive and the signature file a sensible size.
+        const MAX_UPLOAD_SIDE = 2000;
+        const NOT_AN_IMAGE = "That file isn't an image this tool can read. Use a PNG or JPG.";
+
+        function setUploadMessage(text) {
+            const el = document.getElementById('upload-message');
+            if (el) el.textContent = text;
         }
 
         function handleFiles(files) {
-            if (!files.length || !files[0].type.startsWith('image/')) return;
+            if (!files || !files.length) return;
+            const file = files[0];
+            if (!file.type.startsWith('image/')) { setUploadMessage(NOT_AN_IMAGE); return; }
             const reader = new FileReader();
+            reader.onerror = () => setUploadMessage(NOT_AN_IMAGE);
             reader.onload = (e) => {
                 const img = new Image();
+                img.onerror = () => setUploadMessage(NOT_AN_IMAGE);
                 img.onload = () => {
-                    dom.processingCanvas.width = img.width; dom.processingCanvas.height = img.height;
-                    pCtx.drawImage(img, 0, 0);
-                    state.originalImageData = pCtx.getImageData(0, 0, img.width, img.height);
+                    const fit = Math.min(1, MAX_UPLOAD_SIDE / Math.max(img.width, img.height));
+                    const w = Math.max(1, Math.round(img.width * fit)), h = Math.max(1, Math.round(img.height * fit));
+                    dom.processingCanvas.width = w; dom.processingCanvas.height = h;
+                    pCtx.drawImage(img, 0, 0, w, h);
+                    state.originalImageData = pCtx.getImageData(0, 0, w, h);
                     dom.previewImage.style.display = 'block';
-                    if (!state.hasContent) { state.hasContent = true; }
+                    setUploadMessage('');
+                    state.hasContent = true;
                     processUploadedImage();
                 };
                 img.src = e.target.result;
             };
-            reader.readAsDataURL(files[0]);
+            reader.readAsDataURL(file);
+        }
+
+        // Slider changes are processed at most once per screen refresh.
+        let processPending = false;
+        function scheduleProcess() {
+            if (processPending) return;
+            processPending = true;
+            requestAnimationFrame(() => { processPending = false; processUploadedImage(); });
         }
 
         function processUploadedImage() {
@@ -535,20 +579,28 @@
             return dst;
         }
 
+        // Drawn signatures are saved at least twice the on-screen size for sharp edges.
+        const DRAW_MIN_RESOLUTION = 2;
+
         function setupDrawing() {
             const resizeCanvas = () => {
-                // Use layout size (not on-screen size) so the canvas still fills the
-                // preview when the tool is scaled to fit a frame.
-                dom.drawingCanvas.width = dom.previewArea.clientWidth;
-                dom.drawingCanvas.height = dom.previewArea.clientHeight;
+                // Size to the preview's layout size (so it still fills the preview when the
+                // tool is scaled to fit a frame), with extra pixels so drawn signatures
+                // are sharp. Points are stored in layout units, so a resize keeps them.
+                const w = dom.previewArea.clientWidth, h = dom.previewArea.clientHeight;
+                state.drawRes = Math.max(DRAW_MIN_RESOLUTION, window.devicePixelRatio || 1);
+                dom.drawingCanvas.width = Math.round(w * state.drawRes);
+                dom.drawingCanvas.height = Math.round(h * state.drawRes);
+                dom.drawingCanvas.style.width = w + 'px';
+                dom.drawingCanvas.style.height = h + 'px';
                 redrawDrawing();
             }
             const getPos = (e) => {
                 const rect = dom.drawingCanvas.getBoundingClientRect();
                 const event = e.touches ? e.touches[0] : e;
-                // Convert screen position to canvas pixels (they differ when scaled).
-                const sx = dom.drawingCanvas.width / (rect.width || 1);
-                const sy = dom.drawingCanvas.height / (rect.height || 1);
+                // Convert screen position to layout units (they differ when scaled).
+                const sx = dom.drawingCanvas.clientWidth / (rect.width || 1);
+                const sy = dom.drawingCanvas.clientHeight / (rect.height || 1);
                 return [(event.clientX - rect.left) * sx, (event.clientY - rect.top) * sy];
             }
             const startDrawing = (e) => {
@@ -590,7 +642,10 @@
         }
 
         function redrawDrawing() {
+            dCtx.setTransform(1, 0, 0, 1, 0, 0);
             dCtx.clearRect(0, 0, dom.drawingCanvas.width, dom.drawingCanvas.height);
+            const res = state.drawRes || 1;
+            dCtx.setTransform(res, 0, 0, res, 0, 0);
             updateDrawingStyle();
             state.drawPoints.forEach(path => {
                 if (path.length < 2) return;
@@ -630,7 +685,7 @@
         function setupTyping() {
             dom.signatureText.addEventListener('input', () => {
                 const hasValue = dom.signatureText.value.trim().length > 0;
-                dom.clearTextBtn.style.display = hasValue ? 'block' : 'none';
+                dom.clearTextBtn.style.display = hasValue ? 'flex' : 'none';
                 state.fontChosen = false;
                 updateTypedSignature();
                 const words = dom.signatureText.value.trim().split(/\s+/);
@@ -643,6 +698,7 @@
             dom.clearTextBtn.addEventListener('click', () => {
                 dom.signatureText.value = '';
                 dom.signatureText.dispatchEvent(new Event('input'));
+                dom.signatureText.focus();
             });
 
             dom.fontPreviewList.addEventListener('click', (e) => {
@@ -671,8 +727,10 @@
                 dom.typedSignaturePreview.style.display = 'none';
                 dom.fontPreviewList.innerHTML = '';
                 fontList.forEach(font => {
-                    const item = document.createElement('div');
+                    const item = document.createElement('button');
+                    item.type = 'button';
                     item.className = 'font-preview-item';
+                    item.setAttribute('aria-label', `Use the ${font} style`);
                     item.style.fontFamily = `'${font}', cursive`;
                     item.textContent = text || font;
                     item.dataset.font = font;
@@ -684,7 +742,7 @@
         }
 
         function setupStyling() {
-            dom.colorSelectors.addEventListener('click', (e) => { const button = e.target.closest('button'); if (button && colorValues[button.id]) { state.currentColor = colorValues[button.id].rgb; dom.colorSelectors.querySelector('.active')?.classList.remove('active'); button.classList.add('active'); dom.previewArea.classList.toggle('dark-bg', button.id === 'color-white'); applyStyles(); } });
+            dom.colorSelectors.addEventListener('click', (e) => { const button = e.target.closest('button'); if (button && colorValues[button.id]) { state.currentColor = colorValues[button.id].rgb; dom.colorSelectors.querySelectorAll('button').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); }); button.classList.add('active'); button.setAttribute('aria-pressed', 'true'); dom.previewArea.classList.toggle('dark-bg', button.id === 'color-white'); applyStyles(); } });
             dom.sizeSlider.addEventListener('input', (e) => { state.currentSize = e.target.value; applyStyles(); });
         }
         function applyStyles() { if (state.mode === 'upload') processUploadedImage(); else if (state.mode === 'draw') redrawDrawing(); else if (state.mode === 'type') updateTypedSignature(); }
@@ -717,7 +775,7 @@
         // garbled the letters when the tool was scaled to fit a frame.)
         async function renderTypedSignature() {
             const text = dom.signatureText.value.trim();
-            const fontSize = 70, pad = 20, scale = Math.max(1, window.devicePixelRatio || 1);
+            const fontSize = 70, pad = 20, scale = Math.max(2, window.devicePixelRatio || 1);
             const font = `${fontSize}px '${state.selectedFont}', cursive`;
             try { await document.fonts.load(font, text); } catch (e) { /* use fallback font */ }
             const canvas = document.createElement('canvas');
