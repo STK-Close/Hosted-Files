@@ -551,6 +551,17 @@
         .alt-box textarea { width: 100%; box-sizing: border-box; min-height: 64px; font-size: var(--text-sm); font-family: 'Open Sans', sans-serif; padding: 6px 10px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); resize: vertical; color: var(--slate-700); background: var(--white); }
         .alt-box button { align-self: flex-start; min-height: var(--target-min); padding: 0 14px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); background: transparent; color: var(--slate-700); font-weight: 600; cursor: pointer; font-size: var(--text-sm); }
 
+        /* Numbers found in the text */
+        .found-panel { grid-column: 1 / -1; border: 1px solid var(--slate-200); border-radius: var(--rounded-md); padding: 0 12px; }
+        .found-panel > summary { min-height: var(--target-min); display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--slate-700); }
+        .found-text { font-size: var(--text-sm); line-height: 2.1; color: var(--slate-700); margin: 0 0 8px; white-space: pre-wrap; }
+        .num-mark { font: inherit; font-weight: 700; border-radius: 4px; padding: 1px 4px; cursor: pointer; border: 1px solid transparent; }
+        .num-mark.charted { background: #dcfce7; color: #14532d; border-color: #86efac; }
+        .num-mark.skipped { background: var(--slate-100); color: var(--slate-700); border-color: var(--slate-300); text-decoration: line-through dotted; }
+        .found-key { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--muted-text); margin: 0 0 12px; }
+        .card-sentence mark { background: #dcfce7; color: inherit; border-radius: 3px; padding: 0 2px; font-style: normal; font-weight: 600; }
+        .visual-card.flash { box-shadow: 0 0 0 4px rgba(0, 184, 245, 0.6); border-color: var(--kpmg-pacific); }
+
         /* Numbers that weren't charted */
         .skipped-panel { grid-column: 1 / -1; border: 1px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 0 12px; }
         .skipped-panel > summary { min-height: var(--target-min); display: flex; align-items: center; cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--slate-700); }
@@ -1835,6 +1846,7 @@ let currentClaims = [];
 // charts and every download.
 let NUMBER_FORMAT = { style: 'short', decimals: 'auto' };
 let lastSkipped = [];   // numbers found in the text that weren't charted
+let lastFound = null;   // the text with every number marked charted or not
 // Chart style: headline titles (the takeaway) or label titles, and whether to
 // point out the key fact on each chart.
 let CHART_STYLE = { titles: 'headline', keyFact: true };
@@ -2321,6 +2333,10 @@ dom.mainInput.addEventListener('input', () => { lastWorkbook = null; });
     keyFact.addEventListener('change', applyStyle);
 })();
 
+// Save edits (titles, descriptions, numbers) and typed text as they happen.
+dom.gallery.addEventListener('input', () => scheduleSave());
+dom.mainInput.addEventListener('input', () => scheduleSave());
+
 // ---------- INPUT ACTIONS ----------
 dom.generateBtn.addEventListener('click', generate);
 dom.mainInput.addEventListener('keydown', (e) => {
@@ -2445,6 +2461,34 @@ function handleFile(file) {
     else reader.readAsText(file);
 }
 
+// ---------- CLEANUP FOR TEXT PASTED FROM WORD, PDF OR POWERPOINT ----------
+// Removes footnote marks, page numbers and odd spaces, joins lines that a PDF
+// broke in the middle of a sentence, and turns bullets into sentences.
+function cleanPastedText(text) {
+    let t = String(text)
+        .replace(/\r\n?/g, '\n')
+        .replace(/[\u00a0\u2007\u202f]/g, ' ')
+        .replace(/[\u200b\u00ad]/g, '')
+        .replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]+/g, '')                          // superscript footnote marks
+        .replace(/(\S)\s?\[\d{1,3}\](?=[\s.,;:!?)]|$)/g, '$1')   // [1] style footnotes
+        .replace(/(\d%?)\*+(?=\W|$)/g, '$1')                    // 22%* footnote stars
+        .replace(/(\w)-\n(\w)/g, '$1$2');                       // hyphenated line breaks
+    const lines = t.split('\n').filter(l => !/^\s*(page\s+\d+(\s+of\s+\d+)?|\d{1,3})\s*$/i.test(l));
+    const items = [];
+    const BULLET = /^\s*(?:[•◦▪●■□➢►\-*–—]|\d{1,2}[.)]|[a-z][.)])\s+/i;
+    lines.forEach(line => {
+        const isBullet = BULLET.test(line);
+        const l = line.replace(BULLET, '').trim();
+        if (!l) { items.push({ text: '', bullet: false }); return; }
+        const prev = items.length ? items[items.length - 1] : null;
+        // A line that continues the sentence above (PDF wrapping) is joined to it.
+        if (!isBullet && prev && prev.text && !/[.!?:;]$/.test(prev.text) && /^[a-z0-9$(%]/.test(l)) prev.text += ' ' + l;
+        else items.push({ text: l, bullet: isBullet });
+    });
+    // Each bullet ends as its own sentence.
+    return items.map(i => i.bullet && !/[.!?:;]$/.test(i.text) ? i.text + '.' : i.text).join('\n').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function generate() {
     const text = dom.mainInput.value.trim();
     if (!text) {
@@ -2465,22 +2509,27 @@ function generate() {
         }
     }
     showDataOptions(lastTable);
+    let found = null;
     if (claims.length === 0) {
-        claims = extractClaims(text);
-        skipped = findSkippedNumbers(text, claims);
+        const clean = cleanPastedText(text);
+        claims = extractClaims(clean);
+        skipped = findSkippedNumbers(clean, claims);
+        found = { text: clean, marks: findNumberMarks(clean, claims) };
     }
     if (claims.length === 0) {
         showEmptyState();
         offerUndo(saved, 'No charts found.');
         return;
     }
-    renderClaims(claims, { skipped });
+    renderClaims(claims, { skipped, found });
     if (saved && saved.claims.some(c => c.edited)) offerUndo(saved, 'Your edited charts were replaced.');
 }
 
 function showEmptyState() {
     destroyAllCharts();
     lastSkipped = [];
+    lastFound = null;
+    scheduleSave();
     dom.gallery.innerHTML = `
         <div class="placeholder">
             <i class="fas fa-circle-question"></i>
@@ -2509,22 +2558,53 @@ function showToast(message, action) {
     showToast._t = setTimeout(() => dom.toast.classList.remove('show'), action ? 8000 : 2400);
 }
 
+// ---------- PICK UP WHERE YOU LEFT OFF ----------
+// The text and charts are kept in this browser only (never sent anywhere), so
+// a refresh or a closed tab doesn't lose work.
+const SESSION_KEY = 'chart-creator-session-v1';
+function saveSession() {
+    try {
+        const data = { text: dom.mainInput.value, claims: currentClaims, skipped: lastSkipped, found: lastFound, savedAt: Date.now() };
+        store.set(SESSION_KEY, JSON.stringify(data));
+    } catch (e) { /* too large or not allowed: skip */ }
+}
+function scheduleSave() { clearTimeout(scheduleSave._t); scheduleSave._t = setTimeout(saveSession, 500); }
+function restoreSession() {
+    let saved = null;
+    try { saved = JSON.parse(store.get(SESSION_KEY) || 'null'); } catch (e) {}
+    if (!saved || !Array.isArray(saved.claims) || saved.claims.length === 0) {
+        if (saved && saved.text) { dom.mainInput.value = saved.text; dom.clearInputBtn.disabled = !saved.text.trim(); autoGrowTextarea(dom.mainInput); }
+        return;
+    }
+    dom.mainInput.value = saved.text || '';
+    dom.clearInputBtn.disabled = !dom.mainInput.value.trim();
+    autoGrowTextarea(dom.mainInput);
+    try { renderClaims(saved.claims, { skipped: saved.skipped, found: saved.found }); }
+    catch (e) { console.error(e); showEmptyState(); return; }
+    showToast('Restored your last session.', { label: 'Start fresh', run: () => {
+        destroyAllCharts(); currentClaims = []; claimRenderers = [];
+        dom.mainInput.value = ''; dom.clearInputBtn.disabled = true; autoGrowTextarea(dom.mainInput);
+        showEmptyState(); saveSession();
+    } });
+}
+
 // ---------- UNDO ----------
 // Before charts are replaced, cleared or removed, keep a copy so one tap on
 // Undo brings them back, edits included.
 function saveGalleryForUndo() {
     if (currentClaims.length === 0) return null;
-    return { claims: JSON.parse(JSON.stringify(currentClaims)), skipped: lastSkipped };
+    return { claims: JSON.parse(JSON.stringify(currentClaims)), skipped: lastSkipped, found: lastFound };
 }
 function offerUndo(saved, message) {
     if (!saved) return;
-    showToast(message, { label: 'Undo', run: () => { renderClaims(saved.claims, { skipped: saved.skipped }); showToast('Charts restored'); } });
+    showToast(message, { label: 'Undo', run: () => { renderClaims(saved.claims, { skipped: saved.skipped, found: saved.found }); showToast('Charts restored'); } });
 }
 
 // ---------- RENDERING ----------
 
 function renderClaims(claims, options = {}) {
     lastSkipped = options.skipped || [];
+    lastFound = options.found || null;
     destroyAllCharts();
     currentClaims = claims;
     claimRenderers = [];
@@ -2547,7 +2627,9 @@ function renderClaims(claims, options = {}) {
         requestAnimationFrame(() => card.render());
     });
 
-    renderSkippedPanel(lastSkipped);
+    renderFoundPanel(lastFound, lastSkipped);
+    renderSkippedPanel(lastFound ? [] : lastSkipped);
+    scheduleSave();
 
     dom.downloadAllPptx.disabled = false;
     dom.downloadAllHtml.disabled = false;
@@ -2583,6 +2665,81 @@ function findSkippedNumbers(text, claims) {
         }
     });
     return out;
+}
+
+// Every number in the text, with the card it went into (or none).
+function findNumberMarks(text, claims) {
+    const numRe = new RegExp(`(${NUMBER_SRC})(?:\\s*(?:–|—|-)\\s*(${NUMBER_SRC}))?`, 'g');
+    const spans = claims.map((c, i) => {
+        const at = c.sentence ? text.indexOf(c.sentence.split(' … ')[0]) : -1;
+        return { i, start: at, end: at >= 0 ? at + c.sentence.split(' … ')[0].length : -1, sentences: (c.sentence || '').split(' … ') };
+    });
+    const marks = [];
+    let m;
+    while ((m = numRe.exec(text)) !== null) {
+        const lead = m[0].length - m[0].trimStart().length;
+        const start = m.index + lead, end = m.index + m[0].length;
+        if (/[A-Za-z]$/.test(text.slice(0, start))) continue;
+        const num = parseNumber(m[1].trim());
+        if (!num) continue;
+        const second = m[2] ? parseNumber(m[2].trim()) : null;
+        if (!num.unit && !second && Number.isInteger(num.value) && num.value >= 1900 && num.value <= 2100) continue;
+        const values = [num.value].concat(second ? [second.value] : []);
+        let card = -1;
+        for (const sp of spans) {
+            const c = claims[sp.i];
+            const inside = sp.sentences.some(sen => { const a = text.indexOf(sen); return a >= 0 && start >= a && start < a + sen.length; });
+            if (!inside) continue;
+            const nums = numbersIn(c).map(Math.abs);
+            if (values.some(v => nums.some(n => Math.abs(n - Math.abs(v)) < 1e-9))) { card = sp.i; break; }
+        }
+        marks.push({ start, end, card });
+    }
+    return marks;
+}
+
+function renderFoundPanel(found, skipped) {
+    if (!found || !found.marks || found.marks.length === 0) return;
+    const charted = found.marks.filter(m => m.card >= 0).length;
+    const notCharted = found.marks.length - charted;
+    const panel = document.createElement('details');
+    panel.className = 'found-panel';
+    if (notCharted > 0) panel.className += ' skipped-panel';
+    const summary = document.createElement('summary');
+    summary.textContent = `Numbers in your text: ${charted} charted${notCharted ? `, ${notCharted} not charted` : ''}`;
+    panel.appendChild(summary);
+    const key = document.createElement('p');
+    key.className = 'found-key';
+    key.innerHTML = '<span><span class="num-mark charted">12%</span> charted: select it to go to its chart</span><span><span class="num-mark skipped">12%</span> not charted: not enough context</span>';
+    panel.appendChild(key);
+    const p = document.createElement('p');
+    p.className = 'found-text';
+    let pos = 0;
+    found.marks.forEach(mk => {
+        p.appendChild(document.createTextNode(found.text.slice(pos, mk.start)));
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'num-mark ' + (mk.card >= 0 ? 'charted' : 'skipped');
+        b.textContent = found.text.slice(mk.start, mk.end);
+        if (mk.card >= 0) {
+            b.setAttribute('aria-label', `${b.textContent}, charted. Go to its chart.`);
+            b.addEventListener('click', () => {
+                const r = claimRenderers[mk.card];
+                if (!r) return;
+                r.el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+                r.el.classList.add('flash');
+                setTimeout(() => r.el.classList.remove('flash'), 1600);
+            });
+        } else {
+            b.setAttribute('aria-label', `${b.textContent}, not charted`);
+            b.addEventListener('click', () => showToast('Not charted: there wasn\'t enough context. Try "X grew from A to B" or "X: 10, Y: 20".'));
+        }
+        p.appendChild(b);
+        pos = mk.end;
+    });
+    p.appendChild(document.createTextNode(found.text.slice(pos)));
+    panel.appendChild(p);
+    dom.gallery.prepend(panel);
 }
 
 function renderSkippedPanel(skipped) {
@@ -2841,7 +2998,7 @@ function buildCardFor(claim, idx) {
         const saved = saveGalleryForUndo();
         currentClaims.splice(idx, 1);
         if (currentClaims.length === 0) showEmptyState();
-        else renderClaims(currentClaims, { skipped: lastSkipped });
+        else renderClaims(currentClaims, { skipped: lastSkipped, found: lastFound && { ...lastFound, marks: findNumberMarks(lastFound.text, currentClaims) } });
         offerUndo(saved, 'Chart removed.');
     };
     actions.appendChild(rmBtn);
@@ -2862,7 +3019,25 @@ function buildCardFor(claim, idx) {
     // --- ORIGINAL SENTENCE (small context) ---
     const sentenceEl = document.createElement('div');
     sentenceEl.className = 'card-sentence';
-    sentenceEl.textContent = `"${claim.sentence}"`;
+    // The source sentence, with the numbers this chart uses highlighted.
+    (() => {
+        const quote = `"${claim.sentence}"`;
+        const nums = numbersIn(claim).map(Math.abs);
+        const numRe = new RegExp(`(${NUMBER_SRC})(?:\\s*(?:–|—|-)\\s*(${NUMBER_SRC}))?`, 'g');
+        let pos = 0, m;
+        while ((m = numRe.exec(quote)) !== null) {
+            const lead = m[0].length - m[0].trimStart().length;
+            const start = m.index + lead;
+            const n = parseNumber(m[1].trim());
+            if (!n || !nums.some(v => Math.abs(v - Math.abs(n.value)) < 1e-9)) continue;
+            sentenceEl.appendChild(document.createTextNode(quote.slice(pos, start)));
+            const mk = document.createElement('mark');
+            mk.textContent = quote.slice(start, m.index + m[0].length);
+            sentenceEl.appendChild(mk);
+            pos = m.index + m[0].length;
+        }
+        sentenceEl.appendChild(document.createTextNode(quote.slice(pos)));
+    })();
     sentenceEl.title = claim.sentence;
 
     // --- BODY (the actual chart or stat) ---
@@ -2921,6 +3096,7 @@ function buildCardFor(claim, idx) {
             const altArea = el.querySelector('.alt-box textarea');
             if (altArea) altArea.value = alt;
             renderClaimInto(claim, body, instance => { this.chartInstance = instance; });
+            scheduleSave();
         },
         async getPngBlob() {
             // Use captureCardAsExport which always returns a 1280x720 contextual export
@@ -4208,6 +4384,10 @@ function blobToDataURL(blob) {
         reader.readAsDataURL(blob);
     });
 }
+
+
+// Bring back the last session, if there is one.
+restoreSession();
 
 </script>
 </body>
