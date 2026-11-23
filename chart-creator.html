@@ -1,0 +1,3011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creative Services' Chart Creator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0; --slate-300: #cbd5e1;
+            --slate-400: #94a3b8; --slate-500: #64748b; --slate-600: #475569; --slate-700: #334155;
+            --blue-500: #3b82f6; --blue-800: #1e40af; --blue-900: #1e3a8a;
+            --white: #ffffff; --kpmg-blue: #00338D; --kpmg-pacific: #00B8F5;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --rounded-md: 0.375rem; --rounded-xl: 0.75rem;
+        }
+        [data-theme="dark"] {
+            --slate-50: #0f172a; --slate-100: #1e293b; --slate-200: #334155;
+            --slate-300: #475569; --slate-400: #64748b; --slate-600: #94a3b8; --slate-700: #f1f5f9;
+            --white: #1e293b; --blue-900: #60a5fa; --kpmg-blue: #3b82f6;
+            color-scheme: dark;
+        }
+
+        html, body { height: 100vh; margin: 0; overflow: hidden; }
+        body { font-family: 'Open Sans', sans-serif; background-color: var(--slate-50); color: var(--slate-700); font-size: 13px; display: flex; flex-direction: column; transition: background-color 0.3s, color 0.3s; }
+
+        .header-container { background-color: var(--white); box-shadow: var(--shadow-sm); padding: 0.75rem 1.5rem; z-index: 10; flex-shrink: 0; transition: background-color 0.3s; }
+        .header { display: flex; align-items: center; justify-content: space-between; max-width: 1600px; margin: 0 auto; }
+        h1 { color: var(--blue-900); font-weight: 600; font-size: 1.1rem; margin: 0; }
+
+        #theme-toggle { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-300); padding: 6px 10px; border-radius: var(--rounded-md); cursor: pointer; font-size: 1.1rem; transition: all 0.2s; }
+        #theme-toggle:hover { background-color: var(--slate-100); color: var(--blue-900); }
+        [data-theme="dark"] #theme-toggle { color: #cbd5e1; border-color: #475569; }
+        [data-theme="dark"] #theme-toggle:hover { background-color: #334155; color: white; }
+
+        .main-container { flex-grow: 1; display: grid; grid-template-columns: 360px 1fr; gap: 1rem; width: 100%; max-width: 1600px; margin: 0 auto; padding: 1rem; box-sizing: border-box; min-height: 0; overflow: hidden; }
+        .controls-column, .workspace-column { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+
+        /* CONTROLS CARD (left column) */
+        .controls-card {
+            background: var(--white); border-radius: var(--rounded-xl);
+            box-shadow: var(--shadow-md); padding: 1rem;
+            display: flex; flex-direction: column; gap: 0.75rem;
+            flex-grow: 1; min-height: 0; overflow-y: auto;
+            transition: background-color 0.3s;
+        }
+        .controls-card .section-title {
+            font-weight: 700; font-size: 0.82rem; color: var(--blue-900);
+            margin: 0 0 4px 0;
+        }
+        .controls-card .helper {
+            font-size: 0.72rem; color: var(--slate-500); margin: -2px 0 4px 0; line-height: 1.3;
+        }
+        #main-input {
+            width: 100%; min-height: 130px; max-height: 500px;
+            padding: 10px 12px;
+            border: 1.5px solid var(--slate-200); border-radius: var(--rounded-md);
+            font-family: 'Arial', sans-serif; font-size: 13px;
+            background: var(--white); color: var(--slate-700); resize: vertical;
+            line-height: 1.5; box-sizing: border-box; transition: border-color 0.2s, box-shadow 0.2s;
+            overflow-y: auto;
+        }
+        #main-input:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+        [data-theme="dark"] #main-input { color: #ffffff; }
+
+        .control-btn {
+            width: 100%; background: var(--blue-800); color: white; border: none;
+            padding: 9px 14px; border-radius: var(--rounded-md);
+            font-family: 'Open Sans', sans-serif; font-weight: 600; cursor: pointer; font-size: 13px;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .control-btn:hover:not(:disabled) { background: var(--blue-900); }
+        .control-btn.secondary {
+            background: transparent; color: var(--slate-600); border: 1px solid var(--slate-300);
+        }
+        .control-btn.secondary:hover:not(:disabled) { background: var(--slate-100); color: var(--blue-900); border-color: var(--blue-500); }
+        .control-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* Examples laid out as 2x2 grid to reduce vertical space */
+        .examples-list {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
+        }
+        .example-chip {
+            background: var(--slate-100); border: 1px solid var(--slate-200);
+            color: var(--slate-700); padding: 6px 8px; border-radius: var(--rounded-md);
+            font-size: 0.72rem; cursor: pointer; font-weight: 600;
+            text-align: left;
+            transition: all 0.15s;
+            font-family: 'Open Sans', sans-serif;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .example-chip:hover { background: var(--blue-800); color: white; border-color: var(--blue-800); }
+        .example-chip .icon { color: var(--slate-400); margin-right: 5px; }
+        .example-chip:hover .icon { color: rgba(255,255,255,0.7); }
+
+        .controls-card.dragover { outline: 2px dashed var(--blue-500); outline-offset: -4px; background: rgba(59, 130, 246, 0.05); }
+        [data-theme="dark"] .example-chip { color: var(--slate-700); }
+
+        /* WORKSPACE (right column) */
+        .workspace-card {
+            background: var(--white); border-radius: var(--rounded-xl);
+            box-shadow: var(--shadow-md); padding: 1rem;
+            display: flex; flex-direction: column; flex-grow: 1; min-height: 0; overflow: hidden;
+            transition: background-color 0.3s;
+        }
+        .output-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding-bottom: 0.5rem; margin-bottom: 0.75rem;
+            border-bottom: 1px solid var(--slate-100); flex-shrink: 0;
+            gap: 0.5rem; flex-wrap: wrap;
+        }
+        .output-header h3 {
+            margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--slate-700);
+        }
+        .output-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .output-actions button {
+            background: transparent; border: 1px solid var(--slate-300); color: var(--slate-600);
+            padding: 6px 12px; border-radius: var(--rounded-md); font-size: 12px; font-weight: 600;
+            font-family: 'Open Sans', sans-serif;
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            transition: all 0.15s;
+        }
+        .output-actions button:hover:not(:disabled) { background: var(--blue-800); color: white; border-color: var(--blue-800); }
+        .output-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+        .output-actions button.danger:hover:not(:disabled) { background: #ef4444; border-color: #ef4444; }
+
+        /* CHART TYPE PICKER (per-card) */
+        .chart-type-picker {
+            position: relative;
+        }
+        .chart-type-menu {
+            position: absolute; top: 100%; right: 0; margin-top: 4px;
+            background: var(--white); border: 1px solid var(--slate-200);
+            border-radius: var(--rounded-md); box-shadow: var(--shadow-md);
+            padding: 4px; z-index: 100; min-width: 140px; display: none;
+        }
+        .chart-type-menu.visible { display: block; }
+        .chart-type-menu button {
+            display: flex; width: 100%; text-align: left; align-items: center; gap: 8px;
+            background: transparent; border: none; color: var(--slate-700);
+            padding: 6px 10px; border-radius: 3px; cursor: pointer;
+            font-size: 0.8rem; font-family: 'Open Sans', sans-serif;
+        }
+        .chart-type-menu button:hover { background: var(--slate-100); color: var(--blue-900); }
+        .chart-type-menu button.active { color: var(--blue-800); font-weight: 700; background: var(--slate-50); }
+
+        /* GALLERY */
+        .gallery {
+            flex-grow: 1; overflow-y: auto; padding-right: 4px;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1rem; align-content: start;
+        }
+        .placeholder {
+            grid-column: 1 / -1; padding: 3rem 2rem; text-align: center;
+            color: var(--slate-400);
+        }
+        .placeholder i { font-size: 56px; margin-bottom: 12px; color: var(--slate-300); display: block; }
+        .placeholder p { margin: 6px 0; font-size: 0.9rem; }
+        .placeholder p.muted { font-size: 0.75rem; color: var(--slate-400); }
+
+        /* CARDS — fixed total height so every visual occupies the same space */
+        .visual-card {
+            background: var(--white); border: 1px solid var(--slate-200);
+            border-radius: var(--rounded-md); padding: 14px;
+            display: flex; flex-direction: column; gap: 6px;
+            height: 380px; position: relative;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .visual-card:hover { border-color: var(--blue-500); box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .card-title-row {
+            display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+            flex-shrink: 0;
+        }
+        .card-title {
+            font-weight: 700; color: var(--blue-900); font-size: 0.95rem;
+            line-height: 1.3; flex-grow: 1; cursor: text; outline: none;
+            padding: 2px 4px; margin: -2px -4px; border-radius: 3px;
+            transition: background 0.1s;
+            word-break: break-word;
+        }
+        .card-title:hover, .card-title:focus { background: var(--slate-100); }
+        .card-title:empty:before { content: 'Untitled'; color: var(--slate-400); }
+        [data-theme="dark"] .card-title { color: #93c5fd; }
+        .card-actions {
+            display: flex; gap: 2px; flex-shrink: 0;
+        }
+        .card-actions button {
+            background: transparent; border: none; color: var(--slate-400);
+            cursor: pointer; padding: 3px 6px; font-size: 12px;
+            border-radius: 3px;
+        }
+        .card-actions button:hover { color: var(--blue-800); background: var(--slate-100); }
+        .card-actions button.danger:hover { color: #ef4444; }
+        /* Editable description — shows placeholder when empty, click to edit */
+        .card-description {
+            font-size: 0.78rem; color: var(--slate-600); line-height: 1.4;
+            cursor: text; outline: none; padding: 2px 4px; margin: -2px -4px 0;
+            border-radius: 3px; transition: background 0.1s;
+            min-height: 1.1em; max-height: 2.8em; overflow: hidden;
+            flex-shrink: 0;
+        }
+        .card-description:hover, .card-description:focus { background: var(--slate-100); }
+        .card-description:empty:before { content: 'Click to add a description…'; color: var(--slate-400); font-style: italic; }
+        [data-theme="dark"] .card-description { color: var(--slate-600); }
+        /* Original sentence — small context line */
+        .card-sentence {
+            font-size: 0.68rem; color: var(--slate-400); font-style: italic;
+            line-height: 1.35; max-height: 2.7em; overflow: hidden;
+            text-overflow: ellipsis; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+            flex-shrink: 0;
+        }
+        .card-body {
+            flex-grow: 1; min-height: 0; display: flex;
+            align-items: center; justify-content: center; position: relative;
+        }
+        /* Editable axis label below chart */
+        .axis-label-row {
+            display: flex; justify-content: center;
+            font-size: 0.7rem; color: var(--slate-500); padding: 4px 0 0 0;
+            flex-shrink: 0;
+        }
+        .axis-label {
+            cursor: text; outline: none; padding: 2px 6px;
+            border-radius: 3px; transition: background 0.1s; min-width: 30px; text-align: center;
+        }
+        .axis-label:hover, .axis-label:focus { background: var(--slate-100); }
+        .axis-label:empty:before { content: 'add axis label'; color: var(--slate-400); font-style: italic; }
+
+        /* STAT CARD — big number on top, unit word below */
+        .stat-display {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 8px; width: 100%; height: 100%;
+        }
+        .stat-number {
+            font-size: 5rem; font-weight: 700; line-height: 1;
+            color: var(--kpmg-blue); letter-spacing: -0.02em; text-align: center;
+        }
+        [data-theme="dark"] .stat-number { color: #60a5fa; }
+        .stat-unit-word {
+            font-size: 0.95rem; color: var(--slate-500); font-weight: 600;
+            text-transform: lowercase; letter-spacing: 0.02em;
+            cursor: text; outline: none; padding: 2px 8px;
+            border-radius: 3px; transition: background 0.1s; min-width: 30px; text-align: center;
+        }
+        .stat-unit-word:hover, .stat-unit-word:focus { background: var(--slate-100); }
+        /* Empty state shows a subtle dotted underline so users discover it's
+           editable, without a confusing "unit" placeholder word. When already
+           populated by parser, no underline shows. */
+        .stat-unit-word:empty {
+            min-height: 1.1em;
+            border-bottom: 1px dotted var(--slate-300);
+            opacity: 0.5;
+        }
+        .stat-unit-word:empty:hover, .stat-unit-word:empty:focus {
+            opacity: 1;
+            border-bottom-color: var(--blue-500);
+        }
+
+        /* DELTA — big arrow + number, smaller word below */
+        .delta-display {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 6px; width: 100%; height: 100%;
+        }
+        .delta-number {
+            font-size: 5rem; font-weight: 700; line-height: 1;
+            letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px;
+        }
+        .delta-number.up { color: #16a34a; }
+        .delta-number.down { color: #dc2626; }
+        .delta-arrow { font-size: 3.5rem; }
+
+        /* RATIO CARD */
+        .ratio-display {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 6px; width: 100%; height: 100%;
+        }
+        .ratio-numbers {
+            display: flex; align-items: baseline; gap: 12px;
+            font-weight: 700; color: var(--kpmg-blue);
+        }
+        .ratio-numbers .num { font-size: 5rem; line-height: 1; }
+        .ratio-numbers .sep { font-size: 2rem; color: var(--slate-400); }
+        .ratio-numbers .denom { font-size: 3.5rem; }
+        [data-theme="dark"] .ratio-numbers { color: #60a5fa; }
+        [data-theme="dark"] .ratio-numbers .sep { color: var(--slate-500); }
+
+        /* CHART MOUNT */
+        .chart-mount { width: 100%; height: 100%; min-height: 200px; }
+
+        /* MENU on per-card chart-type selector */
+        .chart-type-menu {
+            position: absolute; top: 100%; right: 0; margin-top: 4px;
+            background: var(--white); border: 1px solid var(--slate-200);
+            border-radius: var(--rounded-md); box-shadow: var(--shadow-md);
+            padding: 4px; z-index: 100; min-width: 160px; display: none;
+        }
+        .chart-type-menu.visible { display: block; }
+        .chart-type-menu button {
+            display: block; width: 100%; text-align: left;
+            background: transparent; border: none; color: var(--slate-700);
+            padding: 6px 10px; border-radius: 3px; cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .chart-type-menu button:hover { background: var(--slate-100); color: var(--blue-900); }
+        .chart-type-menu button.active { color: var(--blue-800); font-weight: 700; }
+
+        /* HIDDEN UTILITY */
+        .hidden { display: none !important; }
+        #file-input { display: none; }
+
+        /* SPINNER */
+        .spinner { width: 32px; height: 32px; border: 3px solid var(--slate-200); border-top-color: var(--blue-500); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* TOAST */
+        #toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px);
+            background: var(--slate-700); color: white; padding: 10px 18px;
+            border-radius: var(--rounded-md); font-size: 0.85rem; font-weight: 600;
+            box-shadow: var(--shadow-md); transition: transform 0.25s ease;
+            z-index: 1000;
+        }
+        #toast.show { transform: translateX(-50%) translateY(0); }
+
+        /* WELCOME PANEL — first-load overlay, dismissed forever once acknowledged */
+        .welcome-overlay {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+            display: none; align-items: center; justify-content: center;
+            z-index: 2000; padding: 20px;
+        }
+        .welcome-overlay.visible { display: flex; }
+        .welcome-card {
+            background: var(--white); border-radius: var(--rounded-xl);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            max-width: 540px; width: 100%; padding: 28px 32px;
+            font-family: 'Arial', sans-serif;
+        }
+        .welcome-card h2 {
+            margin: 0 0 6px 0; font-size: 1.35rem; color: var(--blue-900); font-weight: 700;
+        }
+        .welcome-card .lede {
+            color: var(--slate-600); font-size: 0.9rem; margin: 0 0 18px 0; line-height: 1.45;
+        }
+        .welcome-steps {
+            display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin: 0 0 18px 0;
+        }
+        .welcome-step-num {
+            background: var(--blue-800); color: white;
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+        }
+        .welcome-step-text {
+            color: var(--slate-700); font-size: 0.85rem; line-height: 1.4; padding-top: 2px;
+        }
+        .welcome-step-text b { color: var(--blue-900); }
+        .welcome-actions {
+            display: flex; gap: 8px; justify-content: flex-end; align-items: center;
+            border-top: 1px solid var(--slate-100); padding-top: 16px;
+            flex-wrap: wrap;
+        }
+        .welcome-actions .secondary-link {
+            color: var(--slate-600); text-decoration: none; font-size: 0.8rem;
+            display: inline-flex; align-items: center; gap: 6px;
+            margin-right: auto;
+        }
+        .welcome-actions .secondary-link:hover { color: var(--blue-800); }
+        .welcome-card button.primary {
+            background: var(--blue-800); color: white; border: none;
+            padding: 8px 18px; border-radius: var(--rounded-md);
+            font-weight: 600; cursor: pointer; font-size: 0.85rem;
+            font-family: 'Arial', sans-serif;
+        }
+        .welcome-card button.primary:hover { background: var(--blue-900); }
+
+        /* Show help button — bottom-RIGHT, small and unobtrusive */
+        #show-help-btn {
+            position: fixed; bottom: 20px; right: 20px; z-index: 100;
+            background: var(--white); border: 1px solid var(--slate-200);
+            color: var(--slate-600); padding: 8px 12px; border-radius: 999px;
+            font-size: 0.75rem; cursor: pointer;
+            box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 6px;
+            font-family: 'Arial', sans-serif;
+        }
+        #show-help-btn:hover { color: var(--blue-800); border-color: var(--blue-500); }
+        [data-theme="dark"] #show-help-btn { background: var(--slate-100); }
+
+        /* INTERACTIVE TOUR — dimmed backdrop with a cutout around the highlighted element,
+           plus a tooltip card anchored to it with Back / Next / Skip buttons. */
+        .tour-backdrop {
+            position: fixed; inset: 0; z-index: 1900;
+            pointer-events: none; display: none;
+        }
+        .tour-backdrop.visible { display: block; }
+        /* Four divs form the dimmed area around a rectangular cutout */
+        .tour-backdrop > .tour-mask {
+            position: absolute; background: rgba(15, 23, 42, 0.55);
+            pointer-events: auto; transition: all 0.25s ease;
+        }
+        /* Highlight ring around the target */
+        .tour-highlight {
+            position: fixed; z-index: 1901; pointer-events: none;
+            border: 3px solid var(--kpmg-pacific); border-radius: 8px;
+            box-shadow: 0 0 0 4px rgba(0, 184, 245, 0.25);
+            transition: all 0.25s ease;
+            display: none;
+        }
+        .tour-highlight.visible { display: block; }
+        .tour-tooltip {
+            position: fixed; z-index: 1902;
+            background: var(--white); border-radius: var(--rounded-md);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            padding: 16px 18px; max-width: 320px;
+            font-family: 'Arial', sans-serif;
+            transition: all 0.25s ease;
+            display: none;
+        }
+        .tour-tooltip.visible { display: block; }
+        .tour-tooltip .step-counter {
+            font-size: 0.7rem; color: var(--slate-500); font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+        }
+        .tour-tooltip h4 {
+            margin: 0 0 6px 0; color: var(--blue-900); font-size: 1rem; font-weight: 700;
+        }
+        .tour-tooltip p {
+            margin: 0 0 14px 0; color: var(--slate-700); font-size: 0.85rem; line-height: 1.45;
+        }
+        .tour-tooltip .tour-actions {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .tour-tooltip .tour-skip {
+            background: transparent; border: none; color: var(--slate-500);
+            font-size: 0.75rem; cursor: pointer; padding: 4px 6px;
+            font-family: 'Arial', sans-serif;
+        }
+        .tour-tooltip .tour-skip:hover { color: var(--blue-800); }
+        .tour-tooltip .tour-nav { display: flex; gap: 6px; }
+        .tour-tooltip .tour-nav button {
+            padding: 6px 14px; border-radius: var(--rounded-md);
+            font-size: 0.8rem; font-weight: 600; cursor: pointer;
+            font-family: 'Arial', sans-serif;
+        }
+        .tour-tooltip .tour-back {
+            background: transparent; color: var(--slate-600); border: 1px solid var(--slate-300);
+        }
+        .tour-tooltip .tour-back:hover { background: var(--slate-100); color: var(--blue-900); }
+        .tour-tooltip .tour-back:disabled { opacity: 0.4; cursor: not-allowed; }
+        .tour-tooltip .tour-next {
+            background: var(--blue-800); color: white; border: none;
+        }
+        .tour-tooltip .tour-next:hover { background: var(--blue-900); }
+        /* Arrow on tooltip pointing at the target */
+        .tour-tooltip::before {
+            content: ''; position: absolute; width: 0; height: 0;
+            border: 8px solid transparent;
+        }
+        .tour-tooltip[data-arrow="left"]::before {
+            top: 24px; left: -16px; border-right-color: var(--white);
+        }
+        .tour-tooltip[data-arrow="right"]::before {
+            top: 24px; right: -16px; border-left-color: var(--white);
+        }
+        .tour-tooltip[data-arrow="top"]::before {
+            left: 24px; top: -16px; border-bottom-color: var(--white);
+        }
+        .tour-tooltip[data-arrow="bottom"]::before {
+            left: 24px; bottom: -16px; border-top-color: var(--white);
+        }
+
+        @media (max-width: 900px) {
+            html, body { height: auto; overflow: auto; }
+            .main-container { display: flex; flex-direction: column; }
+            .gallery { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header-container">
+        <div class="header">
+            <h1>Creative Services' Chart Creator</h1>
+            <button id="theme-toggle" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- INPUT CARD -->
+        <!-- LEFT COLUMN: CONTROLS -->
+        <div class="controls-column">
+            <div class="controls-card" id="controls-card">
+                <h2 class="section-title">1. Paste text or upload a file</h2>
+                <textarea id="main-input" placeholder="Example: Our team grew from 28 people last year to 54 this year, and client satisfaction reached 92%."></textarea>
+
+                <button id="generate-btn" class="control-btn" title="Generate charts from the text above (or Ctrl/Cmd+Enter)"><i class="fas fa-wand-magic-sparkles"></i> Make charts</button>
+                <button id="file-btn" class="control-btn secondary" title="Upload a CSV, TSV, TXT, or Excel file"><i class="fas fa-file-arrow-up"></i> Upload file</button>
+                <button id="clear-input-btn" class="control-btn secondary" disabled title="Clear the input textarea"><i class="fas fa-eraser"></i> Clear input</button>
+                <input type="file" id="file-input" accept=".csv, .tsv, .txt, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+
+                <h2 class="section-title" style="margin-top: 6px;">2. Or try an example</h2>
+                <div class="examples-list">
+                    <button class="example-chip" data-example="growth" title="Try a paragraph with a year-over-year comparison"><i class="fas fa-arrow-trend-up icon"></i>Growth</button>
+                    <button class="example-chip" data-example="quarterly" title="Try a paragraph with Q1-Q4 numbers"><i class="fas fa-chart-line icon"></i>Quarterly</button>
+                    <button class="example-chip" data-example="breakdown" title="Try a list of categories with values"><i class="fas fa-chart-pie icon"></i>Breakdown</button>
+                    <button class="example-chip" data-example="narrative" title="Try a longer paragraph with multiple data points"><i class="fas fa-align-left icon"></i>Narrative</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: WORKSPACE -->
+        <div class="workspace-column">
+            <div class="workspace-card">
+                <div class="output-header">
+                    <h3 id="output-title">Visualizations</h3>
+                    <div class="output-actions">
+                        <button id="download-all-pptx" disabled title="Download all charts as a single PowerPoint deck (one slide per chart, charts are editable in PowerPoint)"><i class="fas fa-file-powerpoint"></i>&nbsp; Download as PPT</button>
+                        <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files — useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
+                        <button id="download-all-png" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; Download all PNG</button>
+                        <button id="clear-charts-btn" class="danger" disabled title="Remove all charts from the gallery"><i class="fas fa-trash"></i>&nbsp; Clear charts</button>
+                    </div>
+                </div>
+                <div class="gallery" id="gallery">
+                    <div class="placeholder">
+                        <i class="fas fa-wand-magic-sparkles"></i>
+                        <p>Type or paste some text in the left column, then click <b>Make charts</b>.</p>
+                        <p class="muted">No data formats to learn. We'll find the numbers in your sentences and create a chart for each one.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Help / welcome panel — shown on first visit, can be re-opened from the corner button -->
+    <div id="welcome-overlay" class="welcome-overlay">
+        <div class="welcome-card">
+            <h2>Welcome to Creative Services' Chart Creator</h2>
+            <p class="lede">Turn paragraphs of text or spreadsheet data into a gallery of polished charts in seconds.</p>
+            <div class="welcome-steps">
+                <div class="welcome-step-num">1</div>
+                <div class="welcome-step-text"><b>Paste text on the left</b>, or upload a CSV / Excel file. The textarea also accepts drag-and-drop.</div>
+                <div class="welcome-step-num">2</div>
+                <div class="welcome-step-text"><b>Click "Make charts"</b> — the tool finds every number in your text and creates the right kind of chart for each.</div>
+                <div class="welcome-step-num">3</div>
+                <div class="welcome-step-text"><b>Edit any title, description, or axis label</b> by clicking on it. Use the icons on each card to change chart type or download.</div>
+                <div class="welcome-step-num">4</div>
+                <div class="welcome-step-text"><b>Export everything</b> as a PowerPoint deck, a ZIP of PNGs, or HTML for web designers.</div>
+            </div>
+            <div class="welcome-actions">
+                <label style="display:inline-flex; align-items:center; gap:6px; font-size:0.78rem; color:var(--slate-600); margin-right:auto; cursor:pointer;">
+                    <input type="checkbox" id="welcome-autoshow-toggle" checked style="cursor:pointer;">
+                    Show this on every visit
+                </label>
+                <button class="primary" id="welcome-tour-btn" style="background:transparent; color:var(--blue-800); border:1px solid var(--blue-800);">
+                    <i class="fas fa-route"></i>&nbsp; Start tour
+                </button>
+                <button class="primary" id="welcome-dismiss-btn">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="show-help-btn" title="Show the welcome guide again">
+        <i class="fas fa-question-circle"></i> Help
+    </button>
+
+    <!-- Interactive tour: backdrop with 4 mask rectangles around a cutout,
+         a highlight ring on the target, and a tooltip card next to it. -->
+    <div class="tour-backdrop" id="tour-backdrop">
+        <div class="tour-mask" id="tour-mask-top"></div>
+        <div class="tour-mask" id="tour-mask-bottom"></div>
+        <div class="tour-mask" id="tour-mask-left"></div>
+        <div class="tour-mask" id="tour-mask-right"></div>
+    </div>
+    <div class="tour-highlight" id="tour-highlight"></div>
+    <div class="tour-tooltip" id="tour-tooltip">
+        <div class="step-counter" id="tour-step-counter">Step 1 of 6</div>
+        <h4 id="tour-title">Title</h4>
+        <p id="tour-text">Description</p>
+        <div class="tour-actions">
+            <button class="tour-skip" id="tour-skip">Skip tour</button>
+            <div class="tour-nav">
+                <button class="tour-back" id="tour-back">Back</button>
+                <button class="tour-next" id="tour-next">Next</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+// =========================================================================
+// PARSER — turns natural language into structured claims
+// =========================================================================
+
+// Current year for resolving "this year" / "last year" in chart labels.
+const CURRENT_YEAR = new Date().getFullYear();
+
+const HEDGE_WORDS = /\b(roughly|nearly|almost|about|approximately|around|some|a few|several|many|most|just|only|even|quite|rather|fairly)\b/gi;
+const TRIM_LEADING = /^(our|the|a|an|to|of|for|with|in|on|at|by|and|but|that|which|who|whose|while|when|since|though|although|however|despite|yet|meanwhile|also|primarily|including|due|because|as|so|then|its|their|these|those)\s+/i;
+const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretched|stretching|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted)\b/i;
+
+function parseNumber(raw) {
+    const cleaned = raw.trim();
+    // Suffix must be directly adjacent to the number (no space between).
+    // This prevents "48 t" — a number followed by a stray letter from an
+    // adjoining word — from being misread as 48 trillion.
+    const m = cleaned.match(/^(\$)?\s*(-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+(?:\.\d+)?)(K|M|B|T|k|m|b|t|%)?$/);
+    if (!m) return null;
+    const [, dollar, numStr, suffix] = m;
+    let value = parseFloat(numStr.replace(/,/g, ''));
+    if (isNaN(value)) return null;
+    let unit = '';
+    if (dollar) unit = '$';
+    if (suffix) {
+        const s = suffix.toUpperCase();
+        if (s === 'K') value *= 1e3;
+        else if (s === 'M') value *= 1e6;
+        else if (s === 'B') value *= 1e9;
+        else if (s === 'T') value *= 1e12;
+        else if (s === '%') unit = '%';
+    }
+    return { value, display: cleaned.replace(/\s+/g, ''), unit };
+}
+
+function extractSubject(textBefore) {
+    if (!textBefore) return null;
+    let cleaned = textBefore
+        .replace(HEDGE_WORDS, '')
+        .replace(/["""']/g, '')
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/—|–|--/g, ',')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const verbRe = new RegExp(CHANGE_VERB.source, 'gi');
+    let lastVerb = null;
+    let m;
+    while ((m = verbRe.exec(cleaned)) !== null) lastVerb = m;
+    let candidateA = lastVerb ? cleaned.substring(0, lastVerb.index).trim() : cleaned;
+    let candidateB = lastVerb ? cleaned.substring(lastVerb.index + lastVerb[0].length).trim() : '';
+    const a = refineCandidate(candidateA);
+    const b = refineCandidate(candidateB);
+    const pickB = b && (!a || a.length < 3 || /^by\s+|^the\s+/i.test(a));
+    const picked = pickB ? b : (a || b);
+    if (!picked) return null;
+    return picked.charAt(0).toUpperCase() + picked.slice(1).toLowerCase();
+}
+
+function refineCandidate(text) {
+    if (!text) return null;
+    const clauses = text.split(/,\s*/);
+    let candidate = clauses[clauses.length - 1] || text;
+    if (!candidate.trim() && clauses.length > 1) candidate = clauses[clauses.length - 2];
+    let prev = '';
+    while (prev !== candidate && TRIM_LEADING.test(candidate)) {
+        prev = candidate;
+        candidate = candidate.replace(TRIM_LEADING, '');
+    }
+    candidate = candidate
+        .replace(/[,;:\s]+$/g, '')
+        .replace(/\b(by|to|from|of|with|at|in|on|for|the|a|an|that|which|and|but|or|though|however|yet|while|meanwhile)\s*$/i, '')
+        .replace(/[,;:\s]+$/g, '')
+        .trim();
+    const words = candidate.split(/\s+/).filter(w => w.length > 0);
+    if (words.length > 5) candidate = words.slice(-5).join(' ');
+    else candidate = words.join(' ');
+    candidate = candidate
+        .replace(/^(a|an|the)?\s*\$?\d+(?:[.,]\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?\s*(reduction|increase|decrease|improvement|growth|decline|drop|rise|jump|change|expansion|contraction)?\s*(in|of|to|from)?\s+/i, '')
+        .trim();
+    let prev2 = '';
+    while (prev2 !== candidate && TRIM_LEADING.test(candidate)) {
+        prev2 = candidate;
+        candidate = candidate.replace(TRIM_LEADING, '');
+    }
+    if (candidate.length < 2 || candidate.length > 60) return null;
+    return candidate;
+}
+
+function titleFor(subject, fallback = 'Value') { return subject || fallback; }
+
+function extractClaims(text) {
+    if (!text || text.trim().length === 0) return [];
+    const wordToNum = {
+        one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+        eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+        seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20
+    };
+    text = text.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/gi,
+        (m) => wordToNum[m.toLowerCase()] || m);
+    const claims = [];
+    const sentences = splitSentences(text);
+    sentences.forEach(rawSentence => {
+        const sentence = rawSentence.trim();
+        if (sentence.length < 8) return;
+        const found = [];
+        found.push(...tryActivityBreakdown(sentence));
+        found.push(...tryBreakdown(sentence));
+        found.push(...tryTimeSeries(sentence));
+        found.push(...tryFromTo(sentence));
+        found.push(...tryMultipleComparison(sentence));
+        found.push(...tryComparedTo(sentence));
+        found.push(...tryNowFrom(sentence));
+        found.push(...tryDelta(sentence));
+        found.push(...tryRatio(sentence));
+        if (found.length === 0) found.push(...tryStat(sentence));
+        else found.push(...tryStat(sentence));
+        claims.push(...found);
+    });
+    return dedupe(claims);
+}
+
+function splitSentences(text) {
+    const placeholder = '\u0001';
+    const protectedText = text
+        .replace(/(\d)\.(\d)/g, `$1${placeholder}$2`)
+        .replace(/\b(Q|Mr|Mrs|Ms|Dr|Inc|Ltd|Co|Corp|U\.S|e\.g|i\.e)\./gi, `$1${placeholder}`);
+    const sentences = protectedText.split(/[.!?\n]+/).map(s => s.replace(new RegExp(placeholder, 'g'), '.'));
+    return sentences.filter(s => s.trim().length > 0);
+}
+
+function tryBreakdown(sentence) {
+    const pairs = [];
+    const pairRegex = /([A-Z][A-Za-z][A-Za-z\s&\/]{1,30}?)\s*[:=]\s*(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/g;
+    let m;
+    while ((m = pairRegex.exec(sentence)) !== null) {
+        const label = m[1].trim();
+        const num = parseNumber(m[2]);
+        if (num && label.length > 1 && label.length < 30 && !/^\d/.test(label)) {
+            pairs.push({ label, value: num.value, display: num.display });
+        }
+    }
+    if (pairs.length >= 2) {
+        return [{ kind: 'breakdown', title: 'Breakdown', items: pairs, unit: detectCommonUnit(pairs.map(p => p.display)), sentence }];
+    }
+    return [];
+}
+
+/**
+ * Recognize comma-separated activity lists like:
+ *   "8 hours sleeping, 8 hours working, 2 hours exercising, and 6 hours relaxing"
+ *   "spent $50 on groceries, $30 on gas, and $20 on coffee"
+ *   "12 emails for clients, 8 emails for the team, 5 emails for vendors"
+ *
+ * Structure: <number> <unit-word> <preposition?> <activity-label>, repeated.
+ * The activity label is whatever follows the number+unit until the next comma
+ * or end-of-clause.
+ */
+function tryActivityBreakdown(sentence) {
+    // Split into clause-fragments on commas and "and"
+    const chunks = sentence.split(/,\s*(?:and\s+)?|\s+and\s+/).map(c => c.trim()).filter(Boolean);
+    if (chunks.length < 3) return [];
+
+    // For each fragment, strip leading non-numeric prefix words ("Last week I spent")
+    // up to the first $ or digit, then test the rest as <number> <unit?> <activity>.
+    // Two shapes:
+    //   (a) "8 hours sleeping" — bare number + unit word + activity
+    //   (b) "$50 on groceries" — currency-prefixed number + preposition + activity (no unit word)
+    const itemReBare = /^(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)\s+([a-z]+s?)\s+(.+)$/i;
+    const itemReDollar = /^(\$\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z]))?)\s+(?:on|for|to|toward|towards|in|at|with)\s+(.+)$/i;
+
+    const items = [];
+    let commonUnitWord = null;
+    let hasDollarPrefix = false;
+
+    for (const chunk of chunks) {
+        // Strip everything up to and including any leading prefix words before the first digit or $
+        const stripped = chunk.replace(/^[^\d$]+(?=\$|\d)/, '').replace(/[.!?]+$/, '').trim();
+        if (!stripped) continue;
+
+        // Try dollar pattern first (it's more specific)
+        let m = stripped.match(itemReDollar);
+        if (m) {
+            const num = parseNumber(m[1]);
+            if (!num) continue;
+            const activityLabel = m[2].trim();
+            hasDollarPrefix = true;
+            if (commonUnitWord === null) commonUnitWord = 'dollars';
+            else if (commonUnitWord !== 'dollars') continue;
+            items.push({ label: cleanActivityLabel(activityLabel), value: num.value, display: num.display });
+            continue;
+        }
+
+        // Try bare number + unit word + activity
+        m = stripped.match(itemReBare);
+        if (!m) continue;
+        const num = parseNumber(m[1]);
+        if (!num) continue;
+        const unitWord = m[2].toLowerCase();
+        const activityLabel = m[3].trim();
+        if (!activityLabel) continue;
+
+        // Skip if the "unit word" is actually a preposition — that means there's
+        // no real unit word and our regex over-captured
+        if (/^(on|for|to|toward|towards|in|at|with|of|by)$/i.test(unitWord)) continue;
+
+        if (commonUnitWord === null) commonUnitWord = unitWord;
+        else if (commonUnitWord !== unitWord) continue;
+
+        items.push({ label: cleanActivityLabel(activityLabel), value: num.value, display: num.display });
+    }
+
+    if (items.length < 3) return [];
+
+    // Build a clean title from the unit word
+    const titleByUnit = {
+        hours: 'Hours by activity', hour: 'Hours by activity',
+        minutes: 'Minutes by activity', minute: 'Minutes by activity',
+        days: 'Days by activity', day: 'Days by activity',
+        weeks: 'Weeks by activity',
+        emails: 'Emails by recipient', email: 'Emails by recipient',
+        calls: 'Calls by category', call: 'Calls by category',
+        meetings: 'Meetings by category', meeting: 'Meetings by category',
+        dollars: 'Spending by category'
+    };
+    const title = titleByUnit[commonUnitWord] || `${capitalizeWords(commonUnitWord)} by category`;
+    return [{
+        kind: 'breakdown',
+        title,
+        items,
+        unit: hasDollarPrefix ? '$' : '',
+        sentence
+    }];
+}
+
+/**
+ * Clean an activity label: strip leading articles and prepositions, trailing
+ * punctuation, and capitalize words for display.
+ */
+function cleanActivityLabel(label) {
+    return capitalizeWords(
+        label
+            .replace(/^(?:on|for|to|toward|towards|in|at|with|of|by)\s+/i, '')
+            .replace(/^(the|a|an|my|our|their)\s+/i, '')
+            .replace(/[.!?]+$/, '')
+            .trim()
+    );
+}
+
+function tryTimeSeries(sentence) {
+    const claims = [];
+    const periodWord = '(?:Q[1-4]|Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|FY\\s*\\d{2,4}|H[12]|20\\d{2}|19\\d{2})';
+    const valuePart = '(\\$?\\s*\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?\\s*(?:[KMBT](?![a-zA-Z])|%)?)';
+    const re = new RegExp(`(${periodWord})\\s+(?:was|=|:|is|reached|hit|totaled|came in at)?\\s*${valuePart}`, 'gi');
+    const items = [];
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const label = m[1];
+        const num = parseNumber(m[2]);
+        if (num) items.push({ label, value: num.value, display: num.display });
+    }
+    if (items.length >= 3) {
+        const allYears = items.every(it => it.label.match(/^(19|20)\d{2}$/));
+        if (allYears && items.every(it => parseInt(it.label) === it.value)) return [];
+        const firstIdx = sentence.toLowerCase().indexOf(items[0].label.toLowerCase());
+        const subject = extractSubject(sentence.substring(0, firstIdx));
+        claims.push({ kind: 'series', title: titleFor(subject, 'Trend'), items, unit: detectCommonUnit(items.map(i => i.display)), sentence });
+    }
+    return claims;
+}
+
+function tryMultipleComparison(sentence) {
+    const claims = [];
+    const re = /(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)([^\d]{1,40}?)(?:double|triple|quadruple|half|twice|thrice)\s+(?:the\s+)?(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/gi;
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const after = parseNumber(m[1]);
+        const before = parseNumber(m[3]);
+        if (!after || !before) continue;
+        const subjectText = sentence.substring(0, m.index);
+        const subject = extractSubject(subjectText);
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || '', sentence });
+    }
+    return claims;
+}
+
+function tryFromTo(sentence) {
+    const claims = [];
+    const HEDGE = '(?:(?:roughly|nearly|almost|about|approximately|around|an?\\s+average\\s+of|an?\\s+estimated|the\\s+prior|a\\s+prior|the\\s+previous|a\\s+previous|a\\s+targeted)\\s+)*';
+    const NUM = '(\\$?\\s*\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?\\s*(?:[KMBT](?![a-zA-Z])|%)?)';
+    const reA = new RegExp(`\\bfrom\\s+${HEDGE}${NUM}([^\\d]{1,30}?)\\s*to\\s+${HEDGE}${NUM}`, 'gi');
+    let m;
+    while ((m = reA.exec(sentence)) !== null) {
+        const before = parseNumber(m[1]);
+        const after = parseNumber(m[3]);
+        if (!before || !after) continue;
+        const subjectText = sentence.substring(0, m.index);
+        const subject = extractSubject(subjectText);
+        let unit = before.unit || after.unit || '';
+        const afterTxt = sentence.substring(m.index + m[0].length, m.index + m[0].length + 30);
+        const unitMatch = (m[2] + ' ' + afterTxt).match(/\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|cups?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?)\b/i);
+        if (unitMatch) unit = unitMatch[1].toLowerCase();
+        // Capture temporal anchors next to each number ("in January", "on Monday", "in 2024").
+        // This lets the chart show real x-axis labels instead of generic Before/After.
+        const beforeLabel = extractTemporalAnchor(m[2]) || extractTemporalAnchor(sentence.substring(Math.max(0, m.index), m.index + m[0].length - m[3].length));
+        const afterLabel = extractTemporalAnchor(afterTxt);
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit, sentence, beforeLabel, afterLabel });
+    }
+    const reB = new RegExp(`\\bto\\s+${HEDGE}${NUM}([^\\d]{1,40}?)\\s*from\\s+(?:the\\s+prior\\s+|a\\s+prior\\s+|the\\s+previous\\s+|a\\s+previous\\s+)?${HEDGE}${NUM}`, 'gi');
+    while ((m = reB.exec(sentence)) !== null) {
+        const after = parseNumber(m[1]);
+        const before = parseNumber(m[3]);
+        if (!after || !before) continue;
+        if (claims.some(c => c.kind === 'comparison' && c.before.value === before.value && c.after.value === after.value)) continue;
+        const subjectText = sentence.substring(0, m.index);
+        const subject = extractSubject(subjectText);
+        let unit = before.unit || after.unit || '';
+        const afterTxt = sentence.substring(m.index + m[0].length, m.index + m[0].length + 30);
+        const unitMatch = (m[2] + ' ' + afterTxt).match(/\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|cups?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?)\b/i);
+        if (unitMatch) unit = unitMatch[1].toLowerCase();
+        // For "to X ... from Y" the after-anchor comes first, before-anchor comes after "from"
+        const afterLabel = extractTemporalAnchor(sentence.substring(Math.max(0, m.index), m.index + m[0].length).split(/\bfrom\b/i)[0]);
+        const beforeLabel = extractTemporalAnchor(afterTxt) || extractTemporalAnchor(m[2]);
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit, sentence, beforeLabel, afterLabel });
+    }
+    return claims;
+}
+
+/**
+ * Extract a temporal anchor (a month, day, year, quarter, or other time-reference)
+ * from a fragment of text. Returns the matched label capitalized for display,
+ * or null if no anchor found. Used to label comparison-chart axes with the
+ * actual periods being compared ("January" / "June", not "Before" / "After").
+ */
+const MONTH_RE = /\b(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b/i;
+const DAY_RE = /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Tues|Wed|Thu|Thur|Thurs|Fri|Sat|Sun)\b/i;
+const QUARTER_RE = /\b(Q[1-4](?:\s*\d{4})?|first quarter|second quarter|third quarter|fourth quarter)\b/i;
+const YEAR_RE = /\b(19\d{2}|20\d{2})\b/;
+const SEASON_RE = /\b(spring|summer|fall|autumn|winter)\b/i;
+
+function extractTemporalAnchor(text) {
+    if (!text) return null;
+    // Try in priority order: explicit year > quarter > month > day > season
+    let m;
+    if ((m = text.match(YEAR_RE))) return m[1];
+    if ((m = text.match(QUARTER_RE))) return capitalizeWords(m[1]);
+    if ((m = text.match(MONTH_RE))) return capitalizeWords(m[1]);
+    if ((m = text.match(DAY_RE))) return capitalizeWords(m[1]);
+    if ((m = text.match(SEASON_RE))) return capitalizeWords(m[1]);
+    return null;
+}
+
+function capitalizeWords(s) {
+    return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+function tryComparedTo(sentence) {
+    const claims = [];
+    const re = /(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)([^\d]{1,30}?)\s*(?:compared to|versus|vs\.?|against)\s+(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/gi;
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const after = parseNumber(m[1]);
+        const before = parseNumber(m[3]);
+        if (!after || !before) continue;
+        const subjectText = sentence.substring(0, m.index);
+        const subject = extractSubject(subjectText);
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || '', sentence });
+    }
+    return claims;
+}
+
+function tryNowFrom(sentence) {
+    const claims = [];
+    const re = /(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)([^\d]{1,40}?)(?:up from|down from|from the prior|from a prior|was previously|previously|the year prior)\s+(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/gi;
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const after = parseNumber(m[1]);
+        const before = parseNumber(m[3]);
+        if (!after || !before) continue;
+        const subjectText = sentence.substring(0, m.index);
+        const subject = extractSubject(subjectText);
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || '', sentence });
+    }
+    return claims;
+}
+
+function tryDelta(sentence) {
+    const claims = [];
+    const re = /\b(grew|rose|increased|jumped|climbed|expanded|fell|dropped|declined|decreased|reduced|shrank)\b[^.]{0,40}?\bby\s+(\d+(?:\.\d+)?%?)/gi;
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const verb = m[1].toLowerCase();
+        const num = parseNumber(m[2]);
+        if (!num) continue;
+        const subjectText = sentence.substring(0, m.index);
+        const subject = extractSubject(subjectText);
+        const direction = /grew|rose|increased|jumped|climbed|expanded/.test(verb) ? 'up' : 'down';
+        claims.push({ kind: 'delta', title: titleFor(subject, 'Change'), value: num, direction, unit: num.unit || '', sentence });
+    }
+    return claims;
+}
+
+function tryRatio(sentence) {
+    const claims = [];
+    const re = /\b(?:one|1)\b\s+(?:[a-z]+\s+)?(?:in|out of|of every|for every|per)\s+(\d{1,4})\b/gi;
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const n = parseInt(m[1]);
+        if (isNaN(n) || n < 2) continue;
+        const subject = extractSubject(sentence.substring(0, m.index));
+        claims.push({ kind: 'ratio', title: titleFor(subject, 'Ratio'), numerator: 1, denominator: n, sentence });
+    }
+    return claims;
+}
+
+function tryStat(sentence) {
+    const claims = [];
+    const rangeRe = /\d+(?:\.\d+)?\s*[%KMBT]?\s*[-–]\s*\d+(?:\.\d+)?\s*[%KMBT]/;
+    if (rangeRe.test(sentence)) return [];
+    if (/\bbetween\s+\d/.test(sentence) && /\band\s+\d/.test(sentence)) return [];
+    const re = /(?:^|[\s\(\[,;:])(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)(?=[\s\.,;:!?\)\]]|$)/g;
+    let m;
+    const found = [];
+    while ((m = re.exec(sentence)) !== null) {
+        const num = parseNumber(m[1]);
+        if (!num) continue;
+        if (!num.unit && num.value >= 1900 && num.value <= 2099 && Number.isInteger(num.value)) continue;
+        const subjectText = sentence.substring(0, m.index + m[0].indexOf(m[1]));
+        const subject = extractSubject(subjectText);
+        found.push({ num, subject, idx: m.index });
+    }
+    if (found.length === 0) return [];
+    const withSubject = found.filter(f => f.subject && f.subject.length > 2);
+    if (withSubject.length === 0) return [];
+    withSubject.sort((a, b) => a.idx - b.idx);
+    const kept = [];
+    for (const f of withSubject) {
+        const dup = kept.find(k => k.num.unit === f.num.unit && (k.subject === f.subject || k.subject.includes(f.subject) || f.subject.includes(k.subject)));
+        if (!dup) kept.push(f);
+    }
+    kept.forEach(best => {
+        claims.push({ kind: 'stat', title: titleFor(best.subject, 'Value'), value: best.num, unit: best.num.unit, sentence });
+    });
+    return claims;
+}
+
+function detectCommonUnit(displays) {
+    const units = displays.map(d => { if (d.includes('%')) return '%'; if (d.includes('$')) return '$'; return ''; });
+    return units.every(u => u === units[0]) ? units[0] : '';
+}
+
+function dedupe(claims) {
+    const priority = { breakdown: 5, series: 5, comparison: 4, delta: 3, ratio: 3, stat: 1 };
+    const seen = new Map();
+    const sorted = [...claims].sort((a, b) => (priority[b.kind] || 0) - (priority[a.kind] || 0));
+    const kept = [];
+    for (const c of sorted) {
+        const numbers = numbersIn(c);
+        let overlap = false;
+        for (const n of numbers) if (seen.has(n)) { overlap = true; break; }
+        if (!overlap) { kept.push(c); numbers.forEach(n => seen.set(n, true)); }
+    }
+    kept.sort((a, b) => claims.indexOf(a) - claims.indexOf(b));
+
+    // Suppress percent-stats that restate a comparison's implied change.
+    // E.g., "a 15% reduction in failures, dropping from 134 to 114" — 15% is just
+    // (134-114)/134, redundant with the comparison itself.
+    const finalKept = [];
+    for (const c of kept) {
+        if (c.kind === 'stat' && c.unit === '%') {
+            const statPct = c.value.value;
+            const dupedBy = kept.find(other =>
+                other !== c && other.kind === 'comparison' && other.sentence === c.sentence
+                && Math.abs(impliedPercentChange(other) - statPct) < 1.5
+            );
+            if (dupedBy) continue;
+        }
+        // Also suppress delta-claims that restate a comparison's implied change
+        if (c.kind === 'delta') {
+            const dupedBy = kept.find(other =>
+                other !== c && other.kind === 'comparison' && other.sentence === c.sentence
+                && Math.abs(impliedPercentChange(other) - c.value.value) < 1.5
+            );
+            if (dupedBy) continue;
+        }
+        finalKept.push(c);
+    }
+    return finalKept;
+}
+
+function impliedPercentChange(comparisonClaim) {
+    const a = comparisonClaim.before.value, b = comparisonClaim.after.value;
+    if (!a) return 0;
+    return Math.abs((b - a) / a) * 100;
+}
+
+function numbersIn(claim) {
+    switch (claim.kind) {
+        case 'comparison': return [claim.before.value, claim.after.value];
+        case 'stat': return [claim.value.value];
+        case 'delta': return [claim.value.value];
+        case 'ratio': return [claim.numerator, claim.denominator];
+        case 'breakdown': return claim.items.map(i => i.value);
+        case 'series': return claim.items.map(i => i.value);
+        default: return [];
+    }
+}
+
+// =========================================================================
+// CSV / EXCEL FALLBACK PARSER (preserves the original power-user path)
+// =========================================================================
+
+function parseTabular(text) {
+    let guessDelim = undefined;
+    if (text.indexOf('\t') > -1) guessDelim = '\t';
+    const structuralParse = Papa.parse(text, { delimiter: guessDelim, skipEmptyLines: true });
+    if (!structuralParse.data || structuralParse.data.length === 0) return null;
+    let headerIndex = -1;
+    for (let i = 0; i < structuralParse.data.length; i++) {
+        if (structuralParse.data[i].length >= 2) { headerIndex = i; break; }
+    }
+    if (headerIndex === -1) return null;
+    const dataText = structuralParse.data.slice(headerIndex).map(row => Papa.unparse([row])).join('\n');
+    const result = Papa.parse(dataText, { header: true, skipEmptyLines: true, dynamicTyping: true });
+    if (result.data.length > 0 && result.meta.fields.length > 0) {
+        // Trim whitespace from header names (Papa preserves " Restatement number" with leading space)
+        const headers = result.meta.fields.map(h => h.trim());
+        // Rebuild data with trimmed keys
+        const data = result.data.map(row => {
+            const out = {};
+            result.meta.fields.forEach((f, i) => { out[headers[i]] = row[f]; });
+            return out;
+        });
+        const columnTypes = headers.map(h => detectColumnType(h, data));
+        if (columnTypes.includes('numeric')) return { headers, data, columnTypes };
+    }
+    return null;
+}
+
+/**
+ * Determine the column type by sampling values. A column is numeric if the
+ * majority of its non-null values parse cleanly as numbers — either as bare
+ * numbers (Papa already converted via dynamicTyping) or as suffix-decorated
+ * strings like "0.18%", "$3.2M", "1,234". Detecting these is critical because
+ * users routinely paste columns with unit suffixes and expect them to chart.
+ */
+function detectColumnType(header, data) {
+    const samples = data.map(row => row[header]).filter(v => v != null && v !== '');
+    if (samples.length === 0) return 'category';
+    let numericCount = 0;
+    let dateCount = 0;
+    for (const v of samples) {
+        if (typeof v === 'number' && !isNaN(v)) { numericCount++; continue; }
+        if (typeof v === 'string') {
+            // Try parsing as a unit-decorated number (uses our parseNumber helper)
+            if (parseNumber(v) !== null) { numericCount++; continue; }
+            if (!isNaN(Date.parse(v))) { dateCount++; continue; }
+        }
+    }
+    if (numericCount >= samples.length * 0.6) return 'numeric';
+    if (dateCount >= samples.length * 0.6) return 'datetime';
+    return 'category';
+}
+
+// Convert a parsed tabular dataset into one or more claims
+function tabularToClaims(table) {
+    const { headers, data, columnTypes } = table;
+    const catHeader = headers.find((h, i) => ['category', 'datetime'].includes(columnTypes[i])) || headers[0];
+    const numHeaders = headers.filter((h, i) => columnTypes[i] === 'numeric');
+    if (numHeaders.length === 0) return [];
+
+    const claims = [];
+    numHeaders.forEach(numHeader => {
+        // Parse each cell: use parseNumber() for suffix-decorated strings so
+        // "0.18%" becomes value 0.18 with display "0.18%". Preserve the raw
+        // display for axis labels and tooltips.
+        const items = data.map(row => {
+            const raw = row[numHeader];
+            if (typeof raw === 'number') {
+                return { label: String(row[catHeader]), value: raw, display: String(raw) };
+            }
+            const parsed = parseNumber(String(raw));
+            if (parsed) {
+                return { label: String(row[catHeader]), value: parsed.value, display: parsed.display };
+            }
+            return { label: String(row[catHeader]), value: 0, display: String(raw) };
+        });
+        // Determine column unit by sampling parsed displays
+        const unit = detectCommonUnit(items.map(i => i.display));
+        const isDate = columnTypes[headers.indexOf(catHeader)] === 'datetime';
+        const kind = isDate ? 'series' : (items.length > 6 ? 'series' : 'breakdown');
+        claims.push({
+            kind,
+            title: numHeader,
+            items,
+            unit,
+            sentence: `${numHeader} by ${catHeader}`
+        });
+    });
+    return claims;
+}
+
+// =========================================================================
+// DOM + RENDERING
+// =========================================================================
+
+const dom = {
+    mainInput: document.getElementById('main-input'),
+    generateBtn: document.getElementById('generate-btn'),
+    fileBtn: document.getElementById('file-btn'),
+    fileInput: document.getElementById('file-input'),
+    clearInputBtn: document.getElementById('clear-input-btn'),
+    clearChartsBtn: document.getElementById('clear-charts-btn'),
+    gallery: document.getElementById('gallery'),
+    controlsCard: document.getElementById('controls-card'),
+    downloadAllPptx: document.getElementById('download-all-pptx'),
+    downloadAllHtml: document.getElementById('download-all-html'),
+    downloadAllPng: document.getElementById('download-all-png'),
+    themeToggle: document.getElementById('theme-toggle'),
+    toast: document.getElementById('toast'),
+    outputTitle: document.getElementById('output-title')
+};
+
+const examples = {
+    growth: `Our enterprise risk team reported a 15% reduction in control failures, dropping from 134 last year to 114, yet remediation cycle time lengthened from 41 days to 46.`,
+    quarterly: `Revenue this year: Q1 was $1.2M, Q2 was $1.5M, Q3 was $1.8M, Q4 was $2.1M.`,
+    breakdown: `Audit revenue: $4.2B, Tax: $3.1B, Advisory: $5.8B.`,
+    narrative: `During the last fiscal period, forensic investigations grew by 22%, with average case value climbing from $3.1M to $3.8M. Despite higher demand, staffing availability fell 9%, causing average engagement duration to stretch from 11.4 weeks to 13.2. Cost recovery improved, though, reaching 87% compared to 81% the year prior.`
+};
+
+// KPMG brand palette in priority order. Primary colors (first 7) are used first;
+// supplemental colors (last 2) are appended for cases that need more than 7
+// distinct colors (large breakdowns). Pink is "minimal use" per brand guidance —
+// still in the rotation but late.
+const KPMG_COLORS = [
+    '#00338D', // 0  KPMG Blue
+    '#1E49E2', // 1  Cobalt
+    '#0C233C', // 2  Dark Blue
+    '#ACEAFF', // 3  Light Blue
+    '#00B8F5', // 4  Pacific Blue
+    '#7213EA', // 5  Purple
+    '#FD349C', // 6  Pink (minimal use)
+    '#76D2FF', // 7  Blue (supplemental)
+    '#AB0D82'  // 8  Dark Pink (supplemental)
+];
+
+// Brand-specific text-on-color overrides. Per KPMG accessibility guidance,
+// "black numbers" are not acceptable on light brand colors. These pairings
+// specify which brand color to use as text on each light brand color.
+// Lookup is case-insensitive normalized hex (no #).
+const BRAND_TEXT_ON_COLOR = {
+    '00b8f5': '#1E49E2', // Pacific Blue → Cobalt text
+    'aceaff': '#1E49E2', // Light Blue → Cobalt text
+    '76d2ff': '#1E49E2', // Supplemental Blue (light) → Cobalt text
+    // The following are referenced in the brand spec but not in the current
+    // palette — left here so future color additions automatically pick up the
+    // right text color:
+    // 'd1c1ff' (light purple) → KPMG Blue
+    // 'fec1e2' (light pink) → KPMG Blue
+    // 'c8f0d8' (light green) → KPMG Blue
+};
+
+// ---------- ACCESSIBILITY HELPERS ----------
+// WCAG contrast utilities. Bar/slice data labels read off colored backgrounds;
+// stat numbers read off the white card. Both need contrast ratios that pass
+// WCAG (4.5:1 for normal text, 3:1 for large text >18pt or 14pt bold).
+function _hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+function _relativeLuminance([r, g, b]) {
+    const norm = c => {
+        c /= 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * norm(r) + 0.7152 * norm(g) + 0.0722 * norm(b);
+}
+function _contrastRatio(c1, c2) {
+    const l1 = _relativeLuminance(_hexToRgb(c1));
+    const l2 = _relativeLuminance(_hexToRgb(c2));
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+/**
+ * Return the best text color for a given background, preferring brand-specified
+ * pairings before falling back to white-or-black contrast.
+ *
+ * Per KPMG accessibility guidance, "black numbers" are not used. Light brand
+ * backgrounds use a darker brand color as text (e.g., Cobalt on Pacific Blue,
+ * KPMG Blue on Light Purple). For colors without a specified pairing, this
+ * function picks white or black based on contrast.
+ */
+function bestTextOn(bgColor) {
+    const key = bgColor.replace('#', '').toLowerCase();
+    if (BRAND_TEXT_ON_COLOR[key]) return BRAND_TEXT_ON_COLOR[key];
+    // Fall back to white-or-black for any color not in the brand mapping
+    return _contrastRatio('#ffffff', bgColor) >= _contrastRatio('#000000', bgColor)
+        ? '#ffffff'
+        : '#000000';
+}
+
+/**
+ * Return an accessible color for use as TEXT on a (typically white) background.
+ *
+ * Logic:
+ *  1. If the source color has a brand-specified text pair (e.g., Light Blue
+ *     should be displayed using Cobalt), return the pair color. This keeps
+ *     brand alignment when a "light" brand color is used as text on white.
+ *  2. Otherwise, if the source color already passes WCAG contrast, use it.
+ *  3. Otherwise, darken the source progressively until it passes.
+ *
+ * Used for stat / delta / ratio big numbers, which sit on the white card.
+ */
+function accessibleTextColor(color, bgColor = '#ffffff', targetRatio = 3) {
+    const key = color.replace('#', '').toLowerCase();
+    // If this brand color has a designated darker text pair, use it directly
+    // (only when target background is white — pairings assume white card).
+    if (bgColor === '#ffffff' && BRAND_TEXT_ON_COLOR[key]) {
+        return BRAND_TEXT_ON_COLOR[key];
+    }
+    if (_contrastRatio(color, bgColor) >= targetRatio) return color;
+    const rgb = _hexToRgb(color);
+    for (let factor = 99; factor > 30; factor -= 1) {
+        const dimmed = rgb.map(c => Math.round(c * factor / 100));
+        const hex = '#' + dimmed.map(x => x.toString(16).padStart(2, '0')).join('');
+        if (_contrastRatio(hex, bgColor) >= targetRatio) return hex;
+    }
+    // Worst-case: fall back to KPMG Blue rather than black per brand guidance
+    return '#00338D';
+}
+
+/**
+ * Build the per-bar text-color array for a chart with `distributed: true`.
+ * Each entry is the high-contrast color (white or black) for the matching bar.
+ */
+function dataLabelColorsFor(palette) {
+    return palette.map(bestTextOn);
+}
+
+let currentClaims = [];
+let claimRenderers = []; // { claim, mountEl, render(), getCanvas() }
+
+// ---------- THEME ----------
+function setupTheme() {
+    if (localStorage.getItem('chart-theme') === 'dark') applyTheme(true);
+    dom.themeToggle.addEventListener('click', () => applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark'));
+}
+function applyTheme(isDark) {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    if (!isDark) document.documentElement.removeAttribute('data-theme');
+    dom.themeToggle.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    localStorage.setItem('chart-theme', isDark ? 'dark' : 'light');
+    // Re-render to pick up theme colors
+    if (currentClaims.length > 0) renderClaims(currentClaims);
+}
+setupTheme();
+
+// ---------- WELCOME / HELP PANEL ----------
+// Auto-shows on every visit by default so users discover the tour. A checkbox
+// inside the panel lets users opt out of the auto-launch behavior; their
+// preference is persisted in localStorage. The Help button always reopens it.
+const WELCOME_AUTOSHOW_KEY = 'chart-creator-welcome-autoshow-v1';
+
+function setupWelcomePanel() {
+    const overlay = document.getElementById('welcome-overlay');
+    const dismissBtn = document.getElementById('welcome-dismiss-btn');
+    const tourBtn = document.getElementById('welcome-tour-btn');
+    const showBtn = document.getElementById('show-help-btn');
+    const autoShowToggle = document.getElementById('welcome-autoshow-toggle');
+
+    // Default to true (show on load) if never set
+    const storedPref = localStorage.getItem(WELCOME_AUTOSHOW_KEY);
+    const autoShow = storedPref === null ? true : storedPref === '1';
+    autoShowToggle.checked = autoShow;
+
+    if (autoShow) overlay.classList.add('visible');
+
+    // Persist toggle changes the moment they happen so the next reload reflects them
+    autoShowToggle.addEventListener('change', () => {
+        localStorage.setItem(WELCOME_AUTOSHOW_KEY, autoShowToggle.checked ? '1' : '0');
+    });
+
+    const dismissWelcome = () => overlay.classList.remove('visible');
+
+    dismissBtn.addEventListener('click', dismissWelcome);
+
+    tourBtn.addEventListener('click', () => {
+        dismissWelcome();
+        setTimeout(() => startTour(), 200);
+    });
+
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) dismissWelcome();
+    });
+
+    showBtn.addEventListener('click', () => overlay.classList.add('visible'));
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && overlay.classList.contains('visible')) dismissWelcome();
+    });
+}
+setupWelcomePanel();
+
+// ---------- INTERACTIVE TOUR ----------
+// Renders a dimmed backdrop with a cutout around a target element, plus a
+// tooltip card with Back/Next/Skip controls. Each step references an element
+// by CSS selector; the tour calculates positions on the fly so it stays
+// correct even if the layout changes between steps (e.g. when a card is
+// generated for the first time during the tour itself).
+const TOUR_STEPS = [
+    {
+        selector: '#main-input',
+        title: 'Paste your text here',
+        text: "Paste a sentence, paragraph, or full report. The tool reads natural language — you don't need to format anything. CSV and Excel files work too (drag-and-drop or use the Upload button).",
+        arrow: 'left'
+    },
+    {
+        selector: '#generate-btn',
+        title: 'Click to generate charts',
+        text: "Once you have text in the box, click this to extract every number and build the right kind of chart for each. Cmd/Ctrl + Enter works as a shortcut.",
+        arrow: 'left'
+    },
+    {
+        selector: '.examples-list',
+        title: 'Try an example',
+        text: "Not sure what kinds of text work? Click any of these to load a sample paragraph and see the tool in action.",
+        arrow: 'left'
+    },
+    {
+        // Demo card injection happens before this step. See ensureDemoCardForTour().
+        selector: '#tour-demo-card .card-title',
+        title: 'Edit titles and descriptions',
+        text: "Each chart appears as its own card. Click the title or description to edit them inline — they'll appear on every download.",
+        arrow: 'right',
+        needsDemoCard: true
+    },
+    {
+        selector: '#tour-demo-card .chart-type-picker',
+        title: 'Change chart type',
+        text: "Click the shapes icon to swap between bar, line, area, donut, or pie — whatever fits your data best.",
+        arrow: 'right',
+        needsDemoCard: true
+    },
+    {
+        selector: '#tour-demo-card .card-actions button[title*="Download"]',
+        title: 'Download a single chart',
+        text: "Click the download icon to save just this chart as a 1280×720 PNG — sized for slides.",
+        arrow: 'right',
+        needsDemoCard: true
+    },
+    {
+        selector: '#tour-demo-card .card-actions button.danger',
+        title: 'Remove a chart',
+        text: "Don't need this one? Click the X to remove just that card. The rest stay put.",
+        arrow: 'right',
+        needsDemoCard: true
+    },
+    {
+        selector: '.output-actions',
+        title: 'Export everything',
+        text: "Download all charts as a PowerPoint deck (editable native charts), a ZIP of PNGs, or HTML files for web designers. Use Clear charts to start over.",
+        arrow: 'top'
+    },
+    {
+        selector: '#show-help-btn',
+        title: 'Need help again?',
+        text: "Click this button any time to reopen the welcome panel or restart this tour.",
+        arrow: 'bottom'
+    }
+];
+
+let tourCurrentStep = 0;
+let tourActive = false;
+let tourSavedClaims = null; // Backup of real claims so we can restore them after the tour
+
+function startTour() {
+    tourCurrentStep = 0;
+    tourActive = true;
+    document.getElementById('tour-backdrop').classList.add('visible');
+    document.getElementById('tour-highlight').classList.add('visible');
+    document.getElementById('tour-tooltip').classList.add('visible');
+    renderTourStep();
+    window.addEventListener('resize', renderTourStep);
+    window.addEventListener('scroll', renderTourStep, true);
+}
+
+function endTour() {
+    tourActive = false;
+    document.getElementById('tour-backdrop').classList.remove('visible');
+    const highlight = document.getElementById('tour-highlight');
+    highlight.classList.remove('visible');
+    highlight.style.display = '';
+    document.getElementById('tour-tooltip').classList.remove('visible');
+    window.removeEventListener('resize', renderTourStep);
+    window.removeEventListener('scroll', renderTourStep, true);
+    // Clean up demo card and restore prior gallery state
+    removeDemoCardForTour();
+}
+
+/**
+ * If the current step needs a demo card (to show per-card icons), inject one
+ * into the gallery. Reuses the existing render path so the demo card looks
+ * exactly like a real card. Real claims are stashed so they can be restored
+ * when the tour ends.
+ */
+function ensureDemoCardForTour() {
+    if (document.getElementById('tour-demo-card')) return; // already present
+    // Stash real state so we can restore it
+    if (tourSavedClaims === null) {
+        tourSavedClaims = { claims: [...currentClaims] };
+    }
+    // Build a sample claim for demo purposes
+    const demoClaim = {
+        kind: 'comparison',
+        title: 'Sample chart',
+        description: 'A sample chart so you can see how cards work.',
+        sentence: 'Our active teams grew from 28 to 54 in the last year.',
+        before: { value: 28, display: '28', unit: '' },
+        after:  { value: 54, display: '54', unit: '' },
+        unit: 'teams',
+        axisLabel: 'Teams',
+        chartType: 'bar',
+        accentColorIdx: 0
+    };
+    // Use the existing render machinery so the card has all icons in place.
+    // We bypass renderClaims (which clears the gallery) and directly append.
+    const card = buildCardFor(demoClaim, 0);
+    card.el.id = 'tour-demo-card';
+    // Disable the demo card's remove/download buttons during the tour so a
+    // misclick doesn't break the flow
+    card.el.querySelectorAll('.card-actions button').forEach(b => {
+        b.style.pointerEvents = 'none';
+    });
+    // Clear placeholder if present, then prepend the demo card
+    const placeholder = dom.gallery.querySelector('.placeholder');
+    if (placeholder) placeholder.style.display = 'none';
+    dom.gallery.prepend(card.el);
+    requestAnimationFrame(() => card.render());
+}
+
+function removeDemoCardForTour() {
+    const demo = document.getElementById('tour-demo-card');
+    if (demo) demo.remove();
+    // Show placeholder again if there are no real charts
+    if (currentClaims.length === 0) {
+        const placeholder = dom.gallery.querySelector('.placeholder');
+        if (placeholder) placeholder.style.display = '';
+    }
+    tourSavedClaims = null;
+}
+
+function renderTourStep() {
+    if (!tourActive) return;
+    const step = TOUR_STEPS[tourCurrentStep];
+
+    // If this step targets the demo card, make sure it exists.
+    // If we've moved past the demo-card steps, clean it up so the gallery
+    // returns to its real state for the remaining steps.
+    if (step.needsDemoCard) {
+        ensureDemoCardForTour();
+    } else if (document.getElementById('tour-demo-card')) {
+        removeDemoCardForTour();
+    }
+
+    // Defer target lookup by one frame when we just injected — the DOM needs
+    // a tick before the new element is queryable for its bounding rect.
+    const target = document.querySelector(step.selector);
+    if (!target) {
+        if (step.needsDemoCard) {
+            // Demo card was injected but the inner selector hasn't been rendered yet.
+            // Wait a frame and re-render.
+            requestAnimationFrame(() => renderTourStep());
+            return;
+        }
+        positionTourCenter(step);
+        return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const pad = 6;
+    const r = { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
+
+    // Position the four mask rectangles around the cutout
+    const w = window.innerWidth, h = window.innerHeight;
+    setMask('tour-mask-top',    { top: 0,           left: 0,            width: w,                    height: Math.max(0, r.top) });
+    setMask('tour-mask-bottom', { top: r.top + r.height, left: 0,        width: w,                    height: Math.max(0, h - r.top - r.height) });
+    setMask('tour-mask-left',   { top: r.top,       left: 0,            width: Math.max(0, r.left),  height: r.height });
+    setMask('tour-mask-right',  { top: r.top,       left: r.left + r.width, width: Math.max(0, w - r.left - r.width), height: r.height });
+
+    // Position the highlight ring
+    const highlight = document.getElementById('tour-highlight');
+    Object.assign(highlight.style, {
+        top: r.top + 'px', left: r.left + 'px',
+        width: r.width + 'px', height: r.height + 'px'
+    });
+
+    // Position the tooltip — choose side based on arrow hint and available space
+    const tooltip = document.getElementById('tour-tooltip');
+    document.getElementById('tour-step-counter').textContent = `Step ${tourCurrentStep + 1} of ${TOUR_STEPS.length}`;
+    document.getElementById('tour-title').textContent = step.title;
+    document.getElementById('tour-text').textContent = step.text;
+    document.getElementById('tour-back').disabled = tourCurrentStep === 0;
+    document.getElementById('tour-next').textContent = tourCurrentStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+
+    // Force a layout flush so we can measure the tooltip's current size
+    tooltip.style.left = '-9999px';
+    tooltip.style.top = '0px';
+    const tw = tooltip.offsetWidth;
+    const th = tooltip.offsetHeight;
+
+    const { left, top, arrow } = computeTooltipPlacement(r, tw, th, step.arrow, w, h);
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+    tooltip.dataset.arrow = arrow;
+}
+
+function setMask(id, rect) {
+    const el = document.getElementById(id);
+    Object.assign(el.style, {
+        top: rect.top + 'px', left: rect.left + 'px',
+        width: rect.width + 'px', height: rect.height + 'px'
+    });
+}
+
+function positionTourCenter(step) {
+    // Fallback when target element is missing — center the tooltip and dim
+    // the whole screen.
+    const w = window.innerWidth, h = window.innerHeight;
+    setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: h });
+    setMask('tour-mask-bottom', { top: 0, left: 0, width: 0, height: 0 });
+    setMask('tour-mask-left',   { top: 0, left: 0, width: 0, height: 0 });
+    setMask('tour-mask-right',  { top: 0, left: 0, width: 0, height: 0 });
+    document.getElementById('tour-highlight').style.display = 'none';
+    const tooltip = document.getElementById('tour-tooltip');
+    document.getElementById('tour-step-counter').textContent = `Step ${tourCurrentStep + 1} of ${TOUR_STEPS.length}`;
+    document.getElementById('tour-title').textContent = step.title;
+    document.getElementById('tour-text').textContent = step.text;
+    document.getElementById('tour-back').disabled = tourCurrentStep === 0;
+    document.getElementById('tour-next').textContent = tourCurrentStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+    tooltip.style.left = (w / 2 - tooltip.offsetWidth / 2) + 'px';
+    tooltip.style.top = (h / 2 - tooltip.offsetHeight / 2) + 'px';
+    tooltip.dataset.arrow = 'none';
+}
+
+/**
+ * Decide where to place the tooltip card relative to the highlighted element.
+ * Prefers the side hinted by step.arrow, but flips to the opposite side if the
+ * tooltip would overflow the viewport.
+ */
+function computeTooltipPlacement(rect, tw, th, preferredArrow, w, h) {
+    const margin = 20; // gap between tooltip and target
+    const candidates = {
+        // arrow points BACK at the target from the tooltip
+        left:   { left: rect.left + rect.width + margin, top: rect.top, arrow: 'left' },   // tooltip is RIGHT of target
+        right:  { left: rect.left - tw - margin,         top: rect.top, arrow: 'right' },  // tooltip is LEFT of target
+        top:    { left: rect.left, top: rect.top + rect.height + margin, arrow: 'top' },   // tooltip is BELOW target
+        bottom: { left: rect.left, top: rect.top - th - margin,          arrow: 'bottom' } // tooltip is ABOVE target
+    };
+
+    const tryOrder = [preferredArrow, 'left', 'right', 'top', 'bottom'].filter((v, i, a) => a.indexOf(v) === i);
+    for (const a of tryOrder) {
+        const c = candidates[a];
+        if (c.left >= 10 && c.top >= 10 && c.left + tw <= w - 10 && c.top + th <= h - 10) {
+            return { left: c.left, top: c.top, arrow: a };
+        }
+    }
+    // Last resort: clamp to viewport, no arrow
+    return {
+        left: Math.max(10, Math.min(w - tw - 10, rect.left)),
+        top:  Math.max(10, Math.min(h - th - 10, rect.top + rect.height + margin)),
+        arrow: 'none'
+    };
+}
+
+// Wire tour navigation
+document.getElementById('tour-next').addEventListener('click', () => {
+    if (tourCurrentStep < TOUR_STEPS.length - 1) {
+        tourCurrentStep++;
+        document.getElementById('tour-highlight').style.display = 'block';
+        renderTourStep();
+    } else {
+        endTour();
+    }
+});
+document.getElementById('tour-back').addEventListener('click', () => {
+    if (tourCurrentStep > 0) {
+        tourCurrentStep--;
+        document.getElementById('tour-highlight').style.display = 'block';
+        renderTourStep();
+    }
+});
+document.getElementById('tour-skip').addEventListener('click', endTour);
+document.addEventListener('keydown', (e) => {
+    if (tourActive && e.key === 'Escape') endTour();
+});
+
+// ---------- INPUT ACTIONS ----------
+dom.generateBtn.addEventListener('click', generate);
+dom.mainInput.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); generate(); }
+});
+dom.mainInput.addEventListener('input', () => {
+    dom.clearInputBtn.disabled = dom.mainInput.value.trim().length === 0;
+    autoGrowTextarea(dom.mainInput);
+});
+
+/**
+ * Resize the textarea to fit its content, up to its CSS max-height. The
+ * textarea scrolls internally past that cap. This gives a "writes-as-much-
+ * as-it-needs" feel without a separate fullscreen modal.
+ */
+function autoGrowTextarea(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight + 2, 500) + 'px';
+}
+dom.fileBtn.addEventListener('click', () => dom.fileInput.click());
+dom.fileInput.addEventListener('change', (e) => { if (e.target.files.length > 0) handleFile(e.target.files[0]); });
+
+dom.clearInputBtn.addEventListener('click', () => {
+    dom.mainInput.value = '';
+    dom.clearInputBtn.disabled = true;
+    dom.fileInput.value = '';
+    autoGrowTextarea(dom.mainInput);
+    dom.mainInput.focus();
+});
+
+dom.clearChartsBtn.addEventListener('click', () => {
+    currentClaims = [];
+    claimRenderers = [];
+    showEmptyState();
+});
+
+// Drop anywhere on the controls card
+['dragover', 'dragenter'].forEach(ev => dom.controlsCard.addEventListener(ev, e => {
+    e.preventDefault(); dom.controlsCard.classList.add('dragover');
+}));
+['dragleave', 'drop'].forEach(ev => dom.controlsCard.addEventListener(ev, e => {
+    if (ev === 'dragleave' && e.relatedTarget && dom.controlsCard.contains(e.relatedTarget)) return;
+    dom.controlsCard.classList.remove('dragover');
+}));
+dom.controlsCard.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+});
+
+document.querySelectorAll('.example-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+        const key = chip.dataset.example;
+        dom.mainInput.value = examples[key];
+        dom.clearInputBtn.disabled = false;
+        autoGrowTextarea(dom.mainInput);
+        generate();
+    });
+});
+
+function handleFile(file) {
+    const reader = new FileReader();
+    const ext = file.name.toLowerCase().split('.').pop();
+    // Clear any previous text BEFORE reading so user can see the new content take its place
+    dom.mainInput.value = '';
+    autoGrowTextarea(dom.mainInput);
+    showToast('Reading file…');
+    reader.onload = (e) => {
+        try {
+            let text;
+            if (ext === 'xlsx' || ext === 'xls') {
+                const data = new Uint8Array(e.target.result);
+                const wb = XLSX.read(data, { type: 'array' });
+                text = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+            } else {
+                text = e.target.result;
+            }
+            dom.mainInput.value = text;
+            dom.clearInputBtn.disabled = false;
+            autoGrowTextarea(dom.mainInput);
+            generate();
+        } catch (err) {
+            showToast('Could not read file');
+            console.error(err);
+        }
+    };
+    if (ext === 'xlsx' || ext === 'xls') reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
+}
+
+function generate() {
+    const text = dom.mainInput.value.trim();
+    if (!text) {
+        showToast('Type or paste something first');
+        return;
+    }
+    // Try tabular first (if commas/tabs look structured), otherwise narrative
+    let claims = [];
+    const looksTabular = (text.includes('\n') && text.includes(',')) || text.includes('\t');
+    if (looksTabular) {
+        const table = parseTabular(text);
+        if (table) claims = tabularToClaims(table);
+    }
+    if (claims.length === 0) {
+        claims = extractClaims(text);
+    }
+    if (claims.length === 0) {
+        showEmptyState();
+        return;
+    }
+    renderClaims(claims);
+}
+
+function showEmptyState() {
+    dom.gallery.innerHTML = `
+        <div class="placeholder">
+            <i class="fas fa-circle-question"></i>
+            <p>I couldn't find any numbers I could chart in that text.</p>
+            <p class="muted">Try something like: <i>"Our team grew from 28 to 54 last year."</i><br>Or click one of the example buttons to see what works.</p>
+        </div>`;
+    dom.downloadAllPptx.disabled = true;
+    dom.downloadAllHtml.disabled = true;
+    dom.downloadAllPng.disabled = true;
+    dom.clearChartsBtn.disabled = true;
+    dom.outputTitle.textContent = 'Visualizations';
+    currentClaims = [];
+    claimRenderers = [];
+}
+
+function showToast(message) {
+    dom.toast.textContent = message;
+    dom.toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => dom.toast.classList.remove('show'), 2400);
+}
+
+// ---------- RENDERING ----------
+
+function renderClaims(claims) {
+    currentClaims = claims;
+    claimRenderers = [];
+    dom.gallery.innerHTML = '';
+    dom.outputTitle.textContent = `${claims.length} visualization${claims.length === 1 ? '' : 's'}`;
+
+    // Initialize claim defaults: description, editable axis label, unit word, accent color
+    claims.forEach((claim, idx) => {
+        if (claim.description === undefined) claim.description = defaultDescription(claim);
+        if (claim.axisLabel === undefined) claim.axisLabel = defaultAxisLabel(claim);
+        if (claim.unitWord === undefined) claim.unitWord = defaultUnitWord(claim);
+        if (claim.chartType === undefined) claim.chartType = defaultChartType(claim);
+        if (claim.accentColorIdx === undefined) claim.accentColorIdx = idx % KPMG_COLORS.length;
+    });
+
+    claims.forEach((claim, idx) => {
+        const card = buildCardFor(claim, idx);
+        dom.gallery.appendChild(card.el);
+        claimRenderers.push(card);
+        requestAnimationFrame(() => card.render());
+    });
+
+    dom.downloadAllPptx.disabled = false;
+    dom.downloadAllHtml.disabled = false;
+    dom.downloadAllPng.disabled = false;
+    dom.clearChartsBtn.disabled = false;
+}
+
+/**
+ * Generate a default description sentence so users have something to react to
+ * rather than something to author. They can edit or clear it.
+ */
+function defaultDescription(claim) {
+    const t = (claim.title || '').trim();
+    const subj = t.charAt(0).toLowerCase() + t.slice(1);
+    switch (claim.kind) {
+        case 'comparison': {
+            const before = claim.before.display;
+            const after = claim.after.display;
+            const direction = claim.after.value > claim.before.value ? 'rose' : (claim.after.value < claim.before.value ? 'fell' : 'remained');
+            const pct = impliedPercentChange(claim);
+            const pctText = (pct > 0.5 && pct < 1000) ? ` — a ${pct.toFixed(0)}% change` : '';
+            return `${capitalize(subj)} ${direction} from ${before} to ${after}${pctText}.`;
+        }
+        case 'stat': {
+            return `${capitalize(subj)} reached ${claim.value.display}.`;
+        }
+        case 'delta': {
+            const verb = claim.direction === 'up' ? 'increased' : 'decreased';
+            return `${capitalize(subj)} ${verb} by ${claim.value.display}.`;
+        }
+        case 'ratio': {
+            return `Approximately 1 in ${claim.denominator}.`;
+        }
+        case 'series': {
+            const n = claim.items.length;
+            const first = claim.items[0];
+            const last = claim.items[n - 1];
+            const direction = last.value > first.value ? 'rising' : (last.value < first.value ? 'declining' : 'flat');
+            return `${capitalize(subj)} across ${n} periods (${first.label} ${first.display} → ${last.label} ${last.display}), ${direction}.`;
+        }
+        case 'breakdown': {
+            const top = [...claim.items].sort((a, b) => b.value - a.value)[0];
+            return `${capitalize(subj)} broken down across ${claim.items.length} categories (largest: ${top.label} at ${top.display}).`;
+        }
+        default:
+            return '';
+    }
+}
+
+function capitalize(s) {
+    if (!s) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function defaultAxisLabel(claim) {
+    // What gets shown under the chart's X-axis (or as a centered label for stat cards' contexts)
+    if (claim.unit === '$') return 'Dollars';
+    if (claim.unit === '%') return 'Percent';
+    // For comparison/series/breakdown, claim.unit may be a word like 'days'
+    if (typeof claim.unit === 'string' && claim.unit && claim.unit !== '$' && claim.unit !== '%') {
+        return claim.unit.charAt(0).toUpperCase() + claim.unit.slice(1);
+    }
+    return '';
+}
+
+function defaultUnitWord(claim) {
+    // For stat/delta/ratio cards: the word shown beneath the big number.
+    // When the displayed number already contains its symbol (% or $), the
+    // generic word ("percent" / "dollars") would just restate the symbol —
+    // not useful. Instead, derive a subject word from the claim title so the
+    // user can read "9%" + "staffing availability" and immediately know what
+    // 9% refers to.
+    if (claim.kind === 'ratio') return '';
+    const display = claim.value && claim.value.display ? String(claim.value.display) : '';
+    const hasInlineSymbol = display.includes('%') || display.includes('$');
+
+    if (claim.kind === 'delta') {
+        if (hasInlineSymbol) return subjectAsUnitWord(claim);
+        return 'change';
+    }
+    if (claim.kind === 'stat') {
+        if (hasInlineSymbol) return subjectAsUnitWord(claim);
+    }
+    // For other kinds without an inline symbol, fall back to a descriptive word
+    if (claim.unit === '$') return 'dollars';
+    if (claim.unit === '%') return 'percent';
+    if (typeof claim.unit === 'string' && claim.unit) return claim.unit.toLowerCase();
+    return '';
+}
+
+/**
+ * Derive a subject word for a stat/delta card whose number already contains
+ * its unit symbol. We use the claim title (which is the parser's extracted
+ * subject), lowercased and stripped of leading articles. Capped at three
+ * words so it fits visually beneath the big number.
+ */
+function subjectAsUnitWord(claim) {
+    const title = (claim.title || '').trim().toLowerCase();
+    if (!title) return '';
+    // Strip leading articles and connector words
+    let cleaned = title.replace(/^(the|a|an|our|their|its|this|that)\s+/i, '');
+    // Cap at 3 words so it fits cleanly beneath the number
+    const words = cleaned.split(/\s+/).filter(Boolean);
+    if (words.length > 3) cleaned = words.slice(0, 3).join(' ');
+    return cleaned;
+}
+
+function defaultChartType(claim) {
+    // Initial chart type per claim kind — user can override per-card.
+    // Series defaults to AREA (preferred over line for trends per design feedback).
+    switch (claim.kind) {
+        case 'comparison': return 'bar';
+        case 'series': return 'area';
+        case 'breakdown': {
+            const sum = claim.items.reduce((a, b) => a + b.value, 0);
+            const allPositive = claim.items.every(i => i.value > 0);
+            const fewItems = claim.items.length <= 6;
+            const useDonut = fewItems && allPositive && (claim.unit === '%' ? Math.abs(sum - 100) < 5 : true) && claim.items.length >= 3;
+            return useDonut ? 'donut' : 'bar';
+        }
+        default: return null;
+    }
+}
+
+const CHART_TYPE_OPTIONS = {
+    comparison: [
+        { value: 'bar', label: 'Bar chart', icon: 'fa-chart-column' },
+        { value: 'line', label: 'Line chart', icon: 'fa-chart-line' }
+    ],
+    series: [
+        { value: 'area', label: 'Area chart', icon: 'fa-chart-area' },
+        { value: 'bar', label: 'Bar chart', icon: 'fa-chart-column' },
+        { value: 'line', label: 'Line chart', icon: 'fa-chart-line' }
+    ],
+    breakdown: [
+        { value: 'donut', label: 'Donut chart', icon: 'fa-chart-pie' },
+        { value: 'pie', label: 'Pie chart', icon: 'fa-chart-pie' },
+        { value: 'bar', label: 'Bar chart', icon: 'fa-chart-column' }
+    ]
+};
+
+function buildCardFor(claim, idx) {
+    const el = document.createElement('div');
+    el.className = 'visual-card';
+
+    // --- TITLE ROW (title + chart-type picker + download + remove) ---
+    const titleRow = document.createElement('div');
+    titleRow.className = 'card-title-row';
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'card-title';
+    titleEl.contentEditable = 'true';
+    titleEl.spellcheck = false;
+    titleEl.textContent = claim.title;
+    titleEl.addEventListener('input', () => { claim.title = titleEl.textContent.trim() || 'Untitled'; });
+    titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } });
+
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+
+    // Chart-type picker (only for chartable claims)
+    const typeOptions = CHART_TYPE_OPTIONS[claim.kind];
+    if (typeOptions && typeOptions.length > 1) {
+        const picker = document.createElement('div');
+        picker.className = 'chart-type-picker';
+
+        const pickerBtn = document.createElement('button');
+        pickerBtn.title = 'Change chart type';
+        pickerBtn.innerHTML = '<i class="fas fa-shapes"></i>';
+
+        const menu = document.createElement('div');
+        menu.className = 'chart-type-menu';
+        typeOptions.forEach(opt => {
+            const b = document.createElement('button');
+            if (opt.value === claim.chartType) b.classList.add('active');
+            b.innerHTML = `<i class="fas ${opt.icon}"></i>${opt.label}`;
+            b.onclick = () => {
+                claim.chartType = opt.value;
+                menu.classList.remove('visible');
+                renderer.render();
+            };
+            menu.appendChild(b);
+        });
+
+        pickerBtn.onclick = (e) => {
+            e.stopPropagation();
+            // Close any other open menus
+            document.querySelectorAll('.chart-type-menu.visible').forEach(m => { if (m !== menu) m.classList.remove('visible'); });
+            menu.classList.toggle('visible');
+        };
+        picker.append(pickerBtn, menu);
+        actions.appendChild(picker);
+    }
+
+    const dlBtn = document.createElement('button');
+    dlBtn.title = 'Download as PNG';
+    dlBtn.innerHTML = '<i class="fas fa-download"></i>';
+    dlBtn.onclick = () => downloadCardPng(idx);
+    actions.appendChild(dlBtn);
+
+    const rmBtn = document.createElement('button');
+    rmBtn.className = 'danger';
+    rmBtn.title = 'Remove';
+    rmBtn.innerHTML = '<i class="fas fa-times"></i>';
+    rmBtn.onclick = () => {
+        currentClaims.splice(idx, 1);
+        if (currentClaims.length === 0) showEmptyState();
+        else renderClaims(currentClaims);
+    };
+    actions.appendChild(rmBtn);
+
+    titleRow.append(titleEl, actions);
+
+    // --- DESCRIPTION (editable, optional) ---
+    const descEl = document.createElement('div');
+    descEl.className = 'card-description';
+    descEl.contentEditable = 'true';
+    descEl.spellcheck = true;
+    descEl.textContent = claim.description || '';
+    descEl.addEventListener('input', () => { claim.description = descEl.textContent.trim(); });
+    descEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); descEl.blur(); } });
+
+    // --- ORIGINAL SENTENCE (small context) ---
+    const sentenceEl = document.createElement('div');
+    sentenceEl.className = 'card-sentence';
+    sentenceEl.textContent = `"${claim.sentence}"`;
+    sentenceEl.title = claim.sentence;
+
+    // --- BODY (the actual chart or stat) ---
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    // --- AXIS LABEL (editable, for charts only) ---
+    const axisRow = document.createElement('div');
+    axisRow.className = 'axis-label-row';
+    const axisLabelEl = document.createElement('span');
+    axisLabelEl.className = 'axis-label';
+    axisLabelEl.contentEditable = 'true';
+    axisLabelEl.spellcheck = false;
+    axisLabelEl.textContent = claim.axisLabel || '';
+    axisLabelEl.addEventListener('input', () => {
+        claim.axisLabel = axisLabelEl.textContent.trim();
+    });
+    axisLabelEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); axisLabelEl.blur(); } });
+    axisRow.appendChild(axisLabelEl);
+
+    el.append(titleRow, descEl, sentenceEl, body, axisRow);
+
+    // Close menus when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!el.contains(e.target)) {
+            el.querySelectorAll('.chart-type-menu.visible').forEach(m => m.classList.remove('visible'));
+        }
+    });
+
+    const renderer = {
+        el, claim, body, axisRow, axisLabelEl,
+        chartInstance: null,
+        render() {
+            if (this.chartInstance && this.chartInstance.destroy) this.chartInstance.destroy();
+            this.chartInstance = null;
+            body.innerHTML = '';
+            // Hide the axis-label row for non-chart cards (stat/ratio/delta)
+            const isChart = ['comparison', 'series', 'breakdown'].includes(claim.kind);
+            axisRow.style.display = isChart ? 'flex' : 'none';
+            renderClaimInto(claim, body, instance => { this.chartInstance = instance; });
+        },
+        async getPngBlob() {
+            // Use captureCardAsExport which always returns a 1280x720 contextual export
+            return await captureCardAsExport(this);
+        }
+    };
+    return renderer;
+}
+
+function renderClaimInto(claim, body, setInstance) {
+    switch (claim.kind) {
+        case 'stat': return renderStat(claim, body);
+        case 'delta': return renderDelta(claim, body);
+        case 'ratio': return renderRatio(claim, body);
+        case 'comparison': return renderComparison(claim, body, setInstance);
+        case 'breakdown': return renderBreakdown(claim, body, setInstance);
+        case 'series': return renderSeries(claim, body, setInstance);
+        default: body.textContent = 'Unsupported';
+    }
+}
+
+function renderStat(claim, body) {
+    const accent = accessibleTextColor(KPMG_COLORS[claim.accentColorIdx || 0]);
+    const wrap = document.createElement('div');
+    wrap.className = 'stat-display';
+    // Omit the unit-word element entirely when there's nothing to show — avoids
+    // a stray editable space below the number.
+    const unitWordHtml = claim.unitWord
+        ? `<div class="stat-unit-word" contenteditable="true" spellcheck="false">${escapeHtml(claim.unitWord)}</div>`
+        : '';
+    wrap.innerHTML = `
+        <div class="stat-number" style="color:${accent};">${claim.value.display}</div>
+        ${unitWordHtml}
+    `;
+    body.appendChild(wrap);
+    const uw = wrap.querySelector('.stat-unit-word');
+    if (uw) {
+        uw.addEventListener('input', () => { claim.unitWord = uw.textContent.trim(); });
+        uw.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); uw.blur(); } });
+    }
+}
+
+function renderDelta(claim, body) {
+    const wrap = document.createElement('div');
+    wrap.className = 'delta-display';
+    const arrow = claim.direction === 'up' ? '↑' : '↓';
+    const unitWordHtml = claim.unitWord
+        ? `<div class="stat-unit-word" contenteditable="true" spellcheck="false">${escapeHtml(claim.unitWord)}</div>`
+        : '';
+    wrap.innerHTML = `
+        <div class="delta-number ${claim.direction}"><span class="delta-arrow">${arrow}</span>${claim.value.display}</div>
+        ${unitWordHtml}
+    `;
+    body.appendChild(wrap);
+    const uw = wrap.querySelector('.stat-unit-word');
+    if (uw) {
+        uw.addEventListener('input', () => { claim.unitWord = uw.textContent.trim(); });
+        uw.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); uw.blur(); } });
+    }
+}
+
+function renderRatio(claim, body) {
+    const accent = accessibleTextColor(KPMG_COLORS[claim.accentColorIdx || 0]);
+    const wrap = document.createElement('div');
+    wrap.className = 'ratio-display';
+    const unitWordHtml = claim.unitWord
+        ? `<div class="stat-unit-word" contenteditable="true" spellcheck="false">${escapeHtml(claim.unitWord)}</div>`
+        : '';
+    wrap.innerHTML = `
+        <div class="ratio-numbers" style="color:${accent};">
+            <span class="num">1</span>
+            <span class="sep">in</span>
+            <span class="denom">${claim.denominator}</span>
+        </div>
+        ${unitWordHtml}
+    `;
+    body.appendChild(wrap);
+    const uw = wrap.querySelector('.stat-unit-word');
+    if (uw) {
+        uw.addEventListener('input', () => { claim.unitWord = uw.textContent.trim(); });
+        uw.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); uw.blur(); } });
+    }
+}
+
+function renderComparison(claim, body, setInstance) {
+    const mount = document.createElement('div');
+    mount.className = 'chart-mount';
+    body.appendChild(mount);
+    const beforeLabel = inferBeforeLabel(claim);
+    const afterLabel = inferAfterLabel(claim);
+    const accent = KPMG_COLORS[claim.accentColorIdx || 0];
+    // Contrast bar: pick the color halfway through the palette from accent so it's distinct
+    const contrastIdx = ((claim.accentColorIdx || 0) + Math.floor(KPMG_COLORS.length / 2)) % KPMG_COLORS.length;
+    const contrast = KPMG_COLORS[contrastIdx];
+    const config = {
+        chart: { type: claim.chartType === 'line' ? 'line' : 'bar', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+        series: [{ name: claim.title, data: [claim.before.value, claim.after.value] }],
+        xaxis: { categories: [beforeLabel, afterLabel], labels: { style: { fontSize: '11px' } } },
+        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px' } } },
+        colors: [accent, contrast],
+        legend: { show: false },
+        grid: { show: false },
+        tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } }
+    };
+    if (claim.chartType === 'line') {
+        config.colors = [accent];
+        config.stroke = { curve: 'straight', width: 3 };
+        config.markers = { size: 6 };
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '11px', colors: ['#334155'] }, background: { enabled: false }, offsetY: -8 };
+        config.grid = { borderColor: '#e5e5e5' };
+    } else {
+        config.plotOptions = { bar: { distributed: true, borderRadius: 3, columnWidth: '50%' } };
+        // Per-bar text contrast: white text on dark bars, black on light bars
+        const barColors = [accent, contrast];
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(barColors), fontSize: '11px', fontWeight: '700' }, offsetY: 0 };
+    }
+    const apex = new ApexCharts(mount, config);
+    apex.render().then(() => setInstance && setInstance(apex));
+}
+
+function renderBreakdown(claim, body, setInstance) {
+    const mount = document.createElement('div');
+    mount.className = 'chart-mount';
+    body.appendChild(mount);
+    const t = claim.chartType;
+    // Rotate the palette so each card starts at a different color
+    const offset = claim.accentColorIdx || 0;
+    const palette = KPMG_COLORS.map((_, i) => KPMG_COLORS[(i + offset) % KPMG_COLORS.length]);
+    let config;
+    if (t === 'donut' || t === 'pie') {
+        config = {
+            chart: { type: t, height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+            series: claim.items.map(i => i.value),
+            labels: claim.items.map(i => i.label),
+            colors: palette,
+            legend: { position: 'bottom', fontSize: '11px' },
+            // Per-slice text contrast: each label colored to match its underlying slice.
+            // dropShadow disabled — ApexCharts enables it by default on pie/donut and
+            // it makes the numbers hard to read against contrast-aware label colors.
+            dataLabels: { enabled: true, formatter: (v) => v.toFixed(0) + '%', style: { fontSize: '10px', colors: dataLabelColorsFor(palette.slice(0, claim.items.length)) }, dropShadow: { enabled: false } },
+            tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } }
+        };
+        if (t === 'donut') config.plotOptions = { pie: { donut: { size: '55%' } } };
+    } else {
+        config = {
+            chart: { type: 'bar', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+            series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
+            xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '10px' }, rotate: -30 } },
+            yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px' } } },
+            plotOptions: { bar: { distributed: true, borderRadius: 2, columnWidth: '60%' } },
+            colors: palette,
+            legend: { show: false },
+            dataLabels: { enabled: false },
+            grid: { show: false },
+            tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } }
+        };
+    }
+    const apex = new ApexCharts(mount, config);
+    apex.render().then(() => setInstance && setInstance(apex));
+}
+
+function renderSeries(claim, body, setInstance) {
+    const mount = document.createElement('div');
+    mount.className = 'chart-mount';
+    body.appendChild(mount);
+    const t = claim.chartType;
+    const baseType = t === 'bar' ? 'bar' : (t === 'area' ? 'area' : 'line');
+    const accent = KPMG_COLORS[claim.accentColorIdx || 0];
+    // For bar mode, rotate the palette so each bar gets a distinct color
+    // (matches breakdown-bar behavior). Line/area stay single-color.
+    const offset = claim.accentColorIdx || 0;
+    const palette = KPMG_COLORS.map((_, i) => KPMG_COLORS[(i + offset) % KPMG_COLORS.length]);
+    const config = {
+        chart: { type: baseType, height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+        series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
+        xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '10px' } } },
+        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px' } } },
+        colors: baseType === 'bar' ? palette : [accent],
+        grid: { borderColor: '#e5e5e5' },
+        tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } },
+        dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px', colors: ['#334155'] }, background: { enabled: false }, offsetY: -8 }
+    };
+    if (baseType === 'line') {
+        config.stroke = { curve: 'straight', width: 3 };
+        config.markers = { size: 5 };
+    } else if (baseType === 'area') {
+        config.stroke = { curve: 'smooth', width: 2 };
+        config.fill = { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.1 } };
+    } else {
+        config.plotOptions = { bar: { distributed: true, borderRadius: 3, columnWidth: '60%' } };
+        // Per-bar text contrast across the rotated palette
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '10px', fontWeight: '700' } };
+        config.legend = { show: false };
+    }
+    const apex = new ApexCharts(mount, config);
+    apex.render().then(() => setInstance && setInstance(apex));
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
+// ---------- HELPERS ----------
+
+/**
+ * Renders the claim into a hidden 1280x720 export container with full context:
+ * - Title at the top (large, KPMG blue)
+ * - Description below title (if user provided one)
+ * - Chart / stat in the center, sized to fill remaining space
+ * - Axis label at the bottom (for chart cards)
+ * Captures the whole thing via html2canvas and returns a PNG blob.
+ * This is what downloads get, regardless of how the on-screen card looks.
+ */
+async function captureCardAsExport(renderer) {
+    const claim = renderer.claim;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const bgColor = '#ffffff';
+    const textPrimary = '#00338D';
+    const textSecondary = '#334155';
+    const textMuted = '#64748b';
+
+    // Build the offscreen export container
+    const exportEl = document.createElement('div');
+    exportEl.style.cssText = `
+        position: fixed; left: -10000px; top: 0;
+        width: 1280px; height: 720px;
+        background: ${bgColor}; color: ${textSecondary};
+        font-family: 'Open Sans', sans-serif;
+        padding: 48px 64px; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 16px;
+    `;
+
+    // Header: title
+    const titleEl = document.createElement('div');
+    titleEl.style.cssText = `font-size: 38px; font-weight: 700; color: ${textPrimary}; line-height: 1.2; flex-shrink: 0;`;
+    titleEl.textContent = claim.title || 'Untitled';
+    exportEl.appendChild(titleEl);
+
+    // Description (only if user provided one)
+    if (claim.description && claim.description.trim()) {
+        const descEl = document.createElement('div');
+        descEl.style.cssText = `font-size: 18px; color: ${textSecondary}; line-height: 1.45; flex-shrink: 0;`;
+        descEl.textContent = claim.description;
+        exportEl.appendChild(descEl);
+    }
+
+    // Body container
+    const bodyEl = document.createElement('div');
+    bodyEl.style.cssText = `flex-grow: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative;`;
+    exportEl.appendChild(bodyEl);
+
+    // Axis label below (charts only)
+    const isChart = ['comparison', 'series', 'breakdown'].includes(claim.kind);
+    if (isChart && claim.axisLabel) {
+        const axisEl = document.createElement('div');
+        axisEl.style.cssText = `font-size: 16px; color: ${textMuted}; text-align: center; flex-shrink: 0; padding-top: 8px;`;
+        axisEl.textContent = claim.axisLabel;
+        exportEl.appendChild(axisEl);
+    }
+
+    document.body.appendChild(exportEl);
+
+    // Render the claim into bodyEl. For charts, use a fresh ApexCharts instance
+    // sized to fill body. For stats/ratios/deltas, build big static HTML.
+    let exportChartInstance = null;
+    await renderClaimForExport(claim, bodyEl, inst => exportChartInstance = inst);
+
+    // Wait a frame for layout, plus extra time for chart animation/painting
+    await new Promise(r => setTimeout(r, 200));
+
+    // Capture
+    let canvas;
+    try {
+        canvas = await html2canvas(exportEl, {
+            backgroundColor: bgColor,
+            scale: 1,
+            width: 1280,
+            height: 720,
+            windowWidth: 1280,
+            windowHeight: 720,
+            useCORS: true
+        });
+    } finally {
+        if (exportChartInstance && exportChartInstance.destroy) {
+            try { exportChartInstance.destroy(); } catch (e) {}
+        }
+        exportEl.remove();
+    }
+
+    return await new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+
+/**
+ * Render claim into a body element at export-scale (large fonts, full size).
+ * Mirrors the on-screen renderers but scaled up for the 1280x720 canvas.
+ */
+function renderClaimForExport(claim, body, setInstance) {
+    return new Promise(resolve => {
+        const accentRaw = KPMG_COLORS[claim.accentColorIdx || 0];
+        const accent = accentRaw; // bar/slice fills keep brand color
+        const accentText = accessibleTextColor(accentRaw); // text on white uses safe variant
+        const contrastIdx = ((claim.accentColorIdx || 0) + Math.floor(KPMG_COLORS.length / 2)) % KPMG_COLORS.length;
+        const contrast = KPMG_COLORS[contrastIdx];
+        const palette = KPMG_COLORS.map((_, i) => KPMG_COLORS[(i + (claim.accentColorIdx || 0)) % KPMG_COLORS.length]);
+        switch (claim.kind) {
+            case 'stat':
+                body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:16px;">
+                        <div style="font-size:180px; font-weight:700; line-height:1; color:${accentText}; letter-spacing:-0.02em;">${escapeHtml(claim.value.display)}</div>
+                        ${claim.unitWord ? `<div style="font-size:34px; color:#64748b; font-weight:600; text-transform:lowercase;">${escapeHtml(claim.unitWord)}</div>` : ''}
+                    </div>`;
+                resolve();
+                break;
+            case 'delta':
+                body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:14px;">
+                        <div style="display:flex; align-items:center; gap:16px; font-size:180px; font-weight:700; line-height:1; color:${claim.direction === 'up' ? '#16a34a' : '#dc2626'}; letter-spacing:-0.02em;">
+                            <span style="font-size:130px;">${claim.direction === 'up' ? '↑' : '↓'}</span>${escapeHtml(claim.value.display)}
+                        </div>
+                        ${claim.unitWord ? `<div style="font-size:34px; color:#64748b; font-weight:600; text-transform:lowercase;">${escapeHtml(claim.unitWord)}</div>` : ''}
+                    </div>`;
+                resolve();
+                break;
+            case 'ratio':
+                body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:14px;">
+                        <div style="display:flex; align-items:baseline; gap:28px; font-weight:700; color:${accentText};">
+                            <span style="font-size:180px; line-height:1;">1</span>
+                            <span style="font-size:64px; color:#94a3b8;">in</span>
+                            <span style="font-size:130px;">${claim.denominator}</span>
+                        </div>
+                        ${claim.unitWord ? `<div style="font-size:34px; color:#64748b; font-weight:600; text-transform:lowercase;">${escapeHtml(claim.unitWord)}</div>` : ''}
+                    </div>`;
+                resolve();
+                break;
+            case 'comparison': {
+                const mount = document.createElement('div');
+                mount.style.cssText = 'width: 100%; height: 100%;';
+                body.appendChild(mount);
+                const beforeLabel = inferBeforeLabel(claim);
+                const afterLabel = inferAfterLabel(claim);
+                const isLine = claim.chartType === 'line';
+                const config = {
+                    chart: { type: isLine ? 'line' : 'bar', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+                    series: [{ name: claim.title, data: [claim.before.value, claim.after.value] }],
+                    xaxis: { categories: [beforeLabel, afterLabel], labels: { style: { fontSize: '18px' } } },
+                    yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '15px' } } },
+                    colors: isLine ? [accent] : [accent, contrast],
+                    legend: { show: false },
+                    grid: { show: !isLine ? false : true, borderColor: '#e5e5e5' },
+                    tooltip: { enabled: false }
+                };
+                if (isLine) {
+                    config.stroke = { curve: 'straight', width: 5 };
+                    config.markers = { size: 10 };
+                    config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '18px', colors: ['#334155'], fontWeight: '700' }, background: { enabled: false }, offsetY: -14 };
+                } else {
+                    config.plotOptions = { bar: { distributed: true, borderRadius: 4, columnWidth: '50%' } };
+                    // Per-bar text contrast: each label uses white or black depending on bar color
+                    config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor([accent, contrast]), fontSize: '22px', fontWeight: '700' } };
+                }
+                const apex = new ApexCharts(mount, config);
+                apex.render().then(() => { setInstance(apex); resolve(); });
+                break;
+            }
+            case 'breakdown': {
+                const mount = document.createElement('div');
+                mount.style.cssText = 'width: 100%; height: 100%;';
+                body.appendChild(mount);
+                const t = claim.chartType;
+                let config;
+                if (t === 'donut' || t === 'pie') {
+                    config = {
+                        chart: { type: t, height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+                        series: claim.items.map(i => i.value),
+                        labels: claim.items.map(i => i.label),
+                        colors: palette,
+                        legend: { position: 'bottom', fontSize: '16px' },
+                        dataLabels: { enabled: true, formatter: (v) => v.toFixed(0) + '%', style: { fontSize: '18px', colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontWeight: '700' }, dropShadow: { enabled: false } },
+                        tooltip: { enabled: false }
+                    };
+                    if (t === 'donut') config.plotOptions = { pie: { donut: { size: '55%' } } };
+                } else {
+                    config = {
+                        chart: { type: 'bar', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+                        series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
+                        xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '16px' } } },
+                        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '15px' } } },
+                        plotOptions: { bar: { distributed: true, borderRadius: 3, columnWidth: '60%' } },
+                        colors: palette,
+                        legend: { show: false },
+                        dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '16px', fontWeight: '700' } },
+                        grid: { show: false },
+                        tooltip: { enabled: false }
+                    };
+                }
+                const apex = new ApexCharts(mount, config);
+                apex.render().then(() => { setInstance(apex); resolve(); });
+                break;
+            }
+            case 'series': {
+                const mount = document.createElement('div');
+                mount.style.cssText = 'width: 100%; height: 100%;';
+                body.appendChild(mount);
+                const t = claim.chartType;
+                const baseType = t === 'bar' ? 'bar' : (t === 'area' ? 'area' : 'line');
+                const config = {
+                    chart: { type: baseType, height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+                    series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
+                    xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '16px' } } },
+                    yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '15px' } } },
+                    colors: baseType === 'bar' ? palette : [accent],
+                    grid: { borderColor: '#e5e5e5' },
+                    tooltip: { enabled: false },
+                    dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '16px', colors: ['#334155'], fontWeight: '700' }, background: { enabled: false }, offsetY: -10 }
+                };
+                if (baseType === 'line') { config.stroke = { curve: 'straight', width: 4 }; config.markers = { size: 8 }; }
+                else if (baseType === 'area') { config.stroke = { curve: 'smooth', width: 3 }; config.fill = { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.1 } }; }
+                else {
+                    config.plotOptions = { bar: { distributed: true, borderRadius: 4, columnWidth: '60%' } };
+                    config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '16px', fontWeight: '700' } };
+                    config.legend = { show: false };
+                }
+                const apex = new ApexCharts(mount, config);
+                apex.render().then(() => { setInstance(apex); resolve(); });
+                break;
+            }
+            default:
+                body.textContent = '';
+                resolve();
+        }
+    });
+}
+
+function inferBeforeLabel(claim) {
+    // Prefer the temporal anchor captured at parse time ("January", "Monday", "2024")
+    if (claim.beforeLabel) return claim.beforeLabel;
+    const s = claim.sentence.toLowerCase();
+    if (s.includes('two years ago') || s.includes('the year before last')) return String(CURRENT_YEAR - 2);
+    if (s.includes('last year') || s.includes('prior year') || s.includes('the year prior') || s.includes('the previous year') || s.includes('a year ago')) return String(CURRENT_YEAR - 1);
+    if (s.includes('last quarter') || s.includes('previous quarter') || s.includes('the prior quarter')) return 'Last quarter';
+    if (s.includes('last month') || s.includes('previous month')) return 'Last month';
+    if (s.includes('previous') || s.includes('prior')) return 'Previous';
+    return 'Before';
+}
+function inferAfterLabel(claim) {
+    // Prefer the temporal anchor captured at parse time
+    if (claim.afterLabel) return claim.afterLabel;
+    const s = claim.sentence.toLowerCase();
+    if (s.includes('next year')) return String(CURRENT_YEAR + 1);
+    if (s.includes('this year') || s.includes('current year')) return String(CURRENT_YEAR);
+    if (s.includes('this quarter') || s.includes('current quarter')) return 'This quarter';
+    if (s.includes('this month') || s.includes('current month')) return 'This month';
+    if (s.includes('current') || s.includes('today') || s.includes('now')) return 'Current';
+    // If before resolved to a year, assume after is the current year by symmetry
+    const beforeLabel = inferBeforeLabel(claim);
+    if (/^\d{4}$/.test(beforeLabel)) {
+        const beforeYear = parseInt(beforeLabel);
+        if (beforeYear === CURRENT_YEAR - 1) return String(CURRENT_YEAR);
+        if (beforeYear === CURRENT_YEAR - 2) return String(CURRENT_YEAR - 1);
+    }
+    return 'After';
+}
+
+function formatNum(v, unit) {
+    if (v == null || isNaN(v)) return '';
+    const abs = Math.abs(v);
+    let s;
+    if (abs >= 1e9) s = (v / 1e9).toFixed(1) + 'B';
+    else if (abs >= 1e6) s = (v / 1e6).toFixed(1) + 'M';
+    else if (abs >= 1e3) s = (v / 1e3).toFixed(1) + 'K';
+    else if (Number.isInteger(v)) s = v.toLocaleString();
+    else s = v.toFixed(1);
+    if (unit === '$') return '$' + s;
+    if (unit === '%') return s + '%';
+    return s;
+}
+
+// ---------- DOWNLOAD ----------
+
+async function downloadCardPng(idx) {
+    const renderer = claimRenderers[idx];
+    if (!renderer) return;
+    showToast('Saving PNG…');
+    const blob = await renderer.getPngBlob();
+    const filename = `${(renderer.claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.png`;
+    saveAs(blob, filename);
+    showToast('Saved');
+}
+
+dom.downloadAllPng.addEventListener('click', async () => {
+    if (claimRenderers.length === 0) return;
+    // Single visualization: download the file directly — no point zipping one item
+    if (claimRenderers.length === 1) {
+        showToast('Saving PNG…');
+        const blob = await claimRenderers[0].getPngBlob();
+        const name = `${(claimRenderers[0].claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.png`;
+        saveAs(blob, name);
+        showToast('Saved');
+        return;
+    }
+    showToast('Building ZIP…');
+    const zip = new JSZip();
+    for (let i = 0; i < claimRenderers.length; i++) {
+        const blob = await claimRenderers[i].getPngBlob();
+        const name = `${i + 1}_${(claimRenderers[i].claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.png`;
+        zip.file(name, blob);
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    saveAs(zipBlob, 'charts.zip');
+    showToast('ZIP saved');
+});
+
+/**
+ * Export each visualization as a standalone HTML file packaged in a ZIP.
+ * For charts, the file re-renders the chart in the browser using ApexCharts CDN
+ * (live, resizable, customizable for web designers).
+ * For stat/ratio/delta cards, the file contains semantic HTML with inline CSS
+ * (no external scripts needed).
+ */
+dom.downloadAllHtml.addEventListener('click', async () => {
+    if (claimRenderers.length === 0) return;
+    // Single visualization: download the file directly — no point zipping one item
+    if (claimRenderers.length === 1) {
+        showToast('Saving HTML…');
+        const claim = claimRenderers[0].claim;
+        const filename = `${(claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.html`;
+        const html = buildStandaloneHtml(claim, claimRenderers[0]);
+        const blob = new Blob([html], { type: 'text/html' });
+        saveAs(blob, filename);
+        showToast('Saved');
+        return;
+    }
+    showToast('Building HTML files…');
+    const zip = new JSZip();
+    for (let i = 0; i < claimRenderers.length; i++) {
+        const claim = claimRenderers[i].claim;
+        const filename = `${i + 1}_${(claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.html`;
+        const html = buildStandaloneHtml(claim, claimRenderers[i]);
+        zip.file(filename, html);
+    }
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    saveAs(zipBlob, 'charts-html.zip');
+    showToast('HTML saved');
+});
+
+/**
+ * Build a single standalone HTML file representing one claim.
+ * Goals:
+ *  - Web designers can drop it into a page or copy markup
+ *  - No build step, no dependencies for static cards
+ *  - Charts use ApexCharts CDN (well-supported, identical to the in-app render)
+ *  - Editable values: chart data, colors, and labels are clearly named at the top
+ *    of any <script> block so designers can tweak without parsing JSON
+ */
+function buildStandaloneHtml(claim, renderer) {
+    const accent = KPMG_COLORS[claim.accentColorIdx || 0];
+    const accentText = accessibleTextColor(accent); // safe variant for text on white
+    const contrastIdx = ((claim.accentColorIdx || 0) + Math.floor(KPMG_COLORS.length / 2)) % KPMG_COLORS.length;
+    const contrast = KPMG_COLORS[contrastIdx];
+    const palette = KPMG_COLORS.map((_, idx) => KPMG_COLORS[(idx + (claim.accentColorIdx || 0)) % KPMG_COLORS.length]);
+
+    const title = escapeHtml(claim.title || 'Untitled');
+    const description = claim.description ? escapeHtml(claim.description) : '';
+    const sentence = escapeHtml(claim.sentence || '');
+    const axisLabel = escapeHtml(claim.axisLabel || '');
+
+    // Common page chrome — Arial body, KPMG-blue title
+    const headerBlock = `
+    <header style="margin-bottom: 24px;">
+        <h1 style="font-size: 32px; color: #00338D; margin: 0 0 12px 0; font-weight: 700; font-family: 'KPMG Bold', Arial, sans-serif;">${title}</h1>
+        ${description ? `<p style="font-size: 16px; color: #334155; margin: 0 0 8px 0; line-height: 1.45;">${description}</p>` : ''}
+        ${sentence ? `<p style="font-size: 12px; color: #64748b; font-style: italic; margin: 0;">Source: "${sentence}"</p>` : ''}
+    </header>`;
+
+    const footerBlock = axisLabel && ['comparison', 'series', 'breakdown'].includes(claim.kind)
+        ? `<p style="text-align: center; font-size: 14px; color: #64748b; margin-top: 16px;">${axisLabel}</p>`
+        : '';
+
+    // For static cards (stat/delta/ratio), inline everything — no JS needed
+    if (claim.kind === 'stat') {
+        return wrapHtml(title, `
+            ${headerBlock}
+            <div style="display:flex; flex-direction:column; align-items:center; gap:16px; padding:40px 0;">
+                <div style="font-size:160px; font-weight:700; line-height:1; color:${accentText}; letter-spacing:-0.02em;">${escapeHtml(claim.value.display)}</div>
+                ${claim.unitWord ? `<div style="font-size:28px; color:#64748b; font-weight:600;">${escapeHtml(claim.unitWord)}</div>` : ''}
+            </div>
+            ${footerBlock}`);
+    }
+    if (claim.kind === 'delta') {
+        const color = claim.direction === 'up' ? '#16a34a' : '#dc2626';
+        const arrow = claim.direction === 'up' ? '↑' : '↓';
+        return wrapHtml(title, `
+            ${headerBlock}
+            <div style="display:flex; flex-direction:column; align-items:center; gap:14px; padding:40px 0;">
+                <div style="display:flex; align-items:center; gap:16px; font-size:160px; font-weight:700; line-height:1; color:${color};">
+                    <span style="font-size:120px;">${arrow}</span>${escapeHtml(claim.value.display)}
+                </div>
+                ${claim.unitWord ? `<div style="font-size:28px; color:#64748b; font-weight:600;">${escapeHtml(claim.unitWord)}</div>` : ''}
+            </div>
+            ${footerBlock}`);
+    }
+    if (claim.kind === 'ratio') {
+        return wrapHtml(title, `
+            ${headerBlock}
+            <div style="display:flex; flex-direction:column; align-items:center; gap:14px; padding:40px 0;">
+                <div style="display:flex; align-items:baseline; gap:24px; font-weight:700; color:${accentText};">
+                    <span style="font-size:160px; line-height:1;">1</span>
+                    <span style="font-size:56px; color:#94a3b8;">in</span>
+                    <span style="font-size:120px;">${claim.denominator}</span>
+                </div>
+                ${claim.unitWord ? `<div style="font-size:28px; color:#64748b; font-weight:600;">${escapeHtml(claim.unitWord)}</div>` : ''}
+            </div>
+            ${footerBlock}`);
+    }
+
+    // For chart cards, embed ApexCharts and render at runtime
+    let chartConfig;
+    if (claim.kind === 'comparison') {
+        const beforeLabel = inferBeforeLabel(claim);
+        const afterLabel = inferAfterLabel(claim);
+        const isLine = claim.chartType === 'line';
+        const colorList = isLine ? [accent] : [accent, contrast];
+        chartConfig = {
+            chart: { type: isLine ? 'line' : 'bar', height: 480, toolbar: { show: false }, fontFamily: 'Arial, sans-serif' },
+            series: [{ name: claim.title, data: [claim.before.value, claim.after.value] }],
+            xaxis: { categories: [beforeLabel, afterLabel] },
+            colors: colorList,
+            fill: { colors: colorList, type: 'solid' },
+            legend: { show: false },
+            dataLabels: { enabled: true },
+            plotOptions: isLine ? undefined : { bar: { distributed: true, columnWidth: '50%', borderRadius: 4 } },
+            stroke: isLine ? { curve: 'straight', width: 4 } : undefined,
+            markers: isLine ? { size: 8 } : undefined
+        };
+    } else if (claim.kind === 'breakdown') {
+        const t = claim.chartType;
+        if (t === 'donut' || t === 'pie') {
+            chartConfig = {
+                chart: { type: t, height: 480, toolbar: { show: false }, fontFamily: 'Arial, sans-serif' },
+                series: claim.items.map(i => i.value),
+                labels: claim.items.map(i => i.label),
+                colors: palette,
+                fill: { colors: palette, type: 'solid' },
+                legend: { position: 'bottom' },
+                dataLabels: { enabled: true }
+            };
+            if (t === 'donut') chartConfig.plotOptions = { pie: { donut: { size: '55%' } } };
+        } else {
+            chartConfig = {
+                chart: { type: 'bar', height: 480, toolbar: { show: false }, fontFamily: 'Arial, sans-serif' },
+                series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
+                xaxis: { categories: claim.items.map(i => i.label) },
+                plotOptions: { bar: { distributed: true, columnWidth: '60%', borderRadius: 3 } },
+                colors: palette,
+                fill: { colors: palette, type: 'solid' },
+                legend: { show: false },
+                dataLabels: { enabled: true }
+            };
+        }
+    } else if (claim.kind === 'series') {
+        const t = claim.chartType;
+        const baseType = t === 'bar' ? 'bar' : (t === 'area' ? 'area' : 'line');
+        // Bar mode uses the full rotated palette (one color per bar); line/area
+        // stay single-color since the visual is the line/fill itself.
+        const seriesColors = baseType === 'bar' ? palette : [accent];
+        chartConfig = {
+            chart: { type: baseType, height: 480, toolbar: { show: false }, fontFamily: 'Arial, sans-serif' },
+            series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
+            xaxis: { categories: claim.items.map(i => i.label) },
+            colors: seriesColors,
+            fill: baseType === 'area'
+                ? { type: 'gradient', gradient: { opacityFrom: 0.6, opacityTo: 0.1 } }
+                : { colors: seriesColors, type: 'solid' },
+            dataLabels: { enabled: true },
+            stroke: baseType === 'line' ? { curve: 'straight', width: 3 } : (baseType === 'area' ? { curve: 'smooth', width: 2 } : undefined),
+            markers: baseType === 'line' ? { size: 6 } : undefined,
+            plotOptions: baseType === 'bar' ? { bar: { distributed: true, columnWidth: '60%', borderRadius: 3 } } : undefined,
+            legend: baseType === 'bar' ? { show: false } : undefined
+        };
+    }
+
+    return wrapHtml(title, `
+        ${headerBlock}
+        <div id="chart"></div>
+        ${footerBlock}
+        <script src="https://cdn.jsdelivr.net/npm/apexcharts"><\/script>
+        <script>
+        // ===== Chart configuration =====
+        // Edit colors, labels, or data here, then refresh the page.
+        const chartOptions = ${JSON.stringify(chartConfig, null, 2)};
+        new ApexCharts(document.querySelector("#chart"), chartOptions).render();
+        <\/script>`);
+}
+
+function wrapHtml(title, body) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>${title}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 40px; color: #334155; background: #ffffff; max-width: 1200px; margin-left: auto; margin-right: auto; }
+    </style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
+dom.downloadAllPptx.addEventListener('click', async () => {
+    if (claimRenderers.length === 0) return;
+    showToast('Building PPT…');
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'KPMG_Widescreen', width: 13.333, height: 7.5 });
+    pptx.layout = 'KPMG_Widescreen';
+
+    for (const renderer of claimRenderers) {
+        const claim = renderer.claim;
+        const slide = pptx.addSlide();
+
+        // Title at top — 44pt KPMG Bold per design spec
+        let yPos = 0.4;
+        slide.addText(claim.title || 'Untitled', {
+            x: 0.5, y: yPos, w: 12.3, h: 1.0,
+            fontSize: 44, color: '00338D', bold: true, fontFace: 'KPMG Bold'
+        });
+        yPos += 1.15;
+
+        // Description, if provided
+        if (claim.description && claim.description.trim()) {
+            slide.addText(claim.description, {
+                x: 0.5, y: yPos, w: 12.3, h: 0.6,
+                fontSize: 14, color: '334155', fontFace: 'Arial'
+            });
+            yPos += 0.7;
+        }
+
+        // Source sentence (small, italic)
+        slide.addText(`Source: "${claim.sentence}"`, {
+            x: 0.5, y: yPos, w: 12.3, h: 0.45,
+            fontSize: 10, italic: true, color: '64748B', fontFace: 'Arial'
+        });
+        yPos += 0.55;
+
+        const chartY = yPos;
+        // Reserve space at the bottom for the axis caption (if any)
+        const hasCaption = claim.axisLabel && ['comparison', 'series', 'breakdown'].includes(claim.kind);
+        const captionH = hasCaption ? 0.35 : 0;
+        const chartH = 7.5 - chartY - 0.3 - captionH;
+
+        const native = nativePptxChartFor(claim, pptx);
+        if (native) {
+            slide.addChart(native.type, native.data, { x: 0.5, y: chartY, w: 12.3, h: chartH, ...native.opts });
+        } else {
+            // Stat / delta / ratio cards aren't native PPT chart types, so we
+            // embed a captured PNG instead. The PNG is rendered at 1280×720
+            // (16:9), so we must preserve that aspect ratio — stretching to
+            // the full 12.3" slide width would otherwise produce a 6.92"-tall
+            // image that overlaps the title and description above.
+            const blob = await renderer.getPngBlob();
+            const dataUrl = await blobToDataURL(blob);
+            const maxW = 12.3, maxH = chartH;
+            const sourceAspect = 1280 / 720; // 16:9 = 1.778
+            // Fit-to-box: constrain by whichever dimension is more limiting
+            let imgW = maxW, imgH = maxW / sourceAspect;
+            if (imgH > maxH) { imgH = maxH; imgW = maxH * sourceAspect; }
+            const imgX = 0.5 + (maxW - imgW) / 2; // center horizontally
+            const imgY = chartY + (maxH - imgH) / 2; // center vertically too
+            slide.addImage({ data: dataUrl, x: imgX, y: imgY, w: imgW, h: imgH });
+        }
+
+        // Axis caption below the chart — describes context (X-axis usually).
+        // Treated as a caption, not a value-axis title, so user text like "2024"
+        // doesn't get incorrectly rotated onto the value axis. Mirrors the
+        // on-screen and PNG behavior.
+        if (hasCaption) {
+            slide.addText(claim.axisLabel, {
+                x: 0.5, y: chartY + chartH + 0.05, w: 12.3, h: captionH,
+                fontSize: 12, color: '64748B', fontFace: 'Arial', align: 'center'
+            });
+        }
+    }
+    await pptx.writeFile({ fileName: 'charts.pptx' });
+    showToast('PPT saved');
+});
+
+function nativePptxChartFor(claim, pptx) {
+    const accentIdx = claim.accentColorIdx || 0;
+    const accentHex = KPMG_COLORS[accentIdx].replace('#', '');
+    const contrastIdx = (accentIdx + Math.floor(KPMG_COLORS.length / 2)) % KPMG_COLORS.length;
+    const contrastHex = KPMG_COLORS[contrastIdx].replace('#', '');
+    // For breakdowns, rotate the full palette starting at accent
+    const rotatedPalette = KPMG_COLORS.map((_, i) => KPMG_COLORS[(i + accentIdx) % KPMG_COLORS.length].replace('#', ''));
+
+    const baseOpts = {
+        chartColors: rotatedPalette,
+        showLegend: false,
+        catAxisLabelFontFace: 'Arial',
+        valAxisLabelFontFace: 'Arial',
+        dataLabelFontFace: 'Arial',
+        legendFontFace: 'Arial',
+        catGridLine: { color: 'e5e5e5' },
+        valGridLine: { color: 'e5e5e5' }
+    };
+
+    // NOTE: claim.axisLabel is rendered as a caption beneath the chart (see
+    // PPT slide assembly), NOT as a value-axis title. The label is often a
+    // temporal anchor ("2024", "January–June") that describes the X-axis
+    // context, so forcing it onto the value axis would be wrong. The on-screen
+    // and PNG renderings already treat it as a caption.
+
+    if (claim.kind === 'comparison') {
+        const beforeLabel = inferBeforeLabel(claim);
+        const afterLabel = inferAfterLabel(claim);
+        // Comparison uses 2-color accent + contrast
+        const compOpts = { ...baseOpts, chartColors: [accentHex, contrastHex] };
+        if (claim.chartType === 'line') {
+            return {
+                type: pptx.charts.LINE,
+                data: [{ name: claim.title, labels: [beforeLabel, afterLabel], values: [claim.before.value, claim.after.value] }],
+                opts: { ...compOpts, chartColors: [accentHex], showValue: true, lineDataSymbolSize: 10 }
+            };
+        }
+        return {
+            type: pptx.charts.BAR,
+            data: [{ name: claim.title, labels: [beforeLabel, afterLabel], values: [claim.before.value, claim.after.value] }],
+            opts: { ...compOpts, barDir: 'col', barGrouping: 'standard', showValue: true, varyColors: true }
+        };
+    }
+    if (claim.kind === 'breakdown') {
+        const t = claim.chartType;
+        if (t === 'donut' || t === 'pie') {
+            const chartType = t === 'donut' ? pptx.charts.DOUGHNUT : pptx.charts.PIE;
+            return {
+                type: chartType,
+                data: [{ name: claim.title, labels: claim.items.map(i => i.label), values: claim.items.map(i => i.value) }],
+                // Donut/pie: each slice picks the matching position from chartColors automatically.
+                opts: { ...baseOpts, chartColors: rotatedPalette, showLegend: true, legendPos: 'b', showPercent: true, dataLabelColor: 'FFFFFF' }
+            };
+        }
+        return {
+            type: pptx.charts.BAR,
+            data: [{ name: claim.title, labels: claim.items.map(i => i.label), values: claim.items.map(i => i.value) }],
+            // Breakdown bar: varyColors makes each bar take the next color from chartColors
+            opts: { ...baseOpts, chartColors: rotatedPalette, barDir: 'col', barGrouping: 'standard', varyColors: true, showValue: true }
+        };
+    }
+    if (claim.kind === 'series') {
+        const t = claim.chartType;
+        if (t === 'bar') {
+            // Series bar: each bar gets a distinct color via varyColors + palette
+            // (matches the on-screen renderer behavior).
+            return {
+                type: pptx.charts.BAR,
+                data: [{ name: claim.title, labels: claim.items.map(i => i.label), values: claim.items.map(i => i.value) }],
+                opts: { ...baseOpts, chartColors: rotatedPalette, barDir: 'col', barGrouping: 'standard', varyColors: true, showValue: true }
+            };
+        }
+        // Area and line: single accent color (the line/fill itself carries the color)
+        const seriesOpts = { ...baseOpts, chartColors: [accentHex] };
+        if (t === 'area') {
+            return {
+                type: pptx.charts.AREA,
+                data: [{ name: claim.title, labels: claim.items.map(i => i.label), values: claim.items.map(i => i.value) }],
+                opts: { ...seriesOpts, showValue: true }
+            };
+        }
+        return {
+            type: pptx.charts.LINE,
+            data: [{ name: claim.title, labels: claim.items.map(i => i.label), values: claim.items.map(i => i.value) }],
+            opts: { ...seriesOpts, showValue: true, lineDataSymbolSize: 10 }
+        };
+    }
+    // stat / ratio / delta: fall back to image export
+    return null;
+}
+
+function blobToDataURL(blob) {
+    return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+    });
+}
+
+</script>
+</body>
+</html>
