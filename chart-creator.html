@@ -752,7 +752,11 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 const HEDGE_WORDS = /\b(roughly|nearly|almost|about|approximately|around|some|a few|several|many|most|just|only|even|quite|rather|fairly)\b/gi;
 const TRIM_LEADING = /^(our|the|a|an|to|of|for|with|in|on|at|by|and|but|that|which|who|whose|while|when|since|though|although|however|despite|yet|meanwhile|also|primarily|including|due|because|as|so|then|its|their|these|those|causing|leading|driving|pushing|helping|allowing)\s+/i;
-const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretch(?:es|ed|ing)?|climbs?|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted)\b/i;
+const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretch(?:es|ed|ing)?|climbs?|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted|var(?:y|ies|ied)|rang(?:e|es|ed|ing)|saw|expected|made up|makes? up|account(?:s|ed)? for|represent(?:s|ed)?)\b/i;
+
+// One number in text: optional minus and $, digits with or without thousands
+// commas, decimals, then a scale word, K/M/B/T or %.
+const NUMBER_SRC = '(?:(?<![\\w.\\-])-)?\\$?\\s*-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?(?!\\d|,\\d{3}(?!\\d))(?:\\s*(?:thousand|million|billion|trillion|bn|mn)\\b|\\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\\s*%)?';
 
 function parseNumber(raw) {
     let cleaned = String(raw).trim();
@@ -789,7 +793,7 @@ function extractSubject(textBefore) {
     if (!textBefore) return null;
     let cleaned = textBefore
         .replace(HEDGE_WORDS, '')
-        .replace(/["""']/g, '')
+        .replace(/["“”‘’']/g, '')
         .replace(/\([^)]*\)/g, ' ')
         .replace(/—|–|--/g, ',')
         .replace(/\s+/g, ' ')
@@ -803,16 +807,22 @@ function extractSubject(textBefore) {
     const a = refineCandidate(candidateA);
     const b = refineCandidate(candidateB);
     const pickB = b && (!a || a.length < 3 || /^by\s+|^the\s+/i.test(a));
-    const picked = pickB ? b : (a || b);
+    let picked = pickB ? b : (a || b);
     if (!picked) return null;
+    // "Cost recovery improved" -> "Cost recovery"
+    picked = picked.replace(new RegExp('\\s+' + CHANGE_VERB.source.replace(/^\\b|\\b$/g, '') + '$', 'i'), '').trim() || picked;
+    // "Revenue was" -> "Revenue"
+    picked = picked.replace(/\s+(was|were|is|are|has|have|had|stood at|came to)$/i, '').trim() || picked;
     return picked.charAt(0).toUpperCase() + picked.slice(1).toLowerCase();
 }
 
 function refineCandidate(text) {
     if (!text) return null;
-    const clauses = text.split(/,\s*/);
-    let candidate = clauses[clauses.length - 1] || text;
-    if (!candidate.trim() && clauses.length > 1) candidate = clauses[clauses.length - 2];
+    // Use the last clause that has real words (not just "though" or "however").
+    const CONNECTOR_ONLY = /^(though|however|yet|still|also|too|meanwhile|then|so|and|but|or|while|whereas)?$/i;
+    const clauses = text.split(/[,;:]\s*/).map(c => c.trim());
+    let candidate = text;
+    for (let i = clauses.length - 1; i >= 0; i--) { if (!CONNECTOR_ONLY.test(clauses[i])) { candidate = clauses[i]; break; } }
     let prev = '';
     while (prev !== candidate && TRIM_LEADING.test(candidate)) {
         prev = candidate;
@@ -867,6 +877,10 @@ function extractClaims(text) {
         found.push(...tryNowFrom(sentence));
         found.push(...tryDelta(sentence));
         found.push(...tryRatio(sentence));
+        found.push(...tryShare(sentence));
+        // Several same-unit values become one chart, but only when nothing
+        // more specific (from/to, a list, a trend) was found in the sentence.
+        if (!found.some(c => ['comparison', 'series', 'breakdown'].includes(c.kind))) found.push(...tryMultiValue(sentence));
         found.push(...tryStat(sentence));
         found.forEach(c => { c.sentence = original; });
         claims.push(...found);
@@ -1028,6 +1042,12 @@ function tryTimeSeries(sentence) {
     return claims;
 }
 
+// A unit word next to the numbers ("54 active teams", "11.4 weeks").
+function unitWordNear(text) {
+    const m = (text || '').match(/\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?|staff|members?|projects?|offices?|countries|markets?|customers?|partners?|audits?|engagements?)\b/i);
+    return m ? m[1].toLowerCase() : '';
+}
+
 function tryMultipleComparison(sentence) {
     const claims = [];
     const re = /((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)([^\d]{1,40}?)(?:double|triple|quadruple|half|twice|thrice)\s+(?:the\s+)?((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/gi;
@@ -1038,7 +1058,7 @@ function tryMultipleComparison(sentence) {
         if (!after || !before) continue;
         const subjectText = sentence.substring(0, m.index);
         const subject = extractSubject(subjectText);
-        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || '', sentence });
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || unitWordNear(sentence.slice(m.index, m.index + m[0].length + 30)), sentence });
     }
     return claims;
 }
@@ -1109,6 +1129,8 @@ function extractTemporalAnchor(text) {
     return null;
 }
 
+function upperFirst(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+
 function capitalizeWords(s) {
     return s.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
@@ -1123,7 +1145,7 @@ function tryComparedTo(sentence) {
         if (!after || !before) continue;
         const subjectText = sentence.substring(0, m.index);
         const subject = extractSubject(subjectText);
-        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || '', sentence });
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || unitWordNear(sentence.slice(m.index, m.index + m[0].length + 30)), sentence });
     }
     return claims;
 }
@@ -1138,13 +1160,31 @@ function tryNowFrom(sentence) {
         if (!after || !before) continue;
         const subjectText = sentence.substring(0, m.index);
         const subject = extractSubject(subjectText);
-        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || '', sentence });
+        claims.push({ kind: 'comparison', title: titleFor(subject, 'Change'), before, after, unit: before.unit || after.unit || unitWordNear(sentence.slice(m.index, m.index + m[0].length + 30)), sentence });
     }
     return claims;
 }
 
+// The subject of the clause just before a position: in "Revenue rose 15%,
+// while costs fell 3%", the subject for "fell 3%" is "Costs", not "Revenue".
+function nearestSubject(sentence, idx) {
+    const before = sentence.substring(0, idx);
+    const part = before.split(/[,;]|\b(?:while|whereas|but)\b/i).filter(t => t.trim()).pop() || '';
+    return extractSubject(part) || extractSubject(before);
+}
+
 function tryDelta(sentence) {
     const claims = [];
+    const bare = /\b(grew|rose|increased|jumped|climbed|expanded|fell|dropped|declined|decreased|reduced|shrank|slipped|dipped|gained|lost)\b\s+(?:about\s+|nearly\s+|roughly\s+|almost\s+|around\s+)?((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%))/gi;
+    let mb;
+    while ((mb = bare.exec(sentence)) !== null) {
+        const num = parseNumber(mb[2]);
+        if (!num || num.unit !== '%') continue;
+        const verb = mb[1].toLowerCase();
+        const subject = nearestSubject(sentence, mb.index);
+        const direction = /grew|rose|increased|jumped|climbed|expanded|gained/.test(verb) ? 'up' : 'down';
+        claims.push({ kind: 'delta', title: titleFor(subject, 'Change'), value: num, direction, unit: '%', sentence });
+    }
     const re = /\b(grew|rose|increased|jumped|climbed|expanded|fell|dropped|declined|decreased|reduced|shrank)\b[^.]{0,40}?\bby\s+((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/gi;
     let m;
     while ((m = re.exec(sentence)) !== null) {
@@ -1154,7 +1194,101 @@ function tryDelta(sentence) {
         const subjectText = sentence.substring(0, m.index);
         const subject = extractSubject(subjectText);
         const direction = /grew|rose|increased|jumped|climbed|expanded/.test(verb) ? 'up' : 'down';
+        if (claims.some(c => c.value.value === num.value)) continue;
         claims.push({ kind: 'delta', title: titleFor(subject, 'Change'), value: num, direction, unit: num.unit || '', sentence });
+    }
+    return claims;
+}
+
+/**
+ * Several values of the same kind in one sentence become one chart:
+ *   "some teams reported improvements of 18–22%, while a few outliers saw closer to 8%"
+ *   "Audit grew 12%, Tax 8% and Advisory 15%"
+ * Each value is labeled with the words just before it. Ranges ("18–22%")
+ * are charted at their midpoint and keep the range as the label value.
+ */
+function tryMultiValue(sentence) {
+    const re = new RegExp(`(${NUMBER_SRC})(?:\\s*(?:–|—|-)\\s*(${NUMBER_SRC}))?`, 'g');
+    const vals = [];
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        const a = parseNumber(m[1].trim());
+        if (!a) continue;
+        let value = a.value, display = a.display, unit = a.unit, v_range = null;
+        if (m[2]) {
+            const b = parseNumber(m[2].trim());
+            if (!b) continue;
+            const u = a.unit || b.unit;
+            value = (a.value + b.value) / 2;
+            display = `${a.display.replace('%', '')}–${b.display.replace(/^\$/, '')}`;
+            v_range = [a.value, b.value];
+            if (u === '%' && !display.endsWith('%')) display += '%';
+            unit = u;
+        }
+        if (!unit && value >= 1900 && value <= 2100 && Number.isInteger(value)) continue;   // years
+        vals.push({ value, display, unit, range: v_range, start: m.index, end: m.index + m[0].length });
+    }
+    if (vals.length < 2) return [];
+    const unit = vals[0].unit;
+    if (!unit || !vals.every(v => v.unit === unit)) return [];
+    const items = [];
+    const years = [];
+    let prevEnd = 0;
+    for (const v of vals) {
+        let before = sentence.slice(prevEnd, v.start);
+        const y = before.match(/\b(19|20)\d{2}\b/g);
+        years.push(y ? y[y.length - 1] : null);
+        before = before.replace(/\b(in|by|during|for)?\s*(FY\s*)?(19|20)\d{2}\b/gi, ' ');
+        before = before.split(/[,;:]|\b(?:while|whereas|and|but|compared with)\b/i).filter(t => t.trim()).pop() || before;
+        before = before.replace(/\b(of|at|to|by|around|about|nearly|roughly|closer|close|up|down|just|only|over|under|than)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+        const label = extractSubject(before);
+        items.push({ label, value: v.value, display: v.display, range: v.range || undefined });
+        prevEnd = v.end;
+    }
+    // Every value tied to its own year: that's a trend over time.
+    if (years.every(Boolean) && new Set(years).size === years.length) {
+        const subject = items.map(i => i.label).find(Boolean);
+        return [{ kind: 'series', title: subject || 'Trend', unit, sentence,
+            items: items.map((it, i) => ({ label: years[i], value: it.value, display: it.display })) }];
+    }
+    if (items.some(i => !i.label)) return [];
+    const labels = items.map(i => i.label.toLowerCase());
+    if (new Set(labels).size !== labels.length) return [];
+    const head = sentence.includes(':') ? sentence.split(':')[0] : '';
+    let title = head ? extractSubject(head) : null;
+    if (!title) {
+        if (/\b(grew|rose|increased|gains?|growth|improv)/i.test(sentence)) title = 'Growth';
+        else if (/\b(fell|dropped|declined|decreased|decline)/i.test(sentence)) title = 'Decline';
+        else title = 'Comparison';
+    }
+    return [{ kind: 'breakdown', title, items, unit, sentence, fromSentence: true }];
+}
+
+/**
+ * Part of a whole: "60% of clients use the portal" or "nearly half of
+ * respondents" becomes a donut with the rest shown as "Other".
+ */
+function tryShare(sentence) {
+    const words = { 'a quarter': 25, 'one quarter': 25, 'a third': 33.3, 'one third': 33.3, 'half': 50, 'two thirds': 66.7, 'three quarters': 75 };
+    const re = new RegExp(`(?:(${NUMBER_SRC.replace('|\\s*%)?', '|\\s*%)')})|\\b(a quarter|one quarter|a third|one third|half|two thirds|three quarters))\\s+of\\s+(?:our\\s+|the\\s+|all\\s+|their\\s+|its\\s+)?([a-z][a-z-]*(?:\\s+[a-z][a-z-]*){0,2}?)(?:\\s+((?:who\\s+|that\\s+)?[a-z][a-z' -]{2,40}?))?(?=[,.;:]|\\s+(?:while|and|but|compared)\\b|$)`, 'gi');
+    const claims = [];
+    let m;
+    while ((m = re.exec(sentence)) !== null) {
+        let pct;
+        if (m[1]) { const n = parseNumber(m[1].trim()); if (!n || n.unit !== '%') continue; pct = n.value; }
+        else pct = words[m[2].toLowerCase()];
+        if (!(pct > 0 && pct < 100)) continue;
+        const noun = m[3].trim();
+        if (/^(the|total|target|revenue|budget|cost|costs|sales|time|year|growth|change)$/i.test(noun)) continue;
+        const predicate = (m[4] || '').trim();
+        // "60% of clients use the portal" -> "Use the portal";
+        // "Patients aged 65+ made up 30% of visits" -> "Patients aged 65+"
+        const label = predicate ? upperFirst(predicate) : (extractSubject(sentence.slice(0, m.index)) || upperFirst(noun));
+        const display = m[1] ? parseNumber(m[1].trim()).display : `${Math.round(pct)}%`;
+        claims.push({
+            kind: 'breakdown', title: `Share of ${noun.toLowerCase()}`, unit: '%', sentence, isShare: true,
+            items: [{ label, value: pct, display }, { label: 'Other', value: parseFloat((100 - pct).toFixed(1)), display: `${parseFloat((100 - pct).toFixed(1))}%` }]
+        });
     }
     return claims;
 }
@@ -1189,7 +1323,9 @@ function tryStat(sentence) {
         found.push({ num, subject, idx: m.index });
     }
     if (found.length === 0) return [];
-    const withSubject = found.filter(f => f.subject && f.subject.length > 2);
+    // "it", "this" and similar are kept for now; they can join a trend with
+    // other sentences (see mergeYearStats) and are dropped otherwise.
+    const withSubject = found.filter(f => f.subject && (f.subject.length > 2 || /^(it|this|that|they)$/i.test(f.subject)));
     if (withSubject.length === 0) return [];
     withSubject.sort((a, b) => a.idx - b.idx);
     const kept = [];
@@ -1253,7 +1389,54 @@ function dedupe(claims) {
         }
         finalKept.push(c);
     }
-    return finalKept;
+    // "3.1%, or about one issue for every 32 items": keep one card and
+    // mention the ratio in its description.
+    const out = [];
+    for (const c of finalKept) {
+        if (c.kind === 'ratio') {
+            const pctCard = finalKept.find(o => o.kind === 'stat' && o.unit === '%' && o.sentence === c.sentence
+                && Math.abs(100 / c.denominator - o.value.value) / o.value.value < 0.15);
+            if (pctCard) { pctCard.note = `About 1 in ${c.denominator}.`; pctCard.related = [1, c.denominator]; continue; }
+        }
+        out.push(c);
+    }
+    return mergeYearStats(out);
+}
+
+/**
+ * Values for the same measure in different sentences, each tied to a year
+ * ("Revenue was $1M in 2021. ... $2M in 2022. ... $3M in 2023."), become
+ * one trend chart instead of separate cards.
+ */
+function mergeYearStats(claims) {
+    const PRONOUN = /^(it|this|that|they|which|there)\b/i;
+    const stats = claims.filter(c => c.kind === 'stat' && !c.value.unit.includes('%') || (c.kind === 'stat'));
+    const withYear = stats.map(c => {
+        const years = c.sentence.match(/\b(19|20)\d{2}\b/g) || [];
+        return years.length === 1 ? { c, year: years[0] } : null;
+    }).filter(Boolean);
+    const groups = [];
+    withYear.forEach(w => {
+        const key = (w.c.title || '').toLowerCase().replace(/\s+(was|were|is|are|reached|hit|totaled)$/, '');
+        const g = groups.find(g => g.unit === w.c.unit && (g.key === key || PRONOUN.test(w.c.title || '')));
+        if (g) { if (!g.items.some(i => i.year === w.year)) g.items.push(w); }
+        else groups.push({ key, unit: w.c.unit, title: w.c.title, items: [w] });
+    });
+    let result = claims;
+    groups.filter(g => g.items.length >= 3 && !PRONOUN.test(g.title || '')).forEach(g => {
+        const sorted = [...g.items].sort((a, b) => a.year - b.year);
+        const series = {
+            kind: 'series', title: g.title.replace(/\s+(was|were|is|are)$/i, ''), unit: g.unit,
+            items: sorted.map(w => ({ label: w.year, value: w.c.value.value, display: w.c.value.display })),
+            sentence: sorted.map(w => w.c.sentence).join(' … ')
+        };
+        const firstIdx = result.indexOf(g.items[0].c);
+        result = result.filter(c => !g.items.some(w => w.c === c));
+        result.splice(Math.min(firstIdx, result.length), 0, series);
+    });
+    // A card titled "It" or "This" on its own means nothing; leave it out
+    // (it shows in "numbers not charted" instead).
+    return result.filter(c => !(c.kind === 'stat' && PRONOUN.test(c.title || '') && (c.title || '').split(' ').length <= 2));
 }
 
 function impliedPercentChange(comparisonClaim) {
@@ -1265,11 +1448,12 @@ function impliedPercentChange(comparisonClaim) {
 function numbersIn(claim) {
     switch (claim.kind) {
         case 'comparison': return [claim.before.value, claim.after.value];
-        case 'stat': return [claim.value.value];
+        case 'stat': return [claim.value.value, ...(claim.related || [])];
         case 'delta': return [claim.value.value];
         case 'ratio': return [claim.numerator, claim.denominator];
-        case 'breakdown': return claim.items.map(i => i.value);
+        case 'breakdown': return claim.items.flatMap(i => [i.value, ...(i.range || [])]);
         case 'series': return claim.items.map(i => i.value);
+        case 'grouped': return claim.series.flatMap(s => s.values).filter(v => v !== null);
         default: return [];
     }
 }
@@ -1283,12 +1467,21 @@ function parseTabular(text) {
     if (text.indexOf('\t') > -1) guessDelim = '\t';
     const structuralParse = Papa.parse(text, { delimiter: guessDelim, skipEmptyLines: true });
     if (!structuralParse.data || structuralParse.data.length === 0) return null;
+    // The header is the first row with at least two filled-in cells. Lines
+    // above it (like "Customer purchases and payment types") become the title.
+    const filled = row => row.filter(c => String(c).trim() !== '').length;
     let headerIndex = -1;
     for (let i = 0; i < structuralParse.data.length; i++) {
-        if (structuralParse.data[i].length >= 2) { headerIndex = i; break; }
+        if (filled(structuralParse.data[i]) >= 2) { headerIndex = i; break; }
     }
     if (headerIndex === -1) return null;
-    const dataText = structuralParse.data.slice(headerIndex).map(row => Papa.unparse([row])).join('\n');
+    const tableTitle = structuralParse.data.slice(0, headerIndex).map(r => r.filter(c => String(c).trim()).join(' ').trim()).filter(Boolean)
+        .join(' ').replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '').trim();
+    // Drop columns with no header (empty spreadsheet columns).
+    const headerRow = structuralParse.data[headerIndex];
+    const keep = headerRow.map((h, i) => String(h).trim() !== '' ? i : -1).filter(i => i >= 0);
+    const rows = structuralParse.data.slice(headerIndex).map(r => keep.map(i => r[i] === undefined ? '' : r[i])).filter(r => filled(r) > 0);
+    const dataText = rows.map(row => Papa.unparse([row])).join('\n');
     const result = Papa.parse(dataText, { header: true, skipEmptyLines: true, dynamicTyping: true });
     if (result.data.length > 0 && result.meta.fields.length > 0) {
         // Trim whitespace from header names (Papa preserves " Restatement number" with leading space)
@@ -1300,7 +1493,7 @@ function parseTabular(text) {
             return out;
         });
         const columnTypes = headers.map(h => detectColumnType(h, data));
-        if (columnTypes.includes('numeric')) return { headers, data, columnTypes };
+        if (columnTypes.includes('numeric')) return { headers, data, columnTypes, title: tableTitle };
     }
     return null;
 }
@@ -1334,48 +1527,158 @@ function detectColumnType(header, data) {
 }
 
 // Convert a parsed tabular dataset into one or more claims
-function tabularToClaims(table, choices = {}) {
-    const { headers, data, columnTypes } = table;
-    const autoCat = headers.find((h, i) => ['category', 'datetime'].includes(columnTypes[i])) || headers[0];
-    const catHeader = choices.catHeader && headers.includes(choices.catHeader) ? choices.catHeader : autoCat;
-    const numHeaders = choices.numHeaders
-        ? choices.numHeaders.filter(h => headers.includes(h) && h !== catHeader)
-        : headers.filter((h, i) => columnTypes[i] === 'numeric' && h !== catHeader);
-    if (numHeaders.length === 0) return [];
+// ---------- TABLE ANALYSIS ----------
+// Turns a table into a small set of useful charts instead of one bar per row:
+//  - Repeated labels (North America on several rows) are combined: amounts
+//    are added up, while rates, averages, ratings and prices are averaged.
+//  - A time column (quarters, months, years) becomes the x-axis of a trend,
+//    with one line per region or product.
+//  - Two label columns that cross (each region has each product) become a
+//    grouped bar chart.
+//  - Columns that are just identifiers (customer names, IDs) are ignored.
 
-    const claims = [];
-    numHeaders.forEach(numHeader => {
-        // Parse each cell: use parseNumber() for suffix-decorated strings so
-        // "0.18%" becomes value 0.18 with display "0.18%". Preserve the raw
-        // display for axis labels and tooltips.
-        // Blank or unreadable cells are skipped rather than charted as 0.
-        const labelFor = row => (row[catHeader] == null || row[catHeader] === '') ? '(blank)' : String(row[catHeader]);
-        const items = [];
-        data.forEach(row => {
-            const raw = row[numHeader];
-            if (raw == null || raw === '') return;
-            if (typeof raw === 'number') { items.push({ label: labelFor(row), value: raw, display: String(raw) }); return; }
-            const parsed = parseNumber(String(raw));
-            if (parsed) items.push({ label: labelFor(row), value: parsed.value, display: parsed.display });
-        });
-        if (items.length === 0) return;
-        // Determine column unit by sampling parsed displays
-        const unit = detectCommonUnit(items.map(i => i.display));
-        const isDate = columnTypes[headers.indexOf(catHeader)] === 'datetime';
-        // Time-based labels (years, quarters, months, dates) make a trend;
-        // everything else is a breakdown by category.
-        const TIME_LABEL = /^((19|20)\d{2}|FY\s*\d{2,4}|Q[1-4]( \d{4})?|H[12]|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?( \d{2,4})?)$/i;
-        const looksLikeTime = items.length >= 2 && items.every(i => TIME_LABEL.test(i.label.trim()));
-        const kind = (isDate || looksLikeTime) ? 'series' : 'breakdown';
-        claims.push({
-            kind,
-            title: numHeader,
-            items,
-            unit,
-            sentence: `${numHeader} by ${catHeader}`
-        });
+const TIME_LABEL = /^((19|20)\d{2}|FY\s*\d{2,4}|Q[1-4]( \d{4})?|H[12]|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?( \d{2,4})?|\d{4}-\d{2}(-\d{2})?)$/i;
+const TIME_HEADER = /^(year|yr|fy|fiscal year|quarter|qtr|month|period|week|date|day)$/i;
+const MAX_TABLE_CHARTS = 12;
+
+// "Units Sold" -> "Units sold", "UnitPrice" -> "Unit price", "Avg Profit
+// Margin (%)" -> "Average profit margin". Acronyms like CO2 stay as they are.
+function cleanHeader(h) {
+    const words = String(h).replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\s*\((\$|%|usd|percent)\)\s*/gi, ' ')
+        .replace(/^avg\b\.?/i, 'Average').replace(/\s+/g, ' ').trim().split(' ');
+    return words.map((w, i) => i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : (/^[A-Z][a-z]+$/.test(w) ? w.toLowerCase() : w)).join(' ');
+}
+function plural(word) {
+    const w = word.toLowerCase();
+    if (/(s|x|ch|sh)$/.test(w)) return w + 'es';
+    if (/[^aeiou]y$/.test(w)) return w.slice(0, -1) + 'ies';
+    return w + 's';
+}
+function unitFromHeader(h) {
+    if (/\(\s*\$\s*\)|\$|\busd\b/i.test(h)) return '$';
+    if (/%|\bpercent(age)?\b/i.test(h)) return '%';
+    return '';
+}
+// Amounts can be added up; rates, averages, scores and prices are averaged.
+function isAveraged(h) { if (/^\s*(total|sum|count|number of|no\.)\b/i.test(String(h).replace(/([a-z])([A-Z])/g, '$1 $2'))) return false; return /%|percent|rate|avg|average|mean|rating|score|margin|price|ratio|per\b|\(1-\d\)|index|nps|satisfaction|age/i.test(h); }
+
+function cellNumber(raw) {
+    if (raw == null || raw === '') return null;
+    if (typeof raw === 'number') return isNaN(raw) ? null : raw;
+    const p = parseNumber(String(raw));
+    return p ? p.value : null;
+}
+
+function analyzeTable(table) {
+    const { headers, data, columnTypes } = table;
+    const info = headers.map((h, i) => {
+        const values = data.map(r => r[h]).filter(v => v != null && v !== '');
+        const distinct = [...new Set(values.map(v => String(v).trim()))];
+        const isNum = columnTypes[i] === 'numeric';
+        const isTime = !isNum && (TIME_HEADER.test(String(h).trim()) || (distinct.length >= 2 && distinct.every(v => TIME_LABEL.test(v))));
+        const isId = !isNum && !isTime && data.length >= 8 && (distinct.length / Math.max(1, values.length) > 0.85 || /\b(id|email|name)\b/i.test(h) && distinct.length > 12);
+        return { h, isNum, isTime, isId, distinct, order: distinct };
     });
-    return claims;
+    return {
+        metrics: info.filter(c => c.isNum),
+        dims: info.filter(c => !c.isNum && !c.isId),
+        time: info.find(c => c.isTime) || null
+    };
+}
+
+// Combine rows by one or two label columns. Returns values in first-seen order.
+function aggregate(data, xHeader, gHeader, metric) {
+    const avg = isAveraged(metric);
+    const cells = new Map();
+    const xs = [], gs = [];
+    data.forEach(r => {
+        const v = cellNumber(r[metric]);
+        if (v === null) return;
+        const x = r[xHeader] == null || r[xHeader] === '' ? '(blank)' : String(r[xHeader]).trim();
+        const g = gHeader ? (r[gHeader] == null || r[gHeader] === '' ? '(blank)' : String(r[gHeader]).trim()) : '';
+        if (!xs.includes(x)) xs.push(x);
+        if (gHeader && !gs.includes(g)) gs.push(g);
+        const key = x + '\u0001' + g;
+        const c = cells.get(key) || { sum: 0, n: 0 };
+        c.sum += v; c.n += 1; cells.set(key, c);
+    });
+    const val = (x, g) => { const c = cells.get(x + '\u0001' + g); return c ? parseFloat((avg ? c.sum / c.n : c.sum).toPrecision(12)) : null; };
+    // Time labels in time order (Q1..Q4, years ascending) when they are sortable.
+    if (xs.every(x => /^(19|20)\d{2}$/.test(x))) xs.sort();
+    else if (xs.every(x => /^Q[1-4]$/i.test(x))) xs.sort();
+    return { xs, gs, val, avg };
+}
+
+function metricTitle(metric, byText, avg) {
+    const name = cleanHeader(metric);
+    const prefix = avg && !/^(average|mean)\b/i.test(name) && !/%|rate|rating|score|margin/i.test(metric) ? 'Average ' + name.charAt(0).toLowerCase() + name.slice(1) : name;
+    return `${prefix} by ${byText}`;
+}
+
+function tabularToClaims(table, choices = {}) {
+    const { headers, data } = table;
+    const { metrics, dims, time } = analyzeTable(table);
+    let metricHeaders = choices.numHeaders
+        ? choices.numHeaders.filter(h => headers.includes(h))
+        : metrics.map(m => m.h);
+    const chosenDim = choices.catHeader && headers.includes(choices.catHeader) ? dims.find(d => d.h === choices.catHeader) || { h: choices.catHeader, distinct: [...new Set(data.map(r => String(r[choices.catHeader])))] } : null;
+    metricHeaders = metricHeaders.filter(h => !chosenDim || h !== chosenDim.h);
+    if (metricHeaders.length === 0) return [];
+    const usable = dims.filter(d => d.distinct.length >= 2);
+    const x = chosenDim || (time && usable.length > 1 ? time : usable[0]) || dims[0];
+    if (!x) return [];
+    const others = usable.filter(d => d.h !== x.h);
+    const rowsUnique = x.distinct.length === data.filter(r => r[x.h] != null && r[x.h] !== '').length;
+    const lower = s => cleanHeader(s).toLowerCase();
+
+    // Pick a second label column to split by: few values, and it actually
+    // crosses the first (most combinations exist).
+    let g = null;
+    if (!rowsUnique) {
+        for (const d of others) {
+            if (d.distinct.length > 6) continue;
+            const combos = new Set(data.map(r => String(r[x.h]).trim() + '\u0001' + String(r[d.h]).trim())).size;
+            if (x.isTime || combos >= 0.8 * x.distinct.length * d.distinct.length) { g = d; break; }
+        }
+    }
+    const xIsTime = !!(x.isTime || x.distinct.every(v => TIME_LABEL.test(v)));
+    table.usedLabelColumn = x.h;
+    const claims = [];
+    metricHeaders.forEach(metric => {
+        const unit = unitFromHeader(metric) || detectCommonUnit(data.map(r => String(r[metric] ?? '')).filter(Boolean));
+        if (g) {
+            const { xs, gs, val, avg } = aggregate(data, x.h, g.h, metric);
+            if (!xs.length) return;
+            claims.push({
+                kind: 'grouped', title: metricTitle(metric, `${lower(x.h)} and ${lower(g.h)}`, avg), unit,
+                labels: xs, groupName: cleanHeader(g.h), xName: cleanHeader(x.h), timeAxis: xIsTime, averaged: avg,
+                series: gs.map(gv => ({ name: gv, values: xs.map(xv => val(xv, gv)) })),
+                sentence: `${cleanHeader(metric)} by ${lower(x.h)}, split by ${lower(g.h)}`
+            });
+        } else {
+            const { xs, val, avg } = aggregate(data, x.h, null, metric);
+            if (!xs.length) return;
+            const items = xs.map(xv => { const v = val(xv, ''); return { label: xv, value: v, display: formatNum(v, unit) }; }).filter(i => i.value !== null);
+            claims.push({
+                kind: xIsTime ? 'series' : 'breakdown',
+                title: rowsUnique ? cleanHeader(metric) : metricTitle(metric, lower(x.h), avg), unit, items, averaged: avg,
+                sentence: rowsUnique ? `${cleanHeader(metric)} by ${lower(x.h)}` : `${cleanHeader(metric)} by ${lower(x.h)}, ${avg ? 'averaged' : 'added up'} across rows`
+            });
+        }
+    });
+    // The main amount (revenue, sales, total...) by each other label column.
+    if (!choices.numHeaders) {
+        const main = metricHeaders.find(h => /revenue|sales|total|amount|value|spend|cost/i.test(h) && !isAveraged(h))
+            || metricHeaders.find(h => !isAveraged(h)) || metricHeaders[0];
+        others.filter(d => d !== g && d.distinct.length <= 12).forEach(d => {
+            const unit = unitFromHeader(main);
+            const { xs, val, avg } = aggregate(data, d.h, null, main);
+            const items = xs.map(xv => { const v = val(xv, ''); return { label: xv, value: v, display: formatNum(v, unit) }; });
+            claims.push({ kind: d.isTime ? 'series' : 'breakdown', title: metricTitle(main, lower(d.h), avg), unit, items, averaged: avg,
+                sentence: `${cleanHeader(main)} by ${lower(d.h)}, ${avg ? 'averaged' : 'added up'} across rows` });
+        });
+    }
+    return claims.slice(0, MAX_TABLE_CHARTS);
 }
 
 // =========================================================================
@@ -1925,7 +2228,7 @@ function showDataOptions(table) {
     // Label column and value columns
     const choices = tableChoices(table);
     const autoCat = table.headers.find((h, i) => ['category', 'datetime'].includes(table.columnTypes[i])) || table.headers[0];
-    const cat = choices.catHeader || autoCat;
+    const cat = choices.catHeader || table.usedLabelColumn || autoCat;
     const labelSelect = document.getElementById('label-col-select');
     labelSelect.innerHTML = '';
     table.headers.forEach(h => { const o = document.createElement('option'); o.value = h; o.textContent = h; if (h === cat) o.selected = true; labelSelect.appendChild(o); });
@@ -2288,7 +2591,8 @@ function defaultDescription(claim) {
             return `${capitalize(subj)} ${direction} from ${before} to ${after}${pctText}.`;
         }
         case 'stat': {
-            return `${capitalize(subj)} reached ${claim.value.display}.`;
+            const verb = /\baverag/i.test(claim.sentence || '') ? 'averaged' : 'reached';
+            return `${capitalize(subj)} ${verb} ${claim.value.display}.${claim.note ? ' ' + claim.note : ''}`;
         }
         case 'delta': {
             const verb = claim.direction === 'up' ? 'increased' : 'decreased';
@@ -2304,7 +2608,18 @@ function defaultDescription(claim) {
             const direction = last.value > first.value ? 'rising' : (last.value < first.value ? 'declining' : 'flat');
             return `${capitalize(subj)} across ${n} periods (${first.label} ${first.display} → ${last.label} ${last.display}), ${direction}.`;
         }
+        case 'grouped': {
+            const scores = claim.series.map(s => {
+                const vals = s.values.filter(v => v !== null);
+                return { name: s.name, score: claim.averaged ? vals.reduce((a, v) => a + v, 0) / Math.max(1, vals.length) : vals.reduce((a, v) => a + v, 0) };
+            });
+            const top = scores.sort((a, b) => b.score - a.score)[0];
+            const what = cleanHeader(claim.title.split(' by ')[0]);
+            return `${what} for ${claim.series.length} ${plural(claim.groupName)} over ${claim.labels.length} ${plural(claim.xName)}. ${top.name} had the ${claim.averaged ? 'highest average' : 'largest total'}.`;
+        }
         case 'breakdown': {
+            if (claim.fromSentence) return claim.items.map(i => `${i.label}: ${i.display}`).join('. ') + '.';
+            if (claim.isShare) return `${claim.items[0].display} ${claim.items[0].label.charAt(0).toLowerCase() + claim.items[0].label.slice(1)}.`;
             const top = [...claim.items].sort((a, b) => b.value - a.value)[0];
             return `${capitalize(subj)} broken down across ${claim.items.length} categories (largest: ${top.label} at ${top.display}).`;
         }
@@ -2377,6 +2692,12 @@ function defaultChartType(claim) {
     switch (claim.kind) {
         case 'comparison': return 'bar';
         case 'series': return 'area';
+        case 'grouped': {
+            // Trends over time read best as lines; amounts that add up to a
+            // total stack well; everything else is side-by-side bars.
+            if (claim.timeAxis) return 'line';
+            return 'bar';
+        }
         case 'breakdown': {
             const sum = claim.items.reduce((a, b) => a + b.value, 0);
             const allPositive = claim.items.every(i => i.value > 0);
@@ -2396,6 +2717,11 @@ const CHART_TYPE_OPTIONS = {
     series: [
         { value: 'area', label: 'Area chart', icon: 'fa-chart-area' },
         { value: 'bar', label: 'Bar chart', icon: 'fa-chart-column' },
+        { value: 'line', label: 'Line chart', icon: 'fa-chart-line' }
+    ],
+    grouped: [
+        { value: 'bar', label: 'Grouped bar chart', icon: 'fa-chart-column' },
+        { value: 'stacked', label: 'Stacked bar chart', icon: 'fa-chart-column' },
         { value: 'line', label: 'Line chart', icon: 'fa-chart-line' }
     ],
     breakdown: [
@@ -2543,7 +2869,7 @@ function buildCardFor(claim, idx) {
             this.chartInstance = null;
             body.innerHTML = '';
             // Hide the axis-label row for non-chart cards (stat/ratio/delta)
-            const isChart = ['comparison', 'series', 'breakdown'].includes(claim.kind);
+            const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind);
             axisRow.style.display = isChart ? 'flex' : 'none';
             renderClaimInto(claim, body, instance => { this.chartInstance = instance; });
         },
@@ -2608,6 +2934,16 @@ function buildDataEditor(claim, rerender) {
             labelInput(item.label, `Label ${i + 1}`, v => { item.label = v || `Item ${i + 1}`; });
             valueInput(item, `Value ${i + 1}`, p => { item.value = p.value; item.display = p.display; });
         });
+    } else if (claim.kind === 'grouped') {
+        head('Label', 'Value');
+        claim.series.forEach(s => claim.labels.forEach((lab, i) => {
+            const name = document.createElement('div');
+            name.textContent = `${lab}, ${s.name}`;
+            name.style.alignSelf = 'center';
+            grid.appendChild(name);
+            const v = s.values[i];
+            valueInput({ display: v === null ? '' : formatNum(v, claim.unit) }, `${lab}, ${s.name}`, p => { s.values[i] = p.value; });
+        }));
     } else if (claim.kind === 'stat' || claim.kind === 'delta') {
         head('Value', '');
         valueInput(claim.value, 'Value', p => { claim.value = p; claim.unit = p.unit; });
@@ -2628,6 +2964,7 @@ function renderClaimInto(claim, body, setInstance) {
         case 'comparison': return renderComparison(claim, body, setInstance);
         case 'breakdown': return renderBreakdown(claim, body, setInstance);
         case 'series': return renderSeries(claim, body, setInstance);
+        case 'grouped': return renderGrouped(claim, body, setInstance);
         default: body.textContent = 'Unsupported';
     }
 }
@@ -2765,11 +3102,52 @@ function renderBreakdown(claim, body, setInstance) {
             plotOptions: { bar: { distributed: true, borderRadius: 2, columnWidth: '60%' } },
             colors: palette,
             legend: { show: false },
-            dataLabels: { enabled: false },
+            // Show each value on its bar when there are only a few; ranges
+            // like "18–22%" show as written.
+            dataLabels: claim.items.length <= 8
+                ? { enabled: true, formatter: (v, o) => (claim.items[o.dataPointIndex] && claim.items[o.dataPointIndex].range) ? claim.items[o.dataPointIndex].display : formatNum(v, claim.unit), style: { fontSize: '13px', colors: dataLabelColorsFor(palette.slice(0, claim.items.length)) } }
+                : { enabled: false },
             grid: { show: false },
             tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } }
         };
     }
+    config.chart.foreColor = chartTextColor();
+    const apex = new ApexCharts(mount, config);
+    if (setInstance) setInstance(apex);
+    apex.render();
+}
+
+// Shared chart settings for grouped data (several series over the same labels).
+// sizes: { axis, legend } in px. Used on screen and in the PNG export.
+// Strong brand colors first so every line and bar is easy to see, in the same
+// order on every card (North America is the same color everywhere).
+const GROUP_COLORS = ['#00338D', '#00B8F5', '#7213EA', '#FD349C', '#1E49E2', '#0C233C', '#AB0D82', '#76D2FF'];
+
+function groupedConfig(claim, sizes) {
+    const palette = GROUP_COLORS;
+    const t = claim.chartType;
+    const isLine = t === 'line';
+    return {
+        chart: { type: isLine ? 'line' : 'bar', stacked: t === 'stacked', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
+        series: claim.series.map(s => ({ name: s.name, data: s.values })),
+        xaxis: { categories: claim.labels, labels: { style: { fontSize: sizes.axis + 'px' }, rotate: -30, hideOverlappingLabels: true } },
+        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: sizes.axis + 'px' } } },
+        colors: palette,
+        stroke: isLine ? { curve: 'straight', width: 3 } : { width: 0 },
+        markers: isLine ? { size: 4 } : undefined,
+        plotOptions: isLine ? undefined : { bar: { borderRadius: 2, columnWidth: '70%' } },
+        legend: { show: true, position: 'bottom', fontSize: sizes.legend + 'px' },
+        dataLabels: { enabled: false },
+        grid: { borderColor: '#e5e5e5' },
+        tooltip: { shared: true, intersect: false, y: { formatter: (v) => formatNum(v, claim.unit) } }
+    };
+}
+
+function renderGrouped(claim, body, setInstance) {
+    const mount = document.createElement('div');
+    mount.className = 'chart-mount';
+    body.appendChild(mount);
+    const config = groupedConfig(claim, { axis: 13, legend: 13 });
     config.chart.foreColor = chartTextColor();
     const apex = new ApexCharts(mount, config);
     if (setInstance) setInstance(apex);
@@ -2869,7 +3247,7 @@ async function captureCardAsExport(renderer, options = {}) {
     exportEl.appendChild(bodyEl);
 
     // Axis label below (charts only)
-    const isChart = ['comparison', 'series', 'breakdown'].includes(claim.kind);
+    const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind);
     if (isChart && claim.axisLabel) {
         const axisEl = document.createElement('div');
         axisEl.style.cssText = `font-size: 16px; color: ${textMuted}; text-align: center; flex-shrink: 0; padding-top: 8px;`;
@@ -3040,6 +3418,16 @@ function renderClaimForExport(claim, body, setInstance) {
                     config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '16px', fontWeight: '700' } };
                     config.legend = { show: false };
                 }
+                const apex = new ApexCharts(mount, config);
+                apex.render().then(() => { setInstance(apex); resolve(); });
+                break;
+            }
+            case 'grouped': {
+                const mount = document.createElement('div');
+                mount.style.cssText = 'width: 100%; height: 100%;';
+                body.appendChild(mount);
+                const config = groupedConfig(claim, { axis: 16, legend: 16 });
+                config.tooltip = { enabled: false };
                 const apex = new ApexCharts(mount, config);
                 apex.render().then(() => { setInstance(apex); resolve(); });
                 break;
@@ -3265,7 +3653,7 @@ function buildStandaloneHtml(claim, renderer) {
         ${sentence ? `<p style="font-size: 12px; color: #64748b; font-style: italic; margin: 0;">Source: "${sentence}"</p>` : ''}
     </header>`;
 
-    const footerBlock = axisLabel && ['comparison', 'series', 'breakdown'].includes(claim.kind)
+    const footerBlock = axisLabel && ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind)
         ? `<p style="text-align: center; font-size: 14px; color: #64748b; margin-top: 16px;">${axisLabel}</p>`
         : '';
 
@@ -3350,6 +3738,11 @@ function buildStandaloneHtml(claim, renderer) {
                 dataLabels: { enabled: true }
             };
         }
+    } else if (claim.kind === 'grouped') {
+        chartConfig = groupedConfig(claim, { axis: 13, legend: 14 });
+        chartConfig.chart.height = 480;
+        delete chartConfig.chart.animations;
+        delete chartConfig.yaxis; delete chartConfig.tooltip;   // number formats are added in the file
     } else if (claim.kind === 'series') {
         const t = claim.chartType;
         const baseType = t === 'bar' ? 'bar' : (t === 'area' ? 'area' : 'line');
@@ -3449,7 +3842,7 @@ dom.downloadAllPptx.addEventListener('click', () => runExport(async () => {
 
         const chartY = yPos;
         // Reserve space at the bottom for the axis caption (if any)
-        const hasCaption = claim.axisLabel && ['comparison', 'series', 'breakdown'].includes(claim.kind);
+        const hasCaption = claim.axisLabel && ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind);
         const captionH = hasCaption ? 0.35 : 0;
         const chartH = 7.5 - chartY - 0.3 - captionH;
 
@@ -3555,6 +3948,12 @@ function nativePptxChartFor(claim, pptx) {
             // Breakdown bar: varyColors makes each bar take the next color from chartColors
             opts: { ...baseOpts, chartColors: rotatedPalette, barDir: 'col', barGrouping: 'standard', varyColors: true, showValue: true }
         };
+    }
+    if (claim.kind === 'grouped') {
+        const data = claim.series.map(s => ({ name: s.name, labels: claim.labels, values: s.values.map(v => v === null ? 0 : v) }));
+        const opts = { ...baseOpts, chartColors: GROUP_COLORS.map(c => c.replace('#', '')), showLegend: true, legendPos: 'b', showValue: false };
+        if (claim.chartType === 'line') return { type: pptx.charts.LINE, data, opts: { ...opts, lineDataSymbolSize: 6 } };
+        return { type: pptx.charts.BAR, data, opts: { ...opts, barDir: 'col', barGrouping: claim.chartType === 'stacked' ? 'stacked' : 'clustered' } };
     }
     if (claim.kind === 'series') {
         const t = claim.chartType;
