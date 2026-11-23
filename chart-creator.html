@@ -551,6 +551,20 @@
         .alt-box textarea { width: 100%; box-sizing: border-box; min-height: 64px; font-size: var(--text-sm); font-family: 'Open Sans', sans-serif; padding: 6px 10px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); resize: vertical; color: var(--slate-700); background: var(--white); }
         .alt-box button { align-self: flex-start; min-height: var(--target-min); padding: 0 14px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); background: transparent; color: var(--slate-700); font-weight: 600; cursor: pointer; font-size: var(--text-sm); }
 
+        /* Combine: selection mode */
+        .select-box { display: none; align-items: center; gap: 8px; min-height: var(--target-min); font-size: var(--text-sm); font-weight: 600; color: var(--blue-900); cursor: pointer; }
+        .select-box input { width: 20px; height: 20px; }
+        .gallery.selecting .select-box { display: flex; }
+        .gallery.selecting .visual-card:has(.select-box input:checked) { border-color: var(--kpmg-pacific); box-shadow: 0 0 0 3px rgba(0, 184, 245, 0.35); }
+
+        /* Chart options with previews */
+        .chart-type-menu { min-width: 300px !important; }
+        .chart-type-menu button.opt-choice { display: grid !important; grid-template-columns: 116px 1fr; gap: 10px; align-items: center; text-align: left; padding: 8px !important; white-space: normal; }
+        .opt-thumb { width: 116px; height: 64px; border: 1px solid var(--slate-200); border-radius: 4px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; font-weight: 700; color: #15803d; font-size: 22px; }
+        .opt-name { font-weight: 700; color: var(--slate-700); display: block; }
+        .opt-why { color: var(--muted-text); display: block; font-size: var(--text-sm); line-height: 1.3; }
+        .opt-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: #dcfce7; color: #14532d; font-size: var(--text-sm); font-weight: 700; }
+
         /* Numbers found in the text */
         .found-panel { grid-column: 1 / -1; border: 1px solid var(--slate-200); border-radius: var(--rounded-md); padding: 0 12px; }
         .found-panel > summary { min-height: var(--target-min); display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--slate-700); }
@@ -635,6 +649,15 @@
                         <div class="opt-checks">
                             <label><input type="checkbox" id="key-fact-toggle" checked> Point out the key fact</label>
                         </div>
+                        <label class="opt-row"><span>Download size</span>
+                            <select id="export-size" class="opt-select">
+                                <option value="slide">Slide, 16:9 (1280 × 720)</option>
+                                <option value="square">Square social post (1080 × 1080)</option>
+                                <option value="portrait">Portrait social post, 4:5 (1080 × 1350)</option>
+                                <option value="a4">Document, A4 landscape (1754 × 1240)</option>
+                            </select></label>
+                        <label class="opt-row"><span>Infographic title</span>
+                            <input type="text" id="infographic-title" class="opt-select" value="Key figures"></label>
                         <label class="opt-row"><span>Number style</span>
                             <select id="num-style" class="opt-select">
                                 <option value="short">Short: $1.2M, 45K</option>
@@ -668,6 +691,10 @@
                         <button id="download-all-pptx" disabled title="Download all charts as a single PowerPoint deck (one slide per chart, charts are editable in PowerPoint)"><i class="fas fa-file-powerpoint"></i>&nbsp; Download as PPT</button>
                         <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files, useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
                         <button id="download-all-png" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; Download all PNG</button>
+                        <button type="button" id="infographic-btn" disabled title="One branded page with every chart, as a PNG"><i class="fas fa-table-cells-large"></i>&nbsp; Download infographic</button>
+                        <button type="button" id="combine-btn" disabled title="Pick two or more charts and merge them into one"><i class="fas fa-object-group"></i>&nbsp; Combine charts</button>
+                        <button type="button" id="combine-go" hidden><i class="fas fa-check"></i>&nbsp; Combine selected</button>
+                        <button type="button" id="combine-cancel" hidden>Cancel</button>
                         <button id="clear-charts-btn" class="danger" disabled title="Remove all charts from the gallery"><i class="fas fa-trash"></i>&nbsp; Clear charts</button>
                     </div>
                 </div>
@@ -1101,8 +1128,10 @@ function tryFromTo(sentence) {
         const subject = extractSubject(subjectText);
         let unit = before.unit || after.unit || '';
         const afterTxt = sentence.substring(m.index + m[0].length, m.index + m[0].length + 30);
-        const unitMatch = (m[2] + ' ' + afterTxt).match(/\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|cups?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?)\b/i);
-        if (unitMatch) unit = unitMatch[1].toLowerCase();
+        // A unit word ("days", "clients") only when the numbers have no $ or %;
+        // "last year" is a time reference, not a unit.
+        const word = unitWordNear(m[2] + ' ' + afterTxt);
+        if (word && !unit) unit = word;
         // Capture temporal anchors next to each number ("in January", "on Monday", "in 2024").
         // This lets the chart show real x-axis labels instead of generic Before/After.
         const beforeLabel = extractTemporalAnchor(m[2]) || extractTemporalAnchor(sentence.substring(Math.max(0, m.index), m.index + m[0].length - m[3].length));
@@ -1119,8 +1148,10 @@ function tryFromTo(sentence) {
         const subject = extractSubject(subjectText);
         let unit = before.unit || after.unit || '';
         const afterTxt = sentence.substring(m.index + m[0].length, m.index + m[0].length + 30);
-        const unitMatch = (m[2] + ' ' + afterTxt).match(/\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|cups?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?)\b/i);
-        if (unitMatch) unit = unitMatch[1].toLowerCase();
+        // A unit word ("days", "clients") only when the numbers have no $ or %;
+        // "last year" is a time reference, not a unit.
+        const word = unitWordNear(m[2] + ' ' + afterTxt);
+        if (word && !unit) unit = word;
         // For "to X ... from Y" the after-anchor comes first, before-anchor comes after "from"
         const afterLabel = extractTemporalAnchor(sentence.substring(Math.max(0, m.index), m.index + m[0].length).split(/\bfrom\b/i)[0]);
         const beforeLabel = extractTemporalAnchor(afterTxt) || extractTemporalAnchor(m[2]);
@@ -1849,7 +1880,8 @@ let lastSkipped = [];   // numbers found in the text that weren't charted
 let lastFound = null;   // the text with every number marked charted or not
 // Chart style: headline titles (the takeaway) or label titles, and whether to
 // point out the key fact on each chart.
-let CHART_STYLE = { titles: 'headline', keyFact: true };
+let CHART_STYLE = { titles: 'headline', keyFact: true, size: 'slide' };
+const EXPORT_SIZES = { slide: { w: 1280, h: 720 }, square: { w: 1080, h: 1080 }, portrait: { w: 1080, h: 1350 }, a4: { w: 1754, h: 1240 } };
 let claimRenderers = []; // { claim, mountEl, render(), getCanvas() }
 
 // Saved settings. Some embedded frames and privacy settings block storage and
@@ -2331,6 +2363,9 @@ dom.mainInput.addEventListener('input', () => { lastWorkbook = null; });
     };
     titleStyle.addEventListener('change', applyStyle);
     keyFact.addEventListener('change', applyStyle);
+    const size = document.getElementById('export-size');
+    size.value = CHART_STYLE.size || 'slide';
+    size.addEventListener('change', () => { CHART_STYLE = { ...CHART_STYLE, size: size.value }; store.set('chart-style', JSON.stringify(CHART_STYLE)); });
 })();
 
 // Save edits (titles, descriptions, numbers) and typed text as they happen.
@@ -2540,6 +2575,8 @@ function showEmptyState() {
     dom.downloadAllHtml.disabled = true;
     dom.downloadAllPng.disabled = true;
     dom.clearChartsBtn.disabled = true;
+    document.getElementById('infographic-btn').disabled = true;
+    document.getElementById('combine-btn').disabled = true;
     currentClaims = [];
     claimRenderers = [];
 }
@@ -2635,6 +2672,8 @@ function renderClaims(claims, options = {}) {
     dom.downloadAllHtml.disabled = false;
     dom.downloadAllPng.disabled = false;
     dom.clearChartsBtn.disabled = false;
+    document.getElementById('infographic-btn').disabled = false;
+    document.getElementById('combine-btn').disabled = claims.length < 2;
 }
 
 // ---------- NUMBERS NOT CHARTED ----------
@@ -2899,7 +2938,8 @@ function defaultChartType(claim) {
 const CHART_TYPE_OPTIONS = {
     comparison: [
         { value: 'bar', label: 'Bar chart', icon: 'fa-chart-column' },
-        { value: 'line', label: 'Line chart', icon: 'fa-chart-line' }
+        { value: 'line', label: 'Line chart', icon: 'fa-chart-line' },
+        { value: 'number', label: 'Big number', icon: 'fa-hashtag' }
     ],
     series: [
         { value: 'area', label: 'Area chart', icon: 'fa-chart-area' },
@@ -2950,25 +2990,47 @@ function buildCardFor(claim, idx) {
         pickerBtn.setAttribute('aria-label', 'Change chart type');
         pickerBtn.innerHTML = '<i class="fas fa-shapes"></i>';
 
+        pickerBtn.title = 'Chart options';
+        pickerBtn.setAttribute('aria-label', 'Chart options: see other ways to show this');
         const menu = document.createElement('div');
         menu.className = 'chart-type-menu';
-        typeOptions.forEach(opt => {
-            const b = document.createElement('button');
-            if (opt.value === claim.chartType) b.classList.add('active');
-            b.innerHTML = `<i class="fas ${opt.icon}"></i>${opt.label}`;
-            b.onclick = () => {
-                claim.chartType = opt.value;
-                claim.edited = true;
-                menu.classList.remove('visible');
-                renderer.render();
-            };
-            menu.appendChild(b);
-        });
+        let previews = [];
+        const buildMenu = () => {
+            previews.forEach(p => { try { p && p.destroy(); } catch (e) {} });
+            previews = [];
+            menu.innerHTML = '';
+            const recommended = defaultChartType({ ...claim, chartType: undefined });
+            typeOptions.forEach(opt => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'opt-choice' + (opt.value === claim.chartType ? ' active' : '');
+                b.setAttribute('aria-pressed', String(opt.value === claim.chartType));
+                const thumb = document.createElement('span');
+                thumb.className = 'opt-thumb';
+                thumb.setAttribute('aria-hidden', 'true');
+                const text = document.createElement('span');
+                const name = document.createElement('span'); name.className = 'opt-name'; name.textContent = opt.label;
+                if (opt.value === recommended) { const badge = document.createElement('span'); badge.className = 'opt-badge'; badge.textContent = 'Recommended'; name.appendChild(badge); }
+                const why = document.createElement('span'); why.className = 'opt-why'; why.textContent = (CHART_REASONS[claim.kind] || {})[opt.value] || '';
+                text.append(name, why);
+                b.append(thumb, text);
+                b.onclick = () => {
+                    claim.chartType = opt.value;
+                    claim.edited = true;
+                    menu.classList.remove('visible');
+                    renderer.render();
+                };
+                menu.appendChild(b);
+                requestAnimationFrame(() => previews.push(miniPreview(claim, opt.value, thumb)));
+            });
+        };
 
         pickerBtn.onclick = (e) => {
             e.stopPropagation();
             // Close any other open menus
             document.querySelectorAll('.chart-type-menu.visible').forEach(m => { if (m !== menu) m.classList.remove('visible'); });
+            const opening = !menu.classList.contains('visible');
+            if (opening) buildMenu();
             menu.classList.toggle('visible');
         };
         picker.append(pickerBtn, menu);
@@ -3067,7 +3129,14 @@ function buildCardFor(claim, idx) {
     checkEl.className = 'check-note';
     checkEl.setAttribute('role', 'note');
 
-    el.append(titleRow, descEl, checkEl, sentenceEl, body, axisRow, editor);
+    const selectBox = document.createElement('label');
+    selectBox.className = 'select-box';
+    const selectInput = document.createElement('input');
+    selectInput.type = 'checkbox';
+    selectInput.dataset.idx = idx;
+    selectBox.append(selectInput, document.createTextNode('Select to combine'));
+
+    el.append(selectBox, titleRow, descEl, checkEl, sentenceEl, body, axisRow, editor);
 
 
     const renderer = {
@@ -3078,7 +3147,7 @@ function buildCardFor(claim, idx) {
             this.chartInstance = null;
             body.innerHTML = '';
             // Hide the axis-label row for non-chart cards (stat/ratio/delta)
-            const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind);
+            const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(effectiveClaim(claim).kind);
             axisRow.style.display = isChart ? 'flex' : 'none';
             // Title follows the chosen style unless the person typed their own.
             if (!claim.titleEdited) {
@@ -3346,7 +3415,47 @@ function altTextFor(claim) {
     }
 }
 
+// A before/after shown as a "Big number" is drawn as its percent change.
+function effectiveClaim(claim) {
+    if (claim.kind !== 'comparison' || claim.chartType !== 'number') return claim;
+    const p = pctChange(claim.before.value, claim.after.value) || 0;
+    return { ...claim, kind: 'delta', direction: p >= 0 ? 'up' : 'down',
+        value: { value: roundPct(p), display: `${roundPct(p)}%`, unit: '%' }, unit: '%',
+        unitWord: `${claim.before.display} to ${claim.after.display}` };
+}
+
+// Why each chart option suits the data, shown in the chart options menu.
+const CHART_REASONS = {
+    comparison: { bar: 'Best for comparing two values', line: 'Shows the direction of change', number: 'Best when the change itself is the story' },
+    series: { area: 'Shows a trend and its size', line: 'Best for trends over time', bar: 'Best for a few periods' },
+    breakdown: { donut: 'Best when parts add up to a whole', pie: 'Parts of a whole, classic look', bar: 'Best for comparing categories' },
+    grouped: { bar: 'Best for comparing groups side by side', stacked: 'Shows totals and their parts', line: 'Best for trends across groups' }
+};
+
+// Small preview of a chart option (no axes or labels).
+function miniPreview(claim, type, mount) {
+    if (claim.kind === 'comparison' && type === 'number') {
+        const p = pctChange(claim.before.value, claim.after.value) || 0;
+        mount.textContent = `${p >= 0 ? '↑' : '↓'}${roundPct(p)}%`;
+        mount.style.color = p >= 0 ? '#15803d' : '#b91c1c';
+        return null;
+    }
+    const base = { chart: { height: 60, width: 112, sparkline: { enabled: true }, animations: { enabled: false } }, tooltip: { enabled: false }, dataLabels: { enabled: false }, legend: { show: false } };
+    let cfg;
+    if (claim.kind === 'comparison') cfg = { ...base, chart: { ...base.chart, type }, series: [{ data: [claim.before.value, claim.after.value] }], colors: ['#00338D', '#00B8F5'], plotOptions: { bar: { distributed: true } } };
+    else if (claim.kind === 'series') cfg = { ...base, chart: { ...base.chart, type }, series: [{ data: claim.items.map(i => i.value) }], colors: ['#00338D'] };
+    else if (claim.kind === 'breakdown') cfg = (type === 'bar')
+        ? { ...base, chart: { ...base.chart, type: 'bar' }, series: [{ data: claim.items.map(i => i.value) }], colors: KPMG_COLORS, plotOptions: { bar: { distributed: true } } }
+        : { ...base, chart: { ...base.chart, type }, series: claim.items.map(i => Math.max(0, i.value)), labels: claim.items.map(i => i.label), colors: KPMG_COLORS };
+    else if (claim.kind === 'grouped') cfg = { ...base, chart: { ...base.chart, type: type === 'line' ? 'line' : 'bar', stacked: type === 'stacked' }, series: claim.series.map(s => ({ name: s.name, data: s.values })), colors: GROUP_COLORS };
+    if (!cfg) return null;
+    const apex = new ApexCharts(mount, cfg);
+    apex.render();
+    return apex;
+}
+
 function renderClaimInto(claim, body, setInstance) {
+    claim = effectiveClaim(claim);
     switch (claim.kind) {
         case 'stat': return renderStat(claim, body);
         case 'delta': return renderDelta(claim, body);
@@ -3599,6 +3708,7 @@ function escapeHtml(str) {
  * This is what downloads get, regardless of how the on-screen card looks.
  */
 async function captureCardAsExport(renderer, options = {}) {
+    const size = options.size || EXPORT_SIZES[CHART_STYLE.size] || EXPORT_SIZES.slide;
     const claim = options.numberOnly ? { ...renderer.claim, title: '', description: '', axisLabel: '' } : renderer.claim;
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const bgColor = '#ffffff';
@@ -3610,7 +3720,7 @@ async function captureCardAsExport(renderer, options = {}) {
     const exportEl = document.createElement('div');
     exportEl.style.cssText = `
         position: fixed; left: -10000px; top: 0;
-        width: 1280px; height: 720px;
+        width: ${size.w}px; height: ${size.h}px;
         background: ${bgColor}; color: ${textSecondary};
         font-family: 'Open Sans', sans-serif;
         padding: 48px 64px; box-sizing: border-box;
@@ -3637,7 +3747,7 @@ async function captureCardAsExport(renderer, options = {}) {
     exportEl.appendChild(bodyEl);
 
     // Axis label below (charts only)
-    const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind);
+    const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(effectiveClaim(claim).kind);
     if (isChart && claim.axisLabel) {
         const axisEl = document.createElement('div');
         axisEl.style.cssText = `font-size: 16px; color: ${textMuted}; text-align: center; flex-shrink: 0; padding-top: 8px;`;
@@ -3661,10 +3771,10 @@ async function captureCardAsExport(renderer, options = {}) {
         canvas = await html2canvas(exportEl, {
             backgroundColor: bgColor,
             scale: 1,
-            width: 1280,
-            height: 720,
-            windowWidth: 1280,
-            windowHeight: 720,
+            width: size.w,
+            height: size.h,
+            windowWidth: size.w,
+            windowHeight: size.h,
             useCORS: true
         });
     } finally {
@@ -3682,6 +3792,7 @@ async function captureCardAsExport(renderer, options = {}) {
  * Mirrors the on-screen renderers but scaled up for the 1280x720 canvas.
  */
 function renderClaimForExport(claim, body, setInstance) {
+    claim = effectiveClaim(claim);
     return new Promise(resolve => {
         const accentRaw = KPMG_COLORS[claim.accentColorIdx || 0];
         const accent = accentRaw; // bar/slice fills keep brand color
@@ -3900,6 +4011,103 @@ function pptFormatCode(claim) {
     return code;
 }
 
+// ---------- COMBINE CHARTS ----------
+// Merge two or more cards into one chart when they measure comparable things.
+function combineClaims(list) {
+    const name = c => c.labelTitle || c.title;
+    const sameUnit = list.every(c => (c.unit || '') === (list[0].unit || ''));
+    const title = list.length === 2 ? `${name(list[0])} and ${lowerFirst(name(list[1]))}` : 'Combined chart';
+    const sentence = list.map(c => c.sentence).join(' … ');
+    const valueOf = c => c.kind === 'delta' && c.direction === 'down' ? -c.value.value : c.value.value;
+    if (list.every(c => ['stat', 'delta'].includes(c.kind)) && list.every(c => c.value.unit === list[0].value.unit)) {
+        return { kind: 'breakdown', title, unit: list[0].value.unit, fromSentence: true, sentence,
+            items: list.map(c => ({ label: name(c), value: valueOf(c), display: (c.kind === 'delta' && c.direction === 'down' ? '-' : '') + c.value.display })) };
+    }
+    if (list.every(c => c.kind === 'comparison') && sameUnit) {
+        const b0 = inferBeforeLabel(list[0]), a0 = inferAfterLabel(list[0]);
+        const sameLabels = list.every(c => inferBeforeLabel(c) === b0 && inferAfterLabel(c) === a0);
+        return { kind: 'grouped', title, unit: list[0].unit, sentence, labels: list.map(name), groupName: 'Period', xName: 'Measure', timeAxis: false,
+            series: [{ name: sameLabels ? b0 : 'Before', values: list.map(c => c.before.value) }, { name: sameLabels ? a0 : 'After', values: list.map(c => c.after.value) }] };
+    }
+    const labelsKey = c => (c.items || []).map(i => i.label).join('\u0001');
+    if (list.every(c => ['series', 'breakdown'].includes(c.kind)) && sameUnit && list.every(c => labelsKey(c) === labelsKey(list[0]))) {
+        return { kind: 'grouped', title, unit: list[0].unit, sentence, labels: list[0].items.map(i => i.label),
+            groupName: 'Measure', xName: list[0].kind === 'series' ? 'Period' : 'Category', timeAxis: list[0].kind === 'series',
+            series: list.map(c => ({ name: name(c), values: c.items.map(i => i.value) })) };
+    }
+    if (list.every(c => c.kind === 'grouped') && sameUnit && list.every(c => c.labels.join('\u0001') === list[0].labels.join('\u0001'))) {
+        return { kind: 'grouped', title, unit: list[0].unit, sentence, labels: list[0].labels, groupName: 'Measure', xName: list[0].xName, timeAxis: list[0].timeAxis,
+            series: list.flatMap(c => c.series.map(sr => ({ name: `${name(c).split(' by ')[0]}: ${sr.name}`, values: sr.values }))) };
+    }
+    return null;
+}
+
+function setSelecting(on) {
+    dom.gallery.classList.toggle('selecting', on);
+    document.getElementById('combine-go').hidden = !on;
+    document.getElementById('combine-cancel').hidden = !on;
+    ['download-all-pptx', 'download-all-html', 'download-all-png', 'infographic-btn', 'combine-btn', 'clear-charts-btn']
+        .forEach(id => { document.getElementById(id).hidden = on; });
+    if (!on) dom.gallery.querySelectorAll('.select-box input').forEach(i => { i.checked = false; });
+    else showToast('Select two or more charts, then choose Combine selected.');
+}
+document.getElementById('combine-btn').addEventListener('click', () => setSelecting(true));
+document.getElementById('combine-cancel').addEventListener('click', () => setSelecting(false));
+document.getElementById('combine-go').addEventListener('click', () => {
+    const idxs = [...dom.gallery.querySelectorAll('.select-box input:checked')].map(i => +i.dataset.idx).sort((a, b) => a - b);
+    if (idxs.length < 2) { showToast('Select at least two charts to combine.'); return; }
+    const merged = combineClaims(idxs.map(i => currentClaims[i]));
+    if (!merged) { showToast("These charts measure different things, so they can't share one chart."); return; }
+    const saved = saveGalleryForUndo();
+    const next = currentClaims.filter((_, i) => !idxs.includes(i));
+    next.splice(idxs[0], 0, merged);
+    setSelecting(false);
+    renderClaims(next, { skipped: lastSkipped, found: lastFound && { ...lastFound, marks: findNumberMarks(lastFound.text, next) } });
+    offerUndo(saved, `${idxs.length} charts combined.`);
+});
+
+// ---------- ONE-PAGE INFOGRAPHIC ----------
+// Every chart on one branded page, saved as a PNG for reports and emails.
+async function buildInfographic(renderers) {
+    const W = 1920, pad = 64, gap = 40, header = 190, footer = 70;
+    const list = renderers.slice(0, 12);
+    const cols = list.length <= 2 ? list.length : list.length <= 4 ? 2 : 3;
+    const tileW = Math.floor((W - pad * 2 - gap * (cols - 1)) / cols);
+    const tileH = Math.round(tileW * 720 / 1280);
+    const rows = Math.ceil(list.length / cols);
+    const H = header + pad + rows * tileH + (rows - 1) * gap + pad + footer;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#00338D'; ctx.fillRect(0, 0, W, header);
+    ctx.fillStyle = '#ffffff'; ctx.font = '700 64px Arial, sans-serif'; ctx.textBaseline = 'middle';
+    const title = (document.getElementById('infographic-title').value || 'Key figures').trim();
+    ctx.fillText(title, pad, header / 2 - 14);
+    ctx.font = '400 28px Arial, sans-serif'; ctx.fillStyle = '#ACEAFF';
+    ctx.fillText(new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }), pad, header / 2 + 44);
+    for (let i = 0; i < list.length; i++) {
+        showToast(`Building infographic: ${i + 1} of ${list.length}`);
+        const blob = await captureCardAsExport(list[i], { size: EXPORT_SIZES.slide });
+        if (!blob) throw new Error('No image');
+        const img = await createImageBitmap(blob);
+        const x = pad + (i % cols) * (tileW + gap), y = header + pad + Math.floor(i / cols) * (tileH + gap);
+        ctx.drawImage(img, x, y, tileW, tileH);
+        ctx.strokeStyle = '#E2E8F0'; ctx.lineWidth = 2; ctx.strokeRect(x, y, tileW, tileH);
+    }
+    ctx.fillStyle = '#64748b'; ctx.font = '400 24px Arial, sans-serif';
+    ctx.fillText('Created with Creative Services\' Chart Creator', pad, H - footer / 2);
+    return await new Promise(res => canvas.toBlob(res, 'image/png'));
+}
+document.getElementById('infographic-btn').addEventListener('click', () => runExport(async () => {
+    const list = snapshotRenderers();
+    if (!list.length) return;
+    const blob = await buildInfographic(list);
+    if (!blob) throw new Error('No image');
+    saveAs(blob, `${safeName(document.getElementById('infographic-title').value || 'infographic')}.png`);
+    showToast(list.length > 12 ? 'Infographic saved with the first 12 charts.' : 'Infographic saved');
+}));
+
 // ---------- COPY IMAGE ----------
 // Copies the same 1280x720 image as the PNG download, ready to paste into
 // slides or email. Some browsers or frames block copying; then we say so.
@@ -3927,7 +4135,7 @@ let exportBusy = false;
 async function runExport(fn) {
     if (exportBusy) { showToast('Still working on the last download'); return; }
     exportBusy = true;
-    const buttons = [dom.downloadAllPptx, dom.downloadAllHtml, dom.downloadAllPng, dom.clearChartsBtn];
+    const buttons = [dom.downloadAllPptx, dom.downloadAllHtml, dom.downloadAllPng, dom.clearChartsBtn, document.getElementById('infographic-btn'), document.getElementById('combine-btn')];
     buttons.forEach(b => b.disabled = true);
     try { await fn(); }
     catch (err) { console.error(err); showToast("Download didn't work. Please try again."); }
@@ -4024,6 +4232,7 @@ dom.downloadAllHtml.addEventListener('click', () => runExport(async () => {
  *    of any <script> block so designers can tweak without parsing JSON
  */
 function buildStandaloneHtml(claim, renderer) {
+    claim = effectiveClaim(claim);
     const accent = KPMG_COLORS[claim.accentColorIdx || 0];
     const accentText = accessibleTextColor(accent); // safe variant for text on white
     const contrastIdx = ((claim.accentColorIdx || 0) + Math.floor(KPMG_COLORS.length / 2)) % KPMG_COLORS.length;
@@ -4238,7 +4447,7 @@ dom.downloadAllPptx.addEventListener('click', () => runExport(async () => {
         const captionH = hasCaption ? 0.35 : 0;
         const chartH = 7.5 - chartY - 0.3 - captionH;
 
-        const native = nativePptxChartFor(claim, pptx);
+        const native = nativePptxChartFor(effectiveClaim(claim), pptx);
         if (native) {
             slide.addChart(native.type, native.data, { x: 0.5, y: chartY, w: 12.3, h: chartH, ...native.opts, altText: altTextFor(claim) });
         } else {
@@ -4249,7 +4458,7 @@ dom.downloadAllPptx.addEventListener('click', () => runExport(async () => {
             // image that overlaps the title and description above.
             // The slide already has the title and description as text, so the
             // image shows only the number.
-            const blob = await captureCardAsExport(renderer, { numberOnly: true });
+            const blob = await captureCardAsExport(renderer, { numberOnly: true, size: EXPORT_SIZES.slide });
             if (!blob) throw new Error('No image');
             const dataUrl = await blobToDataURL(blob);
             const maxW = 12.3, maxH = chartH;
