@@ -352,19 +352,15 @@
             border-color: #e2e8f0;
         }
 
-        /* Medium screens (most laptops at 100% zoom): narrower side columns so
-           the gallery stays visible instead of being hidden. */
-        @media (max-width: 1400px) {
-            .main-container { grid-template-columns: 260px minmax(0, 1fr) 240px; }
-        }
-        /* Small screens: stack everything in one column, gallery included. */
-        @media (max-width: 1024px) {
-            html, body { height: auto; overflow: auto; }
-            .main-container { grid-template-columns: 1fr; display: flex; flex-direction: column; height: auto; }
-            .controls-column, .workspace-column, .gallery-column { height: auto; }
-            .workspace-content { padding: 1rem; }
-            .thumbnail-gallery { min-height: 140px; max-height: 360px; }
-        }
+        /* Layout modes are set by the fit-to-frame script below (not media queries),
+           because the tool is often shown inside a smaller frame (for example Zoomforth).
+           narrow: narrower side columns. stacked: one column with page scroll (phones). */
+        html.narrow .main-container { grid-template-columns: 260px minmax(0, 1fr) 240px; }
+        html.stacked, html.stacked body { height: auto; overflow: auto; }
+        html.stacked .main-container { grid-template-columns: 1fr; display: flex; flex-direction: column; height: auto; }
+        html.stacked .controls-column, html.stacked .workspace-column, html.stacked .gallery-column { height: auto; }
+        html.stacked .workspace-content { padding: 1rem; }
+        html.stacked .thumbnail-gallery { min-height: 140px; max-height: 360px; }
 
         /* WELCOME PANEL + INTERACTIVE TOUR — same pattern as the other tools */
         .welcome-overlay {
@@ -513,6 +509,34 @@
     </style>
 </head>
 <body>
+    <script>
+    /* Fit to frame: when the window or embedding frame is smaller than the size the
+       layout needs, scale the whole tool down evenly so it fits with no scrollbars.
+       Very small screens (phones) use the stacked one-column layout instead. */
+    (function () {
+        const FIT_MIN_WIDTH = 1180;   // smallest width the three-column layout fits in
+        const FIT_MIN_HEIGHT = 690;   // smallest height with every control visible
+        const FIT_MIN_SCALE = 0.55;   // below this, text gets too small; stack instead
+        const NARROW_WIDTH = 1400;    // under this, use narrower side columns
+        window.fitScale = 1;
+        function fitToFrame() {
+            const root = document.documentElement, body = document.body;
+            const w = window.innerWidth, h = window.innerHeight;
+            // Inside a frame (Zoomforth), always scale to fit. In a normal browser tab,
+            // keep the stacked layout for tablets and phones.
+            const inFrame = window.self !== window.top;
+            const stacked = inFrame ? w / FIT_MIN_WIDTH < FIT_MIN_SCALE : w <= 1024;
+            const scale = stacked ? 1 : Math.max(FIT_MIN_SCALE, Math.min(1, w / FIT_MIN_WIDTH, h / FIT_MIN_HEIGHT));
+            window.fitScale = scale;
+            root.classList.toggle('stacked', stacked);
+            root.classList.toggle('narrow', !stacked && w / scale <= NARROW_WIDTH);
+            body.style.zoom = scale === 1 ? '' : String(scale);
+            body.style.height = stacked ? '' : (h / scale) + 'px';
+        }
+        fitToFrame();
+        window.addEventListener('resize', fitToFrame);
+    })();
+    </script>
     <header class="header-container">
         <div class="header">
             <div class="header-left"></div>
@@ -2453,11 +2477,14 @@ document.addEventListener('DOMContentLoaded', () => {
             positionTourCenter(step);
             return;
         }
-        const rect = target.getBoundingClientRect();
+        // The tour layers are inside the scaled page, so convert screen sizes to page units.
+        const z = window.fitScale || 1;
+        const b = target.getBoundingClientRect();
+        const rect = { top: b.top / z, left: b.left / z, width: b.width / z, height: b.height / z };
         const pad = 6;
         const r = { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
 
-        const w = window.innerWidth, h = window.innerHeight;
+        const w = window.innerWidth / z, h = window.innerHeight / z;
         setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: Math.max(0, r.top) });
         setMask('tour-mask-bottom', { top: r.top + r.height, left: 0, width: w, height: Math.max(0, h - r.top - r.height) });
         setMask('tour-mask-left',   { top: r.top, left: 0, width: Math.max(0, r.left), height: r.height });
@@ -2497,7 +2524,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function positionTourCenter(step) {
-        const w = window.innerWidth, h = window.innerHeight;
+        const z = window.fitScale || 1;
+        const w = window.innerWidth / z, h = window.innerHeight / z;
         setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: h });
         setMask('tour-mask-bottom', { top: 0, left: 0, width: 0, height: 0 });
         setMask('tour-mask-left',   { top: 0, left: 0, width: 0, height: 0 });
