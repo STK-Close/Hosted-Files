@@ -321,6 +321,7 @@
 
         /* HIDDEN UTILITY */
         .hidden { display: none !important; }
+        .visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
         #file-input { display: none; }
 
         /* SPINNER */
@@ -581,12 +582,8 @@
 </head>
 <body>
     <div id="app-shell">
-    <header class="header-container">
-        <div class="header">
-            <h1>Creative Services' Chart Creator</h1>
-            <button id="theme-toggle" title="Switch between light and dark mode" aria-label="Switch between light and dark mode"><i class="fas fa-moon"></i></button>
-        </div>
-    </header>
+    <!-- No top bar, to match the other tools. The page title stays for screen readers. -->
+    <h1 class="visually-hidden">Creative Services' Chart Creator</h1>
 
     <div class="main-container">
         <!-- INPUT CARD -->
@@ -653,6 +650,7 @@
                         <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files, useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
                         <button id="download-all-png" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; Download all PNG</button>
                         <button id="clear-charts-btn" class="danger" disabled title="Remove all charts from the gallery"><i class="fas fa-trash"></i>&nbsp; Clear charts</button>
+                        <button type="button" id="theme-toggle" title="Switch between light and dark mode" aria-label="Switch between light and dark mode"><i class="fas fa-moon"></i></button>
                     </div>
                 </div>
                 <div class="gallery" id="gallery">
@@ -673,7 +671,7 @@
        with no page scrollbars. Phones use the stacked one-column layout instead. */
     (function () {
         const FIT_MIN_WIDTH = 1100;   // smallest width with all buttons on one row
-        const FIT_MIN_HEIGHT = 720;   // smallest height with every control visible (option panels closed)
+        const FIT_MIN_HEIGHT = 650;   // smallest height with every control visible (option panels closed)
         const FIT_MIN_SCALE = 0.55;   // below this, text gets too small; stack instead
         const shell = document.getElementById('app-shell');
         window.fitScale = 1;
