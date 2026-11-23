@@ -483,14 +483,20 @@
             left: 24px; bottom: -16px; border-top-color: var(--white);
         }
 
-        @media (max-width: 900px) {
-            html, body { height: auto; overflow: auto; }
-            .main-container { display: flex; flex-direction: column; }
-            .gallery { grid-template-columns: 1fr; }
-        }
+        /* The app is wrapped in #app-shell so the fit-to-frame script can scale it
+           without scaling pop-ups, the tour or the offscreen export area. */
+        #app-shell { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
+        /* Stacked one-column layout for phones. Set by the fit-to-frame script
+           (not a media query) because the tool is often shown inside a smaller frame. */
+        html.stacked, html.stacked body { height: auto; overflow: auto; }
+        html.stacked #app-shell { flex: none; }
+        html.stacked .main-container { display: flex; flex-direction: column; }
+        html.stacked .gallery { grid-template-columns: 1fr; }
     </style>
 </head>
 <body>
+    <div id="app-shell">
     <header class="header-container">
         <div class="header">
             <h1>Creative Services' Chart Creator</h1>
@@ -543,6 +549,34 @@
             </div>
         </div>
     </div>
+    </div>
+
+    <script>
+    /* Fit to frame: when the window or embedding frame (for example Zoomforth) is
+       smaller than the size the layout needs, scale the app down evenly so it fits
+       with no page scrollbars. Phones use the stacked one-column layout instead. */
+    (function () {
+        const FIT_MIN_WIDTH = 1100;   // smallest width with all buttons on one row
+        const FIT_MIN_HEIGHT = 640;   // smallest height with every control visible
+        const FIT_MIN_SCALE = 0.55;   // below this, text gets too small; stack instead
+        const shell = document.getElementById('app-shell');
+        window.fitScale = 1;
+        function fitToFrame() {
+            const w = window.innerWidth, h = window.innerHeight;
+            // Inside a frame, always scale to fit. In a normal browser tab, keep the
+            // stacked layout for small screens.
+            const inFrame = window.self !== window.top;
+            const stacked = inFrame ? w / FIT_MIN_WIDTH < FIT_MIN_SCALE : w <= 900;
+            const scale = stacked ? 1 : Math.max(FIT_MIN_SCALE, Math.min(1, w / FIT_MIN_WIDTH, h / FIT_MIN_HEIGHT));
+            window.fitScale = scale;
+            document.documentElement.classList.toggle('stacked', stacked);
+            shell.style.zoom = scale === 1 ? '' : String(scale);
+            shell.style.height = stacked ? '' : (h / scale) + 'px';
+        }
+        fitToFrame();
+        window.addEventListener('resize', fitToFrame);
+    })();
+    </script>
 
     <div id="toast"></div>
 
