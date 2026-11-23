@@ -1020,8 +1020,11 @@ document.addEventListener('DOMContentLoaded', () => {
         email:      { top: 10,  bottom: 26, lineWidth: 1.5 },
         ppt:        { top: 60,  bottom: 120, lineWidth: 3.0 },
         print:      { top: 100, bottom: 450, lineWidth: 7.0 },
-        circ:       { isCircle: true, lineWidth: 1.5 },
-        linkedin:   { isCircle: true, lineWidth: 1.5 }
+        // Circle formats: head (skull top to chin) fills about 60% of the circle,
+        // sitting slightly above center so the neck and shoulders show below.
+        // top = 15% of the diameter, chin line = 75% down (bottom = 25%).
+        circ:       { top: 30,  bottom: 50,  lineWidth: 1.5 },
+        linkedin:   { top: 60,  bottom: 100, lineWidth: 2.0 }
     };
 
     let activeCanvas = {};
