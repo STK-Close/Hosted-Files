@@ -86,7 +86,11 @@
         .file-types { font-size: var(--text-sm); color: var(--slate-400); display:block; margin-top: 8px; }
 
         #imageLoader { display: none; }
-        #upload-status { font-size: var(--text-sm); color: var(--blue-800); margin-top: 1rem; font-style: italic; text-align: center; min-height: 20px; line-height: 1.4; }
+        /* Status sits inside the drop zone, in place of the file-types line,
+           so loading messages never make the Controls card taller. */
+        #upload-status { font-size: var(--text-sm); color: var(--blue-800); margin-top: 8px; font-style: italic; text-align: center; line-height: 1.4; }
+        #upload-status:empty { display: none; }
+        #drop-zone:has(#upload-status:not(:empty)) .file-types { display: none; }
         [data-theme="dark"] #upload-status { color: #60a5fa; }
 
 
@@ -531,6 +535,7 @@
                         <p>Drag & drop files here</p>
                         <span>or click to browse</span>
                         <span class="file-types">(Accepts: png, bmp, gif, jpg, webp)</span>
+                        <div id="upload-status" role="status" aria-live="polite"></div>
                         <input type="file" id="imageLoader" accept="image/png, image/bmp, image/gif, image/jpeg, image/webp" multiple>
                     </div>
 
@@ -571,7 +576,6 @@
                         </div>
                     </div>
 
-                    <div id="upload-status"></div>
                 </div>
             </div>
         </div>
@@ -1528,8 +1532,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function loadedSummary() {
         const noFace = images.filter(st => !st.faceResult).length;
-        let msg = `${images.length} image(s) loaded.`;
-        if (noFace) msg += ` ${noFace} with no face found, so ${noFace === 1 ? 'it needs' : 'they need'} positioning by hand.`;
+        // Kept short: this sits inside the drop zone.
+        let msg = `${images.length} ${images.length === 1 ? 'photo' : 'photos'} loaded.`;
+        if (noFace) msg += ` ${noFace} ${noFace === 1 ? 'needs' : 'need'} positioning by hand.`;
         return msg;
     }
 
