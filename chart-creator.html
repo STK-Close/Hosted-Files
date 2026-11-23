@@ -483,6 +483,90 @@
             left: 24px; bottom: -16px; border-top-color: var(--white);
         }
 
+        /* ===== ACCESSIBILITY: sizes, contrast and focus, defined once ===== */
+        :root {
+            --text-sm: 13px;                 /* smallest text anywhere */
+            --target-min: 44px;              /* smallest tap target */
+            --muted-text: #64748b;           /* 4.7:1 on white */
+            --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.55);
+            --danger: #b91c1c;
+        }
+        [data-theme="dark"] { --muted-text: #94a3b8; --danger: #fca5a5; }
+        .controls-card .section-title, .controls-card .helper, .example-chip,
+        .output-actions button, .chart-type-menu button, .placeholder p.muted,
+        .card-actions button, .card-description, .card-sentence, .axis-label-row,
+        #show-help-btn, .welcome-step-num, .welcome-actions label, .tour-tooltip .step-counter,
+        .tour-tooltip .tour-skip, .tour-tooltip .tour-nav button, .welcome-card button.primary,
+        .welcome-card .lede, .welcome-step-text, .tour-tooltip p { font-size: var(--text-sm) !important; }
+        .card-sentence, .placeholder p.muted, .controls-card .helper, .axis-label-row,
+        .card-description:empty:before, .axis-label:empty:before, .tour-tooltip .step-counter { color: var(--muted-text) !important; }
+        .control-btn, .example-chip, .output-actions button, .chart-type-menu button, #theme-toggle,
+        #show-help-btn, .welcome-card button.primary, .tour-tooltip .tour-skip,
+        .tour-tooltip .tour-nav button, .opt-select { min-height: var(--target-min); }
+        .card-actions button, #theme-toggle { min-width: var(--target-min); min-height: var(--target-min); }
+        .welcome-step-num { width: 26px; height: 26px; }
+        .welcome-actions label { min-height: var(--target-min); }
+        button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible,
+        [contenteditable]:focus-visible, .example-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+        .visual-card { height: 440px; }
+        .visual-card:has(.data-editor[open]) { height: auto; min-height: 440px; }
+
+        /* Collapsible option groups in the left column */
+        .opt-group { border: 1px solid var(--slate-200); border-radius: var(--rounded-md); }
+        .opt-group > summary {
+            min-height: var(--target-min); display: flex; align-items: center; gap: 8px;
+            padding: 0 12px; cursor: pointer; font-weight: 700; color: var(--blue-900);
+            font-size: var(--text-sm); list-style: none; border-radius: var(--rounded-md);
+        }
+        .opt-group > summary::-webkit-details-marker { display: none; }
+        .opt-group > summary::after { content: '▾'; margin-left: auto; color: var(--muted-text); }
+        .opt-group[open] > summary::after { content: '▴'; }
+        .opt-body { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+        .opt-row { display: flex; flex-direction: column; gap: 4px; font-size: var(--text-sm); color: var(--slate-700); }
+        .opt-row > span { font-weight: 600; }
+        .opt-select, .data-editor input {
+            width: 100%; box-sizing: border-box; padding: 6px 10px; font-size: var(--text-sm);
+            border: 1px solid var(--slate-300); border-radius: var(--rounded-md);
+            background: var(--white); color: var(--slate-700); font-family: 'Open Sans', sans-serif;
+        }
+        .opt-checks { display: flex; flex-direction: column; gap: 2px; }
+        .opt-checks label { display: flex; align-items: center; gap: 8px; min-height: var(--target-min); cursor: pointer; }
+        .opt-checks input { width: 20px; height: 20px; }
+
+        /* Per-card number editor */
+        .data-editor { flex-shrink: 0; border-top: 1px solid var(--slate-100); padding-top: 2px; }
+        .data-editor > summary {
+            min-height: var(--target-min); display: flex; align-items: center; gap: 6px;
+            cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--blue-900); list-style: none;
+        }
+        .data-editor > summary::-webkit-details-marker { display: none; }
+        .data-editor > summary::before { content: '▸'; }
+        .data-editor[open] > summary::before { content: '▾'; }
+        .data-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-bottom: 6px; }
+        .data-rows .col-head { font-size: var(--text-sm); font-weight: 600; color: var(--muted-text); }
+        .data-editor input { min-height: var(--target-min); }
+        .data-editor input[aria-invalid="true"] { border-color: var(--danger); }
+        .data-help { grid-column: 1 / -1; font-size: var(--text-sm); color: var(--danger); min-height: 0; margin: 0; }
+        .data-help:empty { display: none; }
+
+        /* Numbers that weren't charted */
+        .skipped-panel { grid-column: 1 / -1; border: 1px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 0 12px; }
+        .skipped-panel > summary { min-height: var(--target-min); display: flex; align-items: center; cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--slate-700); }
+        .skipped-panel ul { margin: 0 0 12px; padding-left: 18px; font-size: var(--text-sm); color: var(--slate-700); line-height: 1.5; }
+        .skipped-panel .why { color: var(--muted-text); }
+
+        /* Toast with an Undo button */
+        #toast { display: flex; align-items: center; gap: 12px; font-size: var(--text-sm); }
+        #toast button {
+            background: transparent; color: #93c5fd; border: 1px solid #93c5fd; border-radius: var(--rounded-md);
+            min-height: 36px; padding: 0 12px; font-weight: 700; cursor: pointer; font-size: var(--text-sm);
+        }
+        #toast:not(.show) button { visibility: hidden; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition: none !important; animation: none !important; }
+        }
+
         /* The app is wrapped in #app-shell so the fit-to-frame script can scale it
            without scaling pop-ups, the tour or the offscreen export area. */
         #app-shell { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -516,6 +600,38 @@
                 <button id="file-btn" class="control-btn secondary" title="Upload a CSV, TSV, TXT, or Excel file"><i class="fas fa-file-arrow-up"></i> Upload file</button>
                 <button id="clear-input-btn" class="control-btn secondary" disabled title="Clear the input textarea"><i class="fas fa-eraser"></i> Clear input</button>
                 <input type="file" id="file-input" accept=".csv, .tsv, .txt, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+
+                <details class="opt-group hidden" id="data-options">
+                    <summary>Data options</summary>
+                    <div class="opt-body">
+                        <label class="opt-row" id="sheet-row"><span>Sheet</span>
+                            <select id="sheet-select" class="opt-select"></select></label>
+                        <label class="opt-row"><span>Label column</span>
+                            <select id="label-col-select" class="opt-select"></select></label>
+                        <fieldset class="opt-row" style="border:0; padding:0; margin:0;">
+                            <legend style="padding:0; font-weight:600;">Columns to chart</legend>
+                            <div class="opt-checks" id="value-cols"></div>
+                        </fieldset>
+                    </div>
+                </details>
+
+                <details class="opt-group" id="number-format">
+                    <summary>Number format</summary>
+                    <div class="opt-body">
+                        <label class="opt-row"><span>Style</span>
+                            <select id="num-style" class="opt-select">
+                                <option value="short">Short: $1.2M, 45K</option>
+                                <option value="full">Full: $1,200,000</option>
+                            </select></label>
+                        <label class="opt-row"><span>Decimal places</span>
+                            <select id="num-decimals" class="opt-select">
+                                <option value="auto">Automatic</option>
+                                <option value="0">0</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                            </select></label>
+                    </div>
+                </details>
 
                 <h2 class="section-title" style="margin-top: 6px;">2. Or try an example</h2>
                 <div class="examples-list">
@@ -557,7 +673,7 @@
        with no page scrollbars. Phones use the stacked one-column layout instead. */
     (function () {
         const FIT_MIN_WIDTH = 1100;   // smallest width with all buttons on one row
-        const FIT_MIN_HEIGHT = 640;   // smallest height with every control visible
+        const FIT_MIN_HEIGHT = 720;   // smallest height with every control visible (option panels closed)
         const FIT_MIN_SCALE = 0.55;   // below this, text gets too small; stack instead
         const shell = document.getElementById('app-shell');
         window.fitScale = 1;
@@ -578,7 +694,7 @@
     })();
     </script>
 
-    <div id="toast"></div>
+    <div id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button type="button" id="toast-action" hidden>Undo</button></div>
 
     <!-- Help / welcome panel — shown on first visit, can be re-opened from the corner button -->
     <div id="welcome-overlay" class="welcome-overlay">
@@ -1226,10 +1342,13 @@ function detectColumnType(header, data) {
 }
 
 // Convert a parsed tabular dataset into one or more claims
-function tabularToClaims(table) {
+function tabularToClaims(table, choices = {}) {
     const { headers, data, columnTypes } = table;
-    const catHeader = headers.find((h, i) => ['category', 'datetime'].includes(columnTypes[i])) || headers[0];
-    const numHeaders = headers.filter((h, i) => columnTypes[i] === 'numeric' && h !== catHeader);
+    const autoCat = headers.find((h, i) => ['category', 'datetime'].includes(columnTypes[i])) || headers[0];
+    const catHeader = choices.catHeader && headers.includes(choices.catHeader) ? choices.catHeader : autoCat;
+    const numHeaders = choices.numHeaders
+        ? choices.numHeaders.filter(h => headers.includes(h) && h !== catHeader)
+        : headers.filter((h, i) => columnTypes[i] === 'numeric' && h !== catHeader);
     if (numHeaders.length === 0) return [];
 
     const claims = [];
@@ -1405,6 +1524,11 @@ function dataLabelColorsFor(palette) {
 }
 
 let currentClaims = [];
+// Number format chosen under "Number format": short ($1.2M) or full
+// ($1,200,000), with automatic or fixed decimal places. Used by on-screen
+// charts and every download.
+let NUMBER_FORMAT = { style: 'short', decimals: 'auto' };
+let lastSkipped = [];   // numbers found in the text that weren't charted
 let claimRenderers = []; // { claim, mountEl, render(), getCanvas() }
 
 // Saved settings. Some embedded frames and privacy settings block storage and
@@ -1452,10 +1576,13 @@ function setupWelcomePanel() {
     const showBtn = document.getElementById('show-help-btn');
     const autoShowToggle = document.getElementById('welcome-autoshow-toggle');
 
-    // Default to true (show on load) if never set
+    // Shows automatically on the first visit only. People who want it every
+    // time can tick the box; the Help button always reopens it.
     const storedPref = store.get(WELCOME_AUTOSHOW_KEY);
-    const autoShow = storedPref === null ? true : storedPref === '1';
-    autoShowToggle.checked = autoShow;
+    const firstVisit = storedPref === null;
+    const autoShow = firstVisit || storedPref === '1';
+    autoShowToggle.checked = storedPref === '1';
+    if (firstVisit) store.set(WELCOME_AUTOSHOW_KEY, '0');
 
     if (autoShow) overlay.classList.add('visible');
 
@@ -1790,6 +1917,99 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') document.querySelectorAll('.chart-type-menu.visible').forEach(m => m.classList.remove('visible'));
 });
 
+// ---------- DATA OPTIONS (sheet and columns) ----------
+let lastTable = null;
+let lastWorkbook = null;           // { wb, sheet } when the data came from Excel
+let columnChoices = null;          // { key, catHeader, numHeaders } for the current table
+
+function tableKey(table) { return table.headers.join('\u0001'); }
+function tableChoices(table) {
+    return columnChoices && columnChoices.key === tableKey(table) ? columnChoices : {};
+}
+
+function showDataOptions(table) {
+    const panel = document.getElementById('data-options');
+    if (!table) { panel.classList.add('hidden'); return; }
+    panel.classList.remove('hidden');
+    // Sheet list (Excel files with more than one sheet)
+    const sheetRow = document.getElementById('sheet-row');
+    const sheetSelect = document.getElementById('sheet-select');
+    if (lastWorkbook && lastWorkbook.wb.SheetNames.length > 1) {
+        sheetRow.classList.remove('hidden');
+        sheetSelect.innerHTML = '';
+        lastWorkbook.wb.SheetNames.forEach(name => {
+            const o = document.createElement('option'); o.value = name; o.textContent = name;
+            if (name === lastWorkbook.sheet) o.selected = true;
+            sheetSelect.appendChild(o);
+        });
+    } else sheetRow.classList.add('hidden');
+    // Label column and value columns
+    const choices = tableChoices(table);
+    const autoCat = table.headers.find((h, i) => ['category', 'datetime'].includes(table.columnTypes[i])) || table.headers[0];
+    const cat = choices.catHeader || autoCat;
+    const labelSelect = document.getElementById('label-col-select');
+    labelSelect.innerHTML = '';
+    table.headers.forEach(h => { const o = document.createElement('option'); o.value = h; o.textContent = h; if (h === cat) o.selected = true; labelSelect.appendChild(o); });
+    const chosen = choices.numHeaders || table.headers.filter((h, i) => table.columnTypes[i] === 'numeric' && h !== cat);
+    const box = document.getElementById('value-cols');
+    box.innerHTML = '';
+    table.headers.forEach((h, i) => {
+        if (h === cat || table.columnTypes[i] !== 'numeric') return;
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = h; cb.checked = chosen.includes(h);
+        label.append(cb, document.createTextNode(h));
+        box.appendChild(label);
+    });
+    if (!box.children.length) box.textContent = 'No number columns besides the label column.';
+}
+
+function applyColumnChoices() {
+    if (!lastTable) return;
+    const catHeader = document.getElementById('label-col-select').value;
+    const numHeaders = [...document.querySelectorAll('#value-cols input:checked')].map(i => i.value);
+    columnChoices = { key: tableKey(lastTable), catHeader, numHeaders };
+    const saved = saveGalleryForUndo();
+    const claims = tabularToClaims(lastTable, columnChoices);
+    showDataOptions(lastTable);
+    if (claims.length === 0) { showEmptyState(); offerUndo(saved, 'Pick at least one column to chart.'); return; }
+    renderClaims(claims);
+    if (saved && saved.claims.some(c => c.edited)) offerUndo(saved, 'Your edited charts were replaced.');
+}
+document.getElementById('label-col-select').addEventListener('change', () => {
+    // A new label column resets the value columns to every other number column.
+    columnChoices = { key: tableKey(lastTable), catHeader: document.getElementById('label-col-select').value };
+    showDataOptions(lastTable);
+    applyColumnChoices();
+});
+document.getElementById('value-cols').addEventListener('change', applyColumnChoices);
+document.getElementById('sheet-select').addEventListener('change', (e) => {
+    if (!lastWorkbook) return;
+    lastWorkbook.sheet = e.target.value;
+    columnChoices = null;
+    dom.mainInput.value = XLSX.utils.sheet_to_csv(lastWorkbook.wb.Sheets[lastWorkbook.sheet]);
+    autoGrowTextarea(dom.mainInput);
+    generate();
+});
+// Typing new text means the old workbook no longer applies.
+dom.mainInput.addEventListener('input', () => { lastWorkbook = null; });
+
+// ---------- NUMBER FORMAT CONTROLS ----------
+(function setupNumberFormat() {
+    const style = document.getElementById('num-style');
+    const decimals = document.getElementById('num-decimals');
+    try { const saved = JSON.parse(store.get('chart-number-format') || 'null'); if (saved) NUMBER_FORMAT = { ...NUMBER_FORMAT, ...saved }; } catch (e) {}
+    style.value = NUMBER_FORMAT.style;
+    decimals.value = NUMBER_FORMAT.decimals;
+    const apply = () => {
+        NUMBER_FORMAT = { style: style.value, decimals: decimals.value };
+        store.set('chart-number-format', JSON.stringify(NUMBER_FORMAT));
+        claimRenderers.forEach(r => r.render());
+    };
+    style.addEventListener('change', apply);
+    decimals.addEventListener('change', apply);
+})();
+
 // ---------- INPUT ACTIONS ----------
 dom.generateBtn.addEventListener('click', generate);
 dom.mainInput.addEventListener('keydown', (e) => {
@@ -1820,11 +2040,25 @@ dom.clearInputBtn.addEventListener('click', () => {
     dom.mainInput.focus();
 });
 
+// Clearing takes two taps, and can still be undone.
 dom.clearChartsBtn.addEventListener('click', () => {
+    if (!dom.clearChartsBtn.dataset.armed) {
+        dom.clearChartsBtn.dataset.armed = '1';
+        const original = dom.clearChartsBtn.innerHTML;
+        dom.clearChartsBtn.innerHTML = '<i class="fas fa-trash"></i>&nbsp; Tap again to clear';
+        clearTimeout(dom.clearChartsBtn._t);
+        dom.clearChartsBtn._t = setTimeout(() => { delete dom.clearChartsBtn.dataset.armed; dom.clearChartsBtn.innerHTML = original; }, 4000);
+        return;
+    }
+    clearTimeout(dom.clearChartsBtn._t);
+    delete dom.clearChartsBtn.dataset.armed;
+    dom.clearChartsBtn.innerHTML = '<i class="fas fa-trash"></i>&nbsp; Clear charts';
+    const saved = saveGalleryForUndo();
     destroyAllCharts();
     currentClaims = [];
     claimRenderers = [];
     showEmptyState();
+    offerUndo(saved, 'Charts cleared.');
 });
 
 // Drop anywhere on the controls card
@@ -1875,15 +2109,19 @@ function handleFile(file) {
                 const data = new Uint8Array(e.target.result);
                 const wb = XLSX.read(data, { type: 'array' });
                 text = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
-                if (wb.SheetNames.length > 1) note = `Used the first sheet, "${wb.SheetNames[0]}"`;
+                if (wb.SheetNames.length > 1) note = `Showing sheet "${wb.SheetNames[0]}". Pick another under Data options.`;
             } else {
                 text = e.target.result;
             }
             // Replace the text only after the file was read successfully.
+            columnChoices = null;
             dom.mainInput.value = text;
             dom.clearInputBtn.disabled = false;
             autoGrowTextarea(dom.mainInput);
+            lastWorkbook = (ext === 'xlsx' || ext === 'xls') ? { wb: XLSX.read(new Uint8Array(e.target.result), { type: 'array' }), sheet: null } : null;
+            if (lastWorkbook) lastWorkbook.sheet = lastWorkbook.wb.SheetNames[0];
             generate();
+            if (lastWorkbook && lastWorkbook.wb.SheetNames.length > 1) document.getElementById('data-options').open = true;
             if (note) showToast(note);
         } catch (err) {
             showToast('Could not read that file');
@@ -1902,25 +2140,36 @@ function generate() {
         showToast('Type or paste something first');
         return;
     }
+    const saved = saveGalleryForUndo();
     // Try tabular first (if commas/tabs look structured), otherwise narrative
     let claims = [];
+    let skipped = [];
+    lastTable = null;
     const looksTabular = (text.includes('\n') && text.includes(',')) || text.includes('\t');
     if (looksTabular) {
         const table = parseTabular(text);
-        if (table) claims = tabularToClaims(table);
+        if (table) {
+            lastTable = table;
+            claims = tabularToClaims(table, tableChoices(table));
+        }
     }
+    showDataOptions(lastTable);
     if (claims.length === 0) {
         claims = extractClaims(text);
+        skipped = findSkippedNumbers(text, claims);
     }
     if (claims.length === 0) {
         showEmptyState();
+        offerUndo(saved, 'No charts found.');
         return;
     }
-    renderClaims(claims);
+    renderClaims(claims, { skipped });
+    if (saved && saved.claims.some(c => c.edited)) offerUndo(saved, 'Your edited charts were replaced.');
 }
 
 function showEmptyState() {
     destroyAllCharts();
+    lastSkipped = [];
     dom.gallery.innerHTML = `
         <div class="placeholder">
             <i class="fas fa-circle-question"></i>
@@ -1936,16 +2185,36 @@ function showEmptyState() {
     claimRenderers = [];
 }
 
-function showToast(message) {
-    dom.toast.textContent = message;
+// Short message at the bottom. With an action (like Undo) it stays longer
+// and shows a button.
+function showToast(message, action) {
+    const text = document.getElementById('toast-text');
+    const btn = document.getElementById('toast-action');
+    text.textContent = message;
+    btn.hidden = !action;
+    btn.onclick = action ? () => { dom.toast.classList.remove('show'); action.run(); } : null;
+    if (action) btn.textContent = action.label || 'Undo';
     dom.toast.classList.add('show');
     clearTimeout(showToast._t);
-    showToast._t = setTimeout(() => dom.toast.classList.remove('show'), 2400);
+    showToast._t = setTimeout(() => dom.toast.classList.remove('show'), action ? 8000 : 2400);
+}
+
+// ---------- UNDO ----------
+// Before charts are replaced, cleared or removed, keep a copy so one tap on
+// Undo brings them back, edits included.
+function saveGalleryForUndo() {
+    if (currentClaims.length === 0) return null;
+    return { claims: JSON.parse(JSON.stringify(currentClaims)), skipped: lastSkipped };
+}
+function offerUndo(saved, message) {
+    if (!saved) return;
+    showToast(message, { label: 'Undo', run: () => { renderClaims(saved.claims, { skipped: saved.skipped }); showToast('Charts restored'); } });
 }
 
 // ---------- RENDERING ----------
 
-function renderClaims(claims) {
+function renderClaims(claims, options = {}) {
+    lastSkipped = options.skipped || [];
     destroyAllCharts();
     currentClaims = claims;
     claimRenderers = [];
@@ -1968,10 +2237,61 @@ function renderClaims(claims) {
         requestAnimationFrame(() => card.render());
     });
 
+    renderSkippedPanel(lastSkipped);
+
     dom.downloadAllPptx.disabled = false;
     dom.downloadAllHtml.disabled = false;
     dom.downloadAllPng.disabled = false;
     dom.clearChartsBtn.disabled = false;
+}
+
+// ---------- NUMBERS NOT CHARTED ----------
+// Lists numbers found in the text that didn't make it into any chart, so
+// nothing is dropped without the person knowing.
+function findSkippedNumbers(text, claims) {
+    const used = new Map();
+    claims.forEach(c => {
+        const list = used.get(c.sentence) || [];
+        numbersIn(c).forEach(n => list.push(n));
+        used.set(c.sentence, list);
+    });
+    const numRe = /(?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?/g;
+    const out = [];
+    splitSentences(text).forEach(raw => {
+        const sentence = raw.trim();
+        const usedHere = used.get(sentence) || [];
+        let m;
+        while ((m = numRe.exec(sentence)) !== null) {
+            const start = m.index + (m[0].length - m[0].trimStart().length);
+            if (/[A-Za-z]$/.test(sentence.slice(0, start))) continue;   // part of a word, like Q1 or FY24
+            const num = parseNumber(m[0].trim());
+            if (!num) continue;
+            const isYear = !num.unit && Number.isInteger(num.value) && num.value >= 1900 && num.value <= 2100;
+            if (isYear) continue;
+            if (usedHere.some(u => Math.abs(u - num.value) < 1e-9 || Math.abs(Math.abs(u) - Math.abs(num.value)) < 1e-9)) continue;
+            out.push({ display: num.display, sentence });
+        }
+    });
+    return out;
+}
+
+function renderSkippedPanel(skipped) {
+    if (!skipped || skipped.length === 0) return;
+    const panel = document.createElement('details');
+    panel.className = 'skipped-panel';
+    const n = skipped.length;
+    panel.innerHTML = `<summary>${n} number${n === 1 ? '' : 's'} not charted</summary>`;
+    const list = document.createElement('ul');
+    skipped.forEach(item => {
+        const li = document.createElement('li');
+        const short = item.sentence.length > 90 ? item.sentence.slice(0, 87) + '…' : item.sentence;
+        li.innerHTML = `<b></b> <span class="why">in "<span></span>". Not enough context to chart. Try a sentence like "X grew from A to B".</span>`;
+        li.querySelector('b').textContent = item.display;
+        li.querySelector('.why span').textContent = short;
+        list.appendChild(li);
+    });
+    panel.appendChild(list);
+    dom.gallery.appendChild(panel);
 }
 
 /**
@@ -2123,7 +2443,7 @@ function buildCardFor(claim, idx) {
     titleEl.setAttribute('role', 'textbox');
     titleEl.setAttribute('aria-label', 'Chart title');
     titleEl.textContent = claim.title;
-    titleEl.addEventListener('input', () => { claim.title = titleEl.textContent.trim() || 'Untitled'; });
+    titleEl.addEventListener('input', () => { claim.title = titleEl.textContent.trim() || 'Untitled'; claim.edited = true; });
     titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } });
 
     const actions = document.createElement('div');
@@ -2148,6 +2468,7 @@ function buildCardFor(claim, idx) {
             b.innerHTML = `<i class="fas ${opt.icon}"></i>${opt.label}`;
             b.onclick = () => {
                 claim.chartType = opt.value;
+                claim.edited = true;
                 menu.classList.remove('visible');
                 renderer.render();
             };
@@ -2171,15 +2492,24 @@ function buildCardFor(claim, idx) {
     dlBtn.onclick = () => downloadCardPng(idx);
     actions.appendChild(dlBtn);
 
+    const copyBtn = document.createElement('button');
+    copyBtn.title = 'Copy image';
+    copyBtn.setAttribute('aria-label', 'Copy this chart as an image');
+    copyBtn.innerHTML = '<i class="fas fa-copy"></i>';
+    copyBtn.onclick = () => copyCardImage(renderer);
+    actions.appendChild(copyBtn);
+
     const rmBtn = document.createElement('button');
     rmBtn.className = 'danger';
     rmBtn.title = 'Remove';
     rmBtn.setAttribute('aria-label', 'Remove this chart');
     rmBtn.innerHTML = '<i class="fas fa-times"></i>';
     rmBtn.onclick = () => {
+        const saved = saveGalleryForUndo();
         currentClaims.splice(idx, 1);
         if (currentClaims.length === 0) showEmptyState();
-        else renderClaims(currentClaims);
+        else renderClaims(currentClaims, { skipped: lastSkipped });
+        offerUndo(saved, 'Chart removed.');
     };
     actions.appendChild(rmBtn);
 
@@ -2193,7 +2523,7 @@ function buildCardFor(claim, idx) {
     descEl.setAttribute('role', 'textbox');
     descEl.setAttribute('aria-label', 'Chart description');
     descEl.textContent = claim.description || '';
-    descEl.addEventListener('input', () => { claim.description = descEl.textContent.trim(); });
+    descEl.addEventListener('input', () => { claim.description = descEl.textContent.trim(); claim.edited = true; });
     descEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); descEl.blur(); } });
 
     // --- ORIGINAL SENTENCE (small context) ---
@@ -2218,11 +2548,14 @@ function buildCardFor(claim, idx) {
     axisLabelEl.textContent = claim.axisLabel || '';
     axisLabelEl.addEventListener('input', () => {
         claim.axisLabel = axisLabelEl.textContent.trim();
+        claim.edited = true;
     });
     axisLabelEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); axisLabelEl.blur(); } });
     axisRow.appendChild(axisLabelEl);
 
-    el.append(titleRow, descEl, sentenceEl, body, axisRow);
+    const editor = buildDataEditor(claim, () => renderer.render());
+
+    el.append(titleRow, descEl, sentenceEl, body, axisRow, editor);
 
 
     const renderer = {
@@ -2243,6 +2576,71 @@ function buildCardFor(claim, idx) {
         }
     };
     return renderer;
+}
+
+// "Edit numbers" panel on each card: fix a value or label the tool misread.
+// Values accept the same forms as the text: 1,200 / $1.2M / 45% / -3.
+function buildDataEditor(claim, rerender) {
+    const details = document.createElement('details');
+    details.className = 'data-editor';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Edit numbers';
+    details.appendChild(summary);
+    const grid = document.createElement('div');
+    grid.className = 'data-rows';
+    const help = document.createElement('p');
+    help.className = 'data-help';
+    help.setAttribute('role', 'alert');
+
+    const head = (a, b) => { [a, b].forEach(t => { const h = document.createElement('div'); h.className = 'col-head'; h.textContent = t; grid.appendChild(h); }); };
+    const labelInput = (value, aria, onSet) => {
+        const i = document.createElement('input');
+        i.type = 'text'; i.value = value; i.setAttribute('aria-label', aria);
+        i.addEventListener('change', () => { onSet(i.value.trim()); claim.edited = true; rerender(); });
+        grid.appendChild(i);
+    };
+    const valueInput = (num, aria, onSet) => {
+        const i = document.createElement('input');
+        i.type = 'text'; i.inputMode = 'decimal'; i.value = num.display; i.setAttribute('aria-label', aria);
+        i.addEventListener('change', () => {
+            const parsed = parseNumber(i.value);
+            if (!parsed) {
+                i.setAttribute('aria-invalid', 'true');
+                help.textContent = 'Use a number like 1,200, $1.2M, 45% or -3.';
+                return;
+            }
+            i.removeAttribute('aria-invalid');
+            help.textContent = '';
+            i.value = parsed.display;
+            onSet(parsed);
+            claim.edited = true;
+            rerender();
+        });
+        grid.appendChild(i);
+    };
+
+    if (claim.kind === 'comparison') {
+        head('Label', 'Value');
+        labelInput(inferBeforeLabel(claim), 'First label', v => { claim.beforeLabel = v || 'Before'; });
+        valueInput(claim.before, 'First value', p => { claim.before = p; });
+        labelInput(inferAfterLabel(claim), 'Second label', v => { claim.afterLabel = v || 'After'; });
+        valueInput(claim.after, 'Second value', p => { claim.after = p; });
+    } else if (claim.kind === 'series' || claim.kind === 'breakdown') {
+        head('Label', 'Value');
+        claim.items.forEach((item, i) => {
+            labelInput(item.label, `Label ${i + 1}`, v => { item.label = v || `Item ${i + 1}`; });
+            valueInput(item, `Value ${i + 1}`, p => { item.value = p.value; item.display = p.display; });
+        });
+    } else if (claim.kind === 'stat' || claim.kind === 'delta') {
+        head('Value', '');
+        valueInput(claim.value, 'Value', p => { claim.value = p; claim.unit = p.unit; });
+    } else if (claim.kind === 'ratio') {
+        head('1 in', '');
+        valueInput({ display: String(claim.denominator) }, 'Ratio, 1 in', p => { claim.denominator = Math.max(2, Math.round(p.value)); });
+    }
+    grid.appendChild(help);
+    details.appendChild(grid);
+    return details;
 }
 
 function renderClaimInto(claim, body, setInstance) {
@@ -2333,8 +2731,8 @@ function renderComparison(claim, body, setInstance) {
     const config = {
         chart: { type: claim.chartType === 'line' ? 'line' : 'bar', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
         series: [{ name: claim.title, data: [claim.before.value, claim.after.value] }],
-        xaxis: { categories: [beforeLabel, afterLabel], labels: { style: { fontSize: '11px' } } },
-        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px' } } },
+        xaxis: { categories: [beforeLabel, afterLabel], labels: { style: { fontSize: '13px' } } },
+        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '13px' } } },
         colors: [accent, contrast],
         legend: { show: false },
         grid: { show: false },
@@ -2344,13 +2742,13 @@ function renderComparison(claim, body, setInstance) {
         config.colors = [accent];
         config.stroke = { curve: 'straight', width: 3 };
         config.markers = { size: 6 };
-        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '11px', colors: [chartTextColor()] }, background: { enabled: false }, offsetY: -8 };
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '13px', colors: [chartTextColor()] }, background: { enabled: false }, offsetY: -8 };
         config.grid = { borderColor: '#e5e5e5' };
     } else {
         config.plotOptions = { bar: { distributed: true, borderRadius: 3, columnWidth: '50%' } };
         // Per-bar text contrast: white text on dark bars, black on light bars
         const barColors = [accent, contrast];
-        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(barColors), fontSize: '11px', fontWeight: '700' }, offsetY: 0 };
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(barColors), fontSize: '13px', fontWeight: '700' }, offsetY: 0 };
     }
     config.chart.foreColor = chartTextColor();
     const apex = new ApexCharts(mount, config);
@@ -2373,11 +2771,11 @@ function renderBreakdown(claim, body, setInstance) {
             series: claim.items.map(i => i.value),
             labels: claim.items.map(i => i.label),
             colors: palette,
-            legend: { position: 'bottom', fontSize: '11px' },
+            legend: { position: 'bottom', fontSize: '13px' },
             // Per-slice text contrast: each label colored to match its underlying slice.
             // dropShadow disabled — ApexCharts enables it by default on pie/donut and
             // it makes the numbers hard to read against contrast-aware label colors.
-            dataLabels: { enabled: true, formatter: (v) => v.toFixed(0) + '%', style: { fontSize: '10px', colors: dataLabelColorsFor(palette.slice(0, claim.items.length)) }, dropShadow: { enabled: false } },
+            dataLabels: { enabled: true, formatter: (v) => v.toFixed(0) + '%', style: { fontSize: '13px', colors: dataLabelColorsFor(palette.slice(0, claim.items.length)) }, dropShadow: { enabled: false } },
             tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } }
         };
         if (t === 'donut') config.plotOptions = { pie: { donut: { size: '55%' } } };
@@ -2385,8 +2783,8 @@ function renderBreakdown(claim, body, setInstance) {
         config = {
             chart: { type: 'bar', height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
             series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
-            xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '10px' }, rotate: -30 } },
-            yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px' } } },
+            xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '13px' }, rotate: -30 } },
+            yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '13px' } } },
             plotOptions: { bar: { distributed: true, borderRadius: 2, columnWidth: '60%' } },
             colors: palette,
             legend: { show: false },
@@ -2415,12 +2813,12 @@ function renderSeries(claim, body, setInstance) {
     const config = {
         chart: { type: baseType, height: '100%', toolbar: { show: false }, fontFamily: 'Arial, sans-serif', animations: { enabled: false } },
         series: [{ name: claim.title, data: claim.items.map(i => i.value) }],
-        xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '10px' } } },
-        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px' } } },
+        xaxis: { categories: claim.items.map(i => i.label), labels: { style: { fontSize: '13px' } } },
+        yaxis: { labels: { formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '13px' } } },
         colors: baseType === 'bar' ? palette : [accent],
         grid: { borderColor: '#e5e5e5' },
         tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } },
-        dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px', colors: [chartTextColor()] }, background: { enabled: false }, offsetY: -8 }
+        dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '13px', colors: [chartTextColor()] }, background: { enabled: false }, offsetY: -8 }
     };
     if (baseType === 'line') {
         config.stroke = { curve: 'straight', width: 3 };
@@ -2431,7 +2829,7 @@ function renderSeries(claim, body, setInstance) {
     } else {
         config.plotOptions = { bar: { distributed: true, borderRadius: 3, columnWidth: '60%' } };
         // Per-bar text contrast across the rotated palette
-        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '10px', fontWeight: '700' } };
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '13px', fontWeight: '700' } };
         config.legend = { show: false };
     }
     config.chart.foreColor = chartTextColor();
@@ -2706,19 +3104,64 @@ function inferAfterLabel(claim) {
     return 'After';
 }
 
+
 function formatNum(v, unit) {
     if (v == null || isNaN(v)) return '';
+    const f = NUMBER_FORMAT || { style: 'short', decimals: 'auto' };
     const abs = Math.abs(v);
+    const withDecimals = (x, auto) => f.decimals === 'auto'
+        ? auto(x)
+        : x.toLocaleString('en-US', { minimumFractionDigits: +f.decimals, maximumFractionDigits: +f.decimals });
+    const autoPlain = (x) => Number.isInteger(x) ? x.toLocaleString('en-US')
+        : x < 1 ? String(parseFloat(x.toPrecision(2)))          // 0.18, 0.04
+        : parseFloat(x.toFixed(1)).toLocaleString('en-US');
     let s;
-    if (abs >= 1e9) s = (v / 1e9).toFixed(1) + 'B';
-    else if (abs >= 1e6) s = (v / 1e6).toFixed(1) + 'M';
-    else if (abs >= 1e3) s = (v / 1e3).toFixed(1) + 'K';
-    else if (Number.isInteger(v)) s = v.toLocaleString();
-    else if (abs < 1) s = String(parseFloat(v.toPrecision(2)));   // 0.18, 0.04
-    else s = String(parseFloat(v.toFixed(1)));
-    if (unit === '$') return '$' + s;
-    if (unit === '%') return s + '%';
-    return s;
+    if (f.style === 'short' && abs >= 1e3) {
+        const [div, suffix] = abs >= 1e9 ? [1e9, 'B'] : abs >= 1e6 ? [1e6, 'M'] : [1e3, 'K'];
+        s = withDecimals(abs / div, x => x.toFixed(1)) + suffix;
+    } else {
+        s = withDecimals(abs, autoPlain);
+    }
+    const sign = v < 0 ? '-' : '';
+    if (unit === '$') return sign + '$' + s;
+    if (unit === '%') return sign + s + '%';
+    return sign + s;
+}
+
+// The same format for PowerPoint's native charts (Excel-style format codes).
+function pptFormatCode(claim) {
+    const values = numbersIn(claim).map(Math.abs);
+    const max = values.length ? Math.max(...values) : 0;
+    const f = NUMBER_FORMAT;
+    const dec = f.decimals === 'auto' ? (f.style === 'short' && max >= 1e3 ? 1 : 0) : +f.decimals;
+    let code = '#,##0' + (dec > 0 ? '.' + '0'.repeat(dec) : '');
+    if (f.style === 'short') {
+        if (max >= 1e9) code += ',,,"B"';
+        else if (max >= 1e6) code += ',,"M"';
+        else if (max >= 1e3) code += ',"K"';
+    }
+    if (claim.unit === '$') code = '"$"' + code;
+    if (claim.unit === '%') code += '"%"';
+    return code;
+}
+
+// ---------- COPY IMAGE ----------
+// Copies the same 1280x720 image as the PNG download, ready to paste into
+// slides or email. Some browsers or frames block copying; then we say so.
+async function copyCardImage(renderer) {
+    if (!navigator.clipboard || !window.ClipboardItem) {
+        showToast("Copying images isn't available here. Use the download button instead.");
+        return;
+    }
+    showToast('Copying image…');
+    try {
+        const blobPromise = captureCardAsExport(renderer).then(b => { if (!b) throw new Error('No image'); return b; });
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+        showToast('Image copied. Paste it into your slide or email.');
+    } catch (err) {
+        console.error(err);
+        showToast("Couldn't copy here. Use the download button instead.");
+    }
 }
 
 // ---------- DOWNLOAD ----------
@@ -2963,6 +3406,7 @@ function buildStandaloneHtml(claim, renderer) {
         const chartOptions = ${JSON.stringify(chartConfig, null, 2).replace(/</g, '\\u003c')};
         // Number format: $ and % kept, large values shortened (4.2B, 1.5M, 12K).
         const UNIT = ${JSON.stringify(claim.unit === '$' || claim.unit === '%' ? claim.unit : '')};
+        const NUMBER_FORMAT = ${JSON.stringify(NUMBER_FORMAT)};
         ${formatNum.toString()}
         const fmt = (v) => formatNum(v, UNIT);
         if (!['pie', 'donut'].includes(chartOptions.chart.type)) {
@@ -3079,7 +3523,10 @@ function nativePptxChartFor(claim, pptx) {
     // For breakdowns, rotate the full palette starting at accent
     const rotatedPalette = KPMG_COLORS.map((_, i) => KPMG_COLORS[(i + accentIdx) % KPMG_COLORS.length].replace('#', ''));
 
+    const numFmt = pptFormatCode(claim);
     const baseOpts = {
+        dataLabelFormatCode: numFmt,
+        valAxisLabelFormatCode: numFmt,
         chartColors: rotatedPalette,
         showLegend: false,
         catAxisLabelFontFace: 'Arial',
