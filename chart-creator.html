@@ -620,9 +620,9 @@
                 <textarea id="main-input" aria-label="Text or data to chart" placeholder="Example: Our team grew from 28 people last year to 54 this year, and client satisfaction reached 92%."></textarea>
 
                 <button id="generate-btn" class="control-btn" title="Generate charts from the text above (or Ctrl/Cmd+Enter)"><i class="fas fa-wand-magic-sparkles"></i> Make charts</button>
-                <button id="file-btn" class="control-btn secondary" title="Upload a CSV, TSV, TXT, or Excel file"><i class="fas fa-file-arrow-up"></i> Upload file</button>
+                <button id="file-btn" class="control-btn secondary" title="Upload a CSV, TSV, TXT or Excel file, or a screenshot of a table"><i class="fas fa-file-arrow-up"></i> Upload file</button>
                 <button id="clear-input-btn" class="control-btn secondary" disabled title="Clear the input textarea"><i class="fas fa-eraser"></i> Clear input</button>
-                <input type="file" id="file-input" accept=".csv, .tsv, .txt, .xlsx, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel">
+                <input type="file" id="file-input" accept=".csv, .tsv, .txt, .xlsx, .xls, .png, .jpg, .jpeg, .webp, .bmp, .gif, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, image/*">
 
                 <details class="opt-group hidden" id="data-options">
                     <summary>Data options</summary>
@@ -2452,11 +2452,113 @@ document.querySelectorAll('.example-chip').forEach(chip => {
 });
 
 const SUPPORTED_FILES = ['csv', 'tsv', 'txt', 'xlsx', 'xls'];
+const IMAGE_FILES = ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'];
+
+// ---------- TABLES AND TEXT FROM SCREENSHOTS ----------
+// Reads the words and numbers in a screenshot, in the browser (nothing is
+// uploaded). The reader (about 4 MB) loads the first time it's used.
+const OCR = {
+    lib: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+    worker: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+    core: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1',
+    lang: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'
+};
+function loadScript(src) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const el = document.createElement('script');
+        el.src = src; el.onload = resolve; el.onerror = () => reject(new Error('Could not load ' + src));
+        document.head.appendChild(el);
+    });
+}
+
+// Turn recognized lines into a table when the numbers line up in columns:
+// words close together form one cell, bigger gaps start a new cell.
+function ocrToTable(lines) {
+    const rows = lines.map(line => {
+        const words = (line.words || []).filter(w => w.text.trim());
+        if (!words.length) return [];
+        const h = Math.max(8, line.bbox.y1 - line.bbox.y0);
+        const cells = [];
+        let cur = words[0].text, prevEnd = words[0].bbox.x1;
+        for (let i = 1; i < words.length; i++) {
+            const w = words[i];
+            if (w.bbox.x0 - prevEnd > h * 0.9) { cells.push(cur); cur = w.text; }
+            else cur += ' ' + w.text;
+            prevEnd = w.bbox.x1;
+        }
+        cells.push(cur);
+        return cells.map(c => fixNumberCell(c.trim()));
+    }).filter(r => r.length);
+    const isNum = c => parseNumber(c.replace(/[^\d.,$%()\-kmbtKMBT ]/g, '').trim()) !== null && /\d/.test(c);
+    const dataRows = rows.filter(r => r.length >= 2 && r.slice(1).filter(isNum).length >= Math.max(1, (r.length - 1) * 0.6));
+    if (dataRows.length < 2) return null;
+    const width = Math.max(...dataRows.map(r => r.length));
+    const firstData = rows.indexOf(dataRows[0]);
+    const header = firstData > 0 && rows[firstData - 1].length === width && !rows[firstData - 1].slice(1).some(isNum) ? rows[firstData - 1] : null;
+    const body = dataRows.filter(r => r.length === width);
+    if (body.length < 2) return null;
+    const head = header || ['Item', ...Array.from({ length: width - 1 }, (_, i) => `Value ${i + 1}`)];
+    return [head, ...body].map(r => r.map(c => c.replace(/\t/g, ' ')).join('\t')).join('\n');
+}
+
+// Small screenshots read better when enlarged and turned to grayscale.
+async function prepareImage(file) {
+    try {
+        const img = await createImageBitmap(file);
+        const scale = Math.min(3, Math.max(1, 2000 / Math.max(img.width, img.height)));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+        const ctx = c.getContext('2d');
+        ctx.filter = 'grayscale(1) contrast(1.2)';
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        return await new Promise(res => c.toBlob(b => res(b || file), 'image/png'));
+    } catch (e) { return file; }
+}
+
+// Common misreads inside numbers: I or l for 1, O for 0.
+function fixNumberCell(cell) {
+    if (!/[\d$]/.test(cell) || /[a-z]{3,}/i.test(cell.replace(/(million|billion|thousand)/i, ''))) return cell;
+    return cell.replace(/(?<=[\d$.,])[Il|](?=[\d.,%MKB]|$)/g, '1').replace(/(?<=[\d$.,])[Oo](?=[\d.,%MKB]|$)/g, '0').replace(/\s+(?=[\d.,%])/g, '');
+}
+
+async function readImage(file) {
+    showToast('Reading the image… The first time takes a few seconds.');
+    try {
+        if (!window.Tesseract) await loadScript(OCR.lib);
+        const worker = await Tesseract.createWorker('eng', 1, { workerPath: OCR.worker, corePath: OCR.core, langPath: OCR.lang });
+        const { data } = await worker.recognize(await prepareImage(file), {}, { blocks: true, text: true });
+        await worker.terminate();
+        const lines = (data.blocks || []).flatMap(b => (b.paragraphs || []).flatMap(p => p.lines || []));
+        const table = ocrToTable(lines);
+        const text = table || (data.text || '').trim();
+        if (!text) { showToast("Couldn't find any text in that image."); return; }
+        columnChoices = null; lastWorkbook = null;
+        dom.mainInput.value = text;
+        dom.clearInputBtn.disabled = false;
+        autoGrowTextarea(dom.mainInput);
+        generate();
+        showToast(table ? 'Read a table from the image. Check the numbers against the original.' : 'Read the text from the image. Check the numbers against the original.');
+    } catch (err) {
+        console.error(err);
+        showToast("Couldn't read that image here. Try a clearer screenshot, or paste the text instead.");
+    }
+}
+
+// Paste a screenshot straight into the text box.
+dom.mainInput.addEventListener('paste', (e) => {
+    const item = [...(e.clipboardData && e.clipboardData.items || [])].find(i => i.type.startsWith('image/'));
+    if (!item) return;
+    e.preventDefault();
+    readImage(item.getAsFile());
+});
 
 function handleFile(file) {
     const ext = file.name.toLowerCase().split('.').pop();
+    if (IMAGE_FILES.includes(ext) || (file.type || '').startsWith('image/')) { dom.fileInput.value = ''; readImage(file); return; }
     if (!SUPPORTED_FILES.includes(ext)) {
-        showToast("That file type isn't supported. Use CSV, TSV, TXT or Excel.");
+        showToast("That file type isn't supported. Use CSV, TSV, TXT, Excel or an image.");
         dom.fileInput.value = '';
         return;
     }
