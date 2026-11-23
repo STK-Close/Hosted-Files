@@ -546,6 +546,11 @@
         .data-help { grid-column: 1 / -1; font-size: var(--text-sm); color: var(--danger); min-height: 0; margin: 0; }
         .data-help:empty { display: none; }
 
+        .check-note { flex-shrink: 0; margin: 0; padding: 6px 8px; border-radius: var(--rounded-md); background: #fef3c7; color: #78350f; font-size: var(--text-sm); line-height: 1.35; }
+        .alt-box { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+        .alt-box textarea { width: 100%; box-sizing: border-box; min-height: 64px; font-size: var(--text-sm); font-family: 'Open Sans', sans-serif; padding: 6px 10px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); resize: vertical; color: var(--slate-700); background: var(--white); }
+        .alt-box button { align-self: flex-start; min-height: var(--target-min); padding: 0 14px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); background: transparent; color: var(--slate-700); font-weight: 600; cursor: pointer; font-size: var(--text-sm); }
+
         /* Numbers that weren't charted */
         .skipped-panel { grid-column: 1 / -1; border: 1px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 0 12px; }
         .skipped-panel > summary { min-height: var(--target-min); display: flex; align-items: center; cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--slate-700); }
@@ -609,9 +614,17 @@
                 </details>
 
                 <details class="opt-group" id="number-format">
-                    <summary>Number format</summary>
+                    <summary>Chart style and numbers</summary>
                     <div class="opt-body">
-                        <label class="opt-row"><span>Style</span>
+                        <label class="opt-row"><span>Chart titles</span>
+                            <select id="title-style" class="opt-select">
+                                <option value="headline">Headline: the takeaway</option>
+                                <option value="label">Label: what is measured</option>
+                            </select></label>
+                        <div class="opt-checks">
+                            <label><input type="checkbox" id="key-fact-toggle" checked> Point out the key fact</label>
+                        </div>
+                        <label class="opt-row"><span>Number style</span>
                             <select id="num-style" class="opt-select">
                                 <option value="short">Short: $1.2M, 45K</option>
                                 <option value="full">Full: $1,200,000</option>
@@ -752,7 +765,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 const HEDGE_WORDS = /\b(roughly|nearly|almost|about|approximately|around|some|a few|several|many|most|just|only|even|quite|rather|fairly)\b/gi;
 const TRIM_LEADING = /^(our|the|a|an|to|of|for|with|in|on|at|by|and|but|that|which|who|whose|while|when|since|though|although|however|despite|yet|meanwhile|also|primarily|including|due|because|as|so|then|its|their|these|those|causing|leading|driving|pushing|helping|allowing)\s+/i;
-const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretch(?:es|ed|ing)?|climbs?|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted|var(?:y|ies|ied)|rang(?:e|es|ed|ing)|saw|expected|made up|makes? up|account(?:s|ed)? for|represent(?:s|ed)?)\b/i;
+const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretch(?:es|ed|ing)?|climbs?|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted|var(?:y|ies|ied)|rang(?:e|es|ed|ing)|saw|expected|doubled|tripled|halved|quadrupled|made up|makes? up|account(?:s|ed)? for|represent(?:s|ed)?)\b/i;
 
 // One number in text: optional minus and $, digits with or without thousands
 // commas, decimals, then a scale word, K/M/B/T or %.
@@ -1044,7 +1057,7 @@ function tryTimeSeries(sentence) {
 
 // A unit word next to the numbers ("54 active teams", "11.4 weeks").
 function unitWordNear(text) {
-    const m = (text || '').match(/\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?|staff|members?|projects?|offices?|countries|markets?|customers?|partners?|audits?|engagements?)\b/i);
+    const m = (text || '').match(/(?<!\b(?:last|this|next|per|a|prior|the|that|each)\s)\b(days?|weeks?|months?|years?|hours?|minutes?|seconds?|sessions?|participants?|teams?|items?|transactions?|findings?|requests?|inquiries|clients?|cases?|employees?|people|users?|staff|members?|projects?|offices?|countries|markets?|customers?|partners?|audits?|engagements?)\b/i);
     return m ? m[1].toLowerCase() : '';
 }
 
@@ -1822,6 +1835,9 @@ let currentClaims = [];
 // charts and every download.
 let NUMBER_FORMAT = { style: 'short', decimals: 'auto' };
 let lastSkipped = [];   // numbers found in the text that weren't charted
+// Chart style: headline titles (the takeaway) or label titles, and whether to
+// point out the key fact on each chart.
+let CHART_STYLE = { titles: 'headline', keyFact: true };
 let claimRenderers = []; // { claim, mountEl, render(), getCanvas() }
 
 // Saved settings. Some embedded frames and privacy settings block storage and
@@ -2290,6 +2306,19 @@ dom.mainInput.addEventListener('input', () => { lastWorkbook = null; });
     };
     style.addEventListener('change', apply);
     decimals.addEventListener('change', apply);
+
+    const titleStyle = document.getElementById('title-style');
+    const keyFact = document.getElementById('key-fact-toggle');
+    try { const saved = JSON.parse(store.get('chart-style') || 'null'); if (saved) CHART_STYLE = { ...CHART_STYLE, ...saved }; } catch (e) {}
+    titleStyle.value = CHART_STYLE.titles;
+    keyFact.checked = CHART_STYLE.keyFact;
+    const applyStyle = () => {
+        CHART_STYLE = { ...CHART_STYLE, titles: titleStyle.value, keyFact: keyFact.checked };
+        store.set('chart-style', JSON.stringify(CHART_STYLE));
+        claimRenderers.forEach(r => r.render());
+    };
+    titleStyle.addEventListener('change', applyStyle);
+    keyFact.addEventListener('change', applyStyle);
 })();
 
 // ---------- INPUT ACTIONS ----------
@@ -2503,6 +2532,7 @@ function renderClaims(claims, options = {}) {
 
     // Initialize claim defaults: description, editable axis label, unit word, accent color
     claims.forEach((claim, idx) => {
+        if (claim.labelTitle === undefined) claim.labelTitle = claim.title;
         if (claim.description === undefined) claim.description = defaultDescription(claim);
         if (claim.axisLabel === undefined) claim.axisLabel = defaultAxisLabel(claim);
         if (claim.unitWord === undefined) claim.unitWord = defaultUnitWord(claim);
@@ -2579,7 +2609,7 @@ function renderSkippedPanel(skipped) {
  * rather than something to author. They can edit or clear it.
  */
 function defaultDescription(claim) {
-    const t = (claim.title || '').trim();
+    const t = (claim.labelTitle || claim.title || '').trim();
     const subj = t.charAt(0).toLowerCase() + t.slice(1);
     switch (claim.kind) {
         case 'comparison': {
@@ -2676,7 +2706,7 @@ function defaultUnitWord(claim) {
  * words so it fits visually beneath the big number.
  */
 function subjectAsUnitWord(claim) {
-    const title = (claim.title || '').trim().toLowerCase();
+    const title = (claim.labelTitle || claim.title || '').trim().toLowerCase();
     if (!title) return '';
     // Strip leading articles and connector words
     let cleaned = title.replace(/^(the|a|an|our|their|its|this|that)\s+/i, '');
@@ -2746,7 +2776,7 @@ function buildCardFor(claim, idx) {
     titleEl.setAttribute('role', 'textbox');
     titleEl.setAttribute('aria-label', 'Chart title');
     titleEl.textContent = claim.title;
-    titleEl.addEventListener('input', () => { claim.title = titleEl.textContent.trim() || 'Untitled'; claim.edited = true; });
+    titleEl.addEventListener('input', () => { claim.title = titleEl.textContent.trim() || 'Untitled'; claim.edited = true; claim.titleEdited = true; });
     titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } });
 
     const actions = document.createElement('div');
@@ -2858,7 +2888,11 @@ function buildCardFor(claim, idx) {
 
     const editor = buildDataEditor(claim, () => renderer.render());
 
-    el.append(titleRow, descEl, sentenceEl, body, axisRow, editor);
+    const checkEl = document.createElement('p');
+    checkEl.className = 'check-note';
+    checkEl.setAttribute('role', 'note');
+
+    el.append(titleRow, descEl, checkEl, sentenceEl, body, axisRow, editor);
 
 
     const renderer = {
@@ -2871,6 +2905,21 @@ function buildCardFor(claim, idx) {
             // Hide the axis-label row for non-chart cards (stat/ratio/delta)
             const isChart = ['comparison', 'series', 'breakdown', 'grouped'].includes(claim.kind);
             axisRow.style.display = isChart ? 'flex' : 'none';
+            // Title follows the chosen style unless the person typed their own.
+            if (!claim.titleEdited) {
+                claim.title = CHART_STYLE.titles === 'headline' ? headlineFor(claim) : claim.labelTitle;
+                if (titleEl.textContent !== claim.title) titleEl.textContent = claim.title;
+            }
+            // Number check: flag wording that doesn't match the numbers.
+            const issues = checkClaim(claim);
+            checkEl.textContent = issues.length ? 'Check: ' + issues.join(' ') : '';
+            checkEl.hidden = issues.length === 0;
+            // Alt text for screen readers, also offered for copying.
+            const alt = altTextFor(claim);
+            body.setAttribute('role', 'img');
+            body.setAttribute('aria-label', alt);
+            const altArea = el.querySelector('.alt-box textarea');
+            if (altArea) altArea.value = alt;
             renderClaimInto(claim, body, instance => { this.chartInstance = instance; });
         },
         async getPngBlob() {
@@ -2887,7 +2936,7 @@ function buildDataEditor(claim, rerender) {
     const details = document.createElement('details');
     details.className = 'data-editor';
     const summary = document.createElement('summary');
-    summary.textContent = 'Edit numbers';
+    summary.textContent = 'Edit numbers and alt text';
     details.appendChild(summary);
     const grid = document.createElement('div');
     grid.className = 'data-rows';
@@ -2952,8 +3001,173 @@ function buildDataEditor(claim, rerender) {
         valueInput({ display: String(claim.denominator) }, 'Ratio, 1 in', p => { claim.denominator = Math.max(2, Math.round(p.value)); });
     }
     grid.appendChild(help);
+    // Alt text: a plain description of the chart for screen readers, emails
+    // and slides. Updated whenever the chart changes; it can be edited.
+    const altBox = document.createElement('div');
+    altBox.className = 'alt-box';
+    const altLabel = document.createElement('label');
+    altLabel.textContent = 'Alt text (describes the chart for screen readers)';
+    altLabel.className = 'col-head';
+    const altArea = document.createElement('textarea');
+    altArea.id = 'alt-' + Math.random().toString(36).slice(2);
+    altLabel.htmlFor = altArea.id;
+    altArea.value = altTextFor(claim);
+    altArea.addEventListener('input', () => { claim.altText = altArea.value; claim.edited = true; });
+    const copyAlt = document.createElement('button');
+    copyAlt.type = 'button';
+    copyAlt.textContent = 'Copy alt text';
+    copyAlt.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(altArea.value); showToast('Alt text copied'); }
+        catch (e) { altArea.select(); showToast('Press Ctrl+C (or Cmd+C) to copy'); }
+    });
+    altBox.append(altLabel, altArea, copyAlt);
+    grid.appendChild(altBox);
     details.appendChild(grid);
     return details;
+}
+
+// ---------- HEADLINES, KEY FACTS, NUMBER CHECK, ALT TEXT ----------
+function pctChange(a, b) { return a ? (b - a) / Math.abs(a) * 100 : null; }
+function lowerFirst(s) { return s ? s.charAt(0).toLowerCase() + s.slice(1) : ''; }
+function roundPct(p) { const a = Math.abs(p); return a >= 10 ? Math.round(a) : parseFloat(a.toFixed(1)); }
+
+// The takeaway as a title, for example "Active pilot teams nearly doubled".
+function headlineFor(claim) {
+    const subj = (claim.labelTitle || claim.title || '').trim();
+    const S = subj || 'Value';
+    const s = lowerFirst(S);
+    switch (claim.kind) {
+        case 'comparison': {
+            const a = claim.before.value, b = claim.after.value;
+            if (!a) return `${S}: ${claim.before.display} to ${claim.after.display}`;
+            const r = b / a;
+            if (r >= 2.85 && r <= 3.15) return `${S} tripled`;
+            if (r > 2.05) return `${S} more than doubled`;
+            if (r >= 1.97) return `${S} doubled`;
+            if (r >= 1.8) return `${S} nearly doubled`;
+            if (r >= 0.47 && r <= 0.53) return `${S} halved`;
+            const p = pctChange(a, b);
+            if (Math.abs(p) < 0.5) return `${S} held steady at ${claim.after.display}`;
+            return `${S} ${p > 0 ? 'up' : 'down'} ${roundPct(p)}%, to ${claim.after.display}`;
+        }
+        case 'delta': return `${S} ${claim.direction === 'up' ? 'up' : 'down'} ${claim.value.display}`;
+        case 'stat': return `${S} at ${claim.value.display}`;
+        case 'ratio': return `1 in ${claim.denominator}: ${s}`;
+        case 'series': {
+            const it = claim.items; if (it.length < 2) return S;
+            const first = it[0], last = it[it.length - 1];
+            const up = it.every((x, i) => i === 0 || x.value >= it[i - 1].value);
+            const down = it.every((x, i) => i === 0 || x.value <= it[i - 1].value);
+            const p = pctChange(first.value, last.value);
+            if (up && p) return `${S} rose every period, up ${roundPct(p)}% from ${first.label} to ${last.label}`;
+            if (down && p) return `${S} fell every period, down ${roundPct(p)}% from ${first.label} to ${last.label}`;
+            const peak = it.reduce((m, x) => x.value > m.value ? x : m, it[0]);
+            return p === null ? S : `${S} ${p >= 0 ? 'up' : 'down'} ${roundPct(p)}% from ${first.label} to ${last.label}, peaking in ${peak.label}`;
+        }
+        case 'breakdown': {
+            if (claim.isShare) return `${claim.items[0].display} of ${s.replace(/^share of /, '')}: ${lowerFirst(claim.items[0].label)}`;
+            const top = [...claim.items].sort((a, b) => b.value - a.value)[0];
+            if (claim.fromSentence) return `${top.label} highest at ${top.display}`;
+            return `${top.label} leads ${s.replace(/ by .*$/, '')}`;
+        }
+        case 'grouped': {
+            const metric = lowerFirst(cleanHeader(S.split(' by ')[0]));
+            const leaders = claim.labels.map((_, i) => {
+                let best = null; claim.series.forEach(sr => { const v = sr.values[i]; if (v !== null && (!best || v > best.v)) best = { n: sr.name, v }; });
+                return best && best.n;
+            });
+            const same = leaders.every(n => n === leaders[0]);
+            if (same && leaders[0]) return `${leaders[0]} leads ${metric} in every ${lowerFirst(claim.xName)}`;
+            const counts = {}; leaders.forEach(n => counts[n] = (counts[n] || 0) + 1);
+            const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+            return `${top[0]} leads ${metric} in ${top[1]} of ${claim.labels.length} ${plural(claim.xName)}`;
+        }
+        default: return S;
+    }
+}
+
+// Point out the key fact: the change on a before/after chart, the top bar in
+// a breakdown, the peak of a trend. Works on screen and in downloads.
+function applyKeyFact(claim, config, big) {
+    if (!CHART_STYLE.keyFact) return config;
+    const fs = big ? '22px' : '14px';
+    const labelStyle = (bg) => ({ borderWidth: 0, offsetY: -6, style: { background: bg, color: '#ffffff', fontSize: fs, fontWeight: 700, padding: { left: 8, right: 8, top: 4, bottom: 4 } } });
+    // Leave room above the tallest value for the label, on a tidy scale.
+    const roomAbove = (values) => {
+        const top = Math.max(...values), low = Math.min(...values);
+        if (!(top > 0)) return;
+        const raw = top * 1.2, mag = Math.pow(10, Math.floor(Math.log10(raw)));
+        const nice = [1, 2, 2.5, 5, 10].map(m => m * mag).find(v => v >= raw);
+        const y = Array.isArray(config.yaxis) ? config.yaxis[0] : (config.yaxis || {});
+        config.yaxis = { ...y, max: nice, tickAmount: 5, ...(low >= 0 ? { min: 0 } : {}) };
+    };
+    if (claim.kind === 'comparison' && config.xaxis && config.xaxis.categories) {
+        const p = pctChange(claim.before.value, claim.after.value);
+        if (p === null || Math.abs(p) < 0.5) return config;
+        config.annotations = { points: [{ x: config.xaxis.categories[1], y: claim.after.value, marker: { size: 0, strokeWidth: 0 },
+            label: { text: `${p > 0 ? '+' : '-'}${roundPct(p)}%`, ...labelStyle(p > 0 ? '#15803d' : '#b91c1c') } }] };
+        roomAbove([claim.before.value, claim.after.value]);
+    } else if (claim.kind === 'series' && claim.items.length >= 3 && config.xaxis) {
+        const peak = claim.items.reduce((m, x) => x.value > m.value ? x : m, claim.items[0]);
+        config.annotations = { points: [{ x: peak.label, y: peak.value, marker: { size: 0, strokeWidth: 0 }, label: { text: `Peak: ${formatNum(peak.value, claim.unit)}`, ...labelStyle('#00338D') } }] };
+        roomAbove(claim.items.map(i => i.value));
+    } else if (claim.kind === 'breakdown' && config.chart && config.chart.type === 'bar' && claim.items.length >= 3) {
+        const max = Math.max(...claim.items.map(i => i.value));
+        const colors = claim.items.map(i => i.value === max ? '#00338D' : '#CBD5E1');
+        config.colors = colors;
+        if (config.dataLabels && config.dataLabels.style) config.dataLabels.style.colors = colors.map(c => c === '#00338D' ? '#ffffff' : '#0C233C');
+    }
+    return config;
+}
+
+// Number check: wording in the text that doesn't match the numbers.
+function checkClaim(claim) {
+    const out = [];
+    const s = (claim.sentence || '').toLowerCase();
+    if (claim.kind === 'comparison' && claim.before.value) {
+        const r = claim.after.value / claim.before.value;
+        const p = pctChange(claim.before.value, claim.after.value);
+        const shown = `${claim.before.display} to ${claim.after.display} is ${p >= 0 ? '+' : ''}${roundPct(p) * Math.sign(p || 1)}% (${parseFloat(r.toFixed(2))}×).`;
+        if (/\b(more than|over)\s+doubl/.test(s)) { if (r <= 2) out.push(`The text says "more than double", but ${shown}`); }
+        else if (/\b(nearly|almost|close to)\s+doubl/.test(s)) { if (r < 1.7 || r > 2.05) out.push(`The text says "nearly double", but ${shown}`); }
+        else if (/\bdoubl/.test(s)) { if (r < 1.85 || r > 2.15) out.push(`The text says "doubled", but ${shown}`); }
+        if (/\btripl/.test(s) && (r < 2.7 || r > 3.3)) out.push(`The text says "tripled", but ${shown}`);
+        if (/\bhalved\b/.test(s) && (r < 0.45 || r > 0.55)) out.push(`The text says "halved", but ${shown}`);
+        const idx = s.indexOf(claim.before.display.toLowerCase());
+        const lead = idx > 0 ? s.slice(Math.max(0, idx - 60), idx) : '';
+        if (/\b(rose|grew|increased|climbed|jumped|expanded|improved)\b/.test(lead) && p < 0) out.push(`The text says it went up, but ${shown}`);
+        if (/\b(fell|dropped|declined|decreased|shrank)\b/.test(lead) && p > 0) out.push(`The text says it went down, but ${shown}`);
+        const stated = lead.match(/(\d+(?:\.\d+)?)%\s*(?:increase|decrease|rise|drop|growth|reduction|jump|decline|gain|improvement)/) || lead.match(/\bby\s+(\d+(?:\.\d+)?)%/);
+        if (stated && Math.abs(parseFloat(stated[1]) - Math.abs(p)) > 2) out.push(`The text says ${stated[1]}%, but ${shown}`);
+    }
+    if (claim.kind === 'breakdown' && claim.unit === '%') {
+        const sum = claim.items.reduce((a, i) => a + i.value, 0);
+        const wholeWords = /\bshare|split|mix|made up|account|of (all|total)|breakdown\b/.test(s + ' ' + (claim.labelTitle || '').toLowerCase());
+        if ((claim.isShare || wholeWords) && sum > 100.5) out.push(`These parts add up to ${parseFloat(sum.toFixed(1))}%, more than 100%.`);
+    }
+    return out;
+}
+
+// A plain description of the chart for screen readers and slide alt text.
+function altTextFor(claim) {
+    if (claim.altText) return claim.altText;
+    const S = claim.labelTitle || claim.title || 'Chart';
+    const type = { bar: 'Bar chart', line: 'Line chart', area: 'Area chart', donut: 'Donut chart', pie: 'Pie chart', stacked: 'Stacked bar chart', number: 'Big number' }[claim.chartType] || 'Chart';
+    const f = (v) => formatNum(v, claim.unit);
+    switch (claim.kind) {
+        case 'comparison': {
+            const p = pctChange(claim.before.value, claim.after.value);
+            return `${type} of ${lowerFirst(S)}: ${inferBeforeLabel(claim)} ${claim.before.display}, ${inferAfterLabel(claim)} ${claim.after.display}${p !== null ? `, a change of ${p >= 0 ? '+' : '-'}${roundPct(p)}%` : ''}.`;
+        }
+        case 'delta': return `${S} ${claim.direction === 'up' ? 'increased' : 'decreased'} by ${claim.value.display}.`;
+        case 'stat': return `${S}: ${claim.value.display}.${claim.note ? ' ' + claim.note : ''}`;
+        case 'ratio': return `${S}: 1 in ${claim.denominator}.`;
+        case 'series': case 'breakdown':
+            return `${type} of ${lowerFirst(S)}: ${claim.items.map(i => `${i.label} ${i.range ? i.display : f(i.value)}`).join(', ')}.`;
+        case 'grouped':
+            return `${type} of ${lowerFirst(S)}. ` + claim.series.map(sr => `${sr.name}: ${claim.labels.map((l, i) => `${l} ${sr.values[i] === null ? 'no data' : f(sr.values[i])}`).join(', ')}`).join('. ') + '.';
+        default: return S;
+    }
 }
 
 function renderClaimInto(claim, body, setInstance) {
@@ -3065,7 +3279,7 @@ function renderComparison(claim, body, setInstance) {
         config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(barColors), fontSize: '13px', fontWeight: '700' }, offsetY: 0 };
     }
     config.chart.foreColor = chartTextColor();
-    const apex = new ApexCharts(mount, config);
+    const apex = new ApexCharts(mount, applyKeyFact(claim, config, false));
     if (setInstance) setInstance(apex);
     apex.render();
 }
@@ -3112,7 +3326,7 @@ function renderBreakdown(claim, body, setInstance) {
         };
     }
     config.chart.foreColor = chartTextColor();
-    const apex = new ApexCharts(mount, config);
+    const apex = new ApexCharts(mount, applyKeyFact(claim, config, false));
     if (setInstance) setInstance(apex);
     apex.render();
 }
@@ -3149,7 +3363,7 @@ function renderGrouped(claim, body, setInstance) {
     body.appendChild(mount);
     const config = groupedConfig(claim, { axis: 13, legend: 13 });
     config.chart.foreColor = chartTextColor();
-    const apex = new ApexCharts(mount, config);
+    const apex = new ApexCharts(mount, applyKeyFact(claim, config, false));
     if (setInstance) setInstance(apex);
     apex.render();
 }
@@ -3188,7 +3402,7 @@ function renderSeries(claim, body, setInstance) {
         config.legend = { show: false };
     }
     config.chart.foreColor = chartTextColor();
-    const apex = new ApexCharts(mount, config);
+    const apex = new ApexCharts(mount, applyKeyFact(claim, config, false));
     if (setInstance) setInstance(apex);
     apex.render();
 }
@@ -3356,7 +3570,7 @@ function renderClaimForExport(claim, body, setInstance) {
                     // Per-bar text contrast: each label uses white or black depending on bar color
                     config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor([accent, contrast]), fontSize: '22px', fontWeight: '700' } };
                 }
-                const apex = new ApexCharts(mount, config);
+                const apex = new ApexCharts(mount, applyKeyFact(claim, config, true));
                 apex.render().then(() => { setInstance(apex); resolve(); });
                 break;
             }
@@ -3391,7 +3605,7 @@ function renderClaimForExport(claim, body, setInstance) {
                         tooltip: { enabled: false }
                     };
                 }
-                const apex = new ApexCharts(mount, config);
+                const apex = new ApexCharts(mount, applyKeyFact(claim, config, true));
                 apex.render().then(() => { setInstance(apex); resolve(); });
                 break;
             }
@@ -3418,7 +3632,7 @@ function renderClaimForExport(claim, body, setInstance) {
                     config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '16px', fontWeight: '700' } };
                     config.legend = { show: false };
                 }
-                const apex = new ApexCharts(mount, config);
+                const apex = new ApexCharts(mount, applyKeyFact(claim, config, true));
                 apex.render().then(() => { setInstance(apex); resolve(); });
                 break;
             }
@@ -3428,7 +3642,7 @@ function renderClaimForExport(claim, body, setInstance) {
                 body.appendChild(mount);
                 const config = groupedConfig(claim, { axis: 16, legend: 16 });
                 config.tooltip = { enabled: false };
-                const apex = new ApexCharts(mount, config);
+                const apex = new ApexCharts(mount, applyKeyFact(claim, config, true));
                 apex.render().then(() => { setInstance(apex); resolve(); });
                 break;
             }
@@ -3765,9 +3979,11 @@ function buildStandaloneHtml(claim, renderer) {
         };
     }
 
+    applyKeyFact(claim, chartConfig, false);
+    if (chartConfig.yaxis && typeof chartConfig.yaxis.max === 'function') delete chartConfig.yaxis.max;
     return wrapHtml(title, `
         ${headerBlock}
-        <div id="chart"></div>
+        <div id="chart" role="img" aria-label="${escapeHtml(altTextFor(claim))}"></div>
         ${footerBlock}
         <script src="https://cdn.jsdelivr.net/npm/apexcharts@8.9.1/dist/apexcharts.min.js"><\/script>
         <script>
@@ -3848,7 +4064,7 @@ dom.downloadAllPptx.addEventListener('click', () => runExport(async () => {
 
         const native = nativePptxChartFor(claim, pptx);
         if (native) {
-            slide.addChart(native.type, native.data, { x: 0.5, y: chartY, w: 12.3, h: chartH, ...native.opts });
+            slide.addChart(native.type, native.data, { x: 0.5, y: chartY, w: 12.3, h: chartH, ...native.opts, altText: altTextFor(claim) });
         } else {
             // Stat / delta / ratio cards aren't native PPT chart types, so we
             // embed a captured PNG instead. The PNG is rendered at 1280×720
@@ -3867,7 +4083,7 @@ dom.downloadAllPptx.addEventListener('click', () => runExport(async () => {
             if (imgH > maxH) { imgH = maxH; imgW = maxH * sourceAspect; }
             const imgX = 0.5 + (maxW - imgW) / 2; // center horizontally
             const imgY = chartY + (maxH - imgH) / 2; // center vertically too
-            slide.addImage({ data: dataUrl, x: imgX, y: imgY, w: imgW, h: imgH });
+            slide.addImage({ data: dataUrl, x: imgX, y: imgY, w: imgW, h: imgH, altText: altTextFor(claim) });
         }
 
         // Axis caption below the chart — describes context (X-axis usually).
