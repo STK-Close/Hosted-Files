@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<!--
+    Creative Services' Signature Formatter
+    Developed and produced by Heath Cushman
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creative Services' Signature Formatter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com>" crossorigin>
+
+    <!-- LIBRARIES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+    <!-- FONTS -->
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Great+Vibes&family=Allura&family=Dancing+Script&family=Caveat&family=Marck+Script&display=swap" rel="stylesheet">
+
+
+    <style>
+        :root {
+            /* Color Palette */
+            --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0; --slate-300: #cbd5e1; --slate-400: #94a3b8;
+            --slate-500: #64748b; --slate-600: #475569; --slate-700: #334155; --blue-500: #3b82f6;
+            --blue-900: #1e3a8a; --kpmg-blue: #00338d; --white: #ffffff; --black: #000000; --red-500: #ef4444;
+
+            /* UI Variables */
+            --checker-color-1: #e2e8f0;
+            --checker-color-2: transparent;
+
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --rounded-md: 0.375rem; --rounded-xl: 0.75rem;
+        }
+
+        html, body { height: 100vh; margin: 0; overflow: hidden; }
+        body { font-family: 'Open Sans', sans-serif; background-color: var(--slate-50); color: var(--slate-700); font-size: 13px; display: flex; flex-direction: column; }
+
+        .main-container { flex-grow: 1; display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; width: 100%; max-width: 1800px; margin: 0 auto; padding: 1.5rem; box-sizing: border-box; min-height: 0; }
+        .controls-column, .workspace-column { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+        .card { background: var(--white); border-radius: var(--rounded-xl); box-shadow: var(--shadow-md); display: flex; flex-direction: column; flex-grow: 1; min-height: 0; overflow: hidden; }
+        .card-header { font-size: 1rem; font-weight: 600; color: var(--slate-700); padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--slate-100); flex-shrink: 0; }
+        .controls-container { display: flex; flex-direction: column; gap: 0.75rem; flex-grow: 1; overflow-y: auto; padding: 1rem 1.25rem; }
+
+        .input-group { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; position: relative; }
+        .input-label { font-weight: 700; font-size: 0.85rem; color: var(--blue-900); }
+        .input-helper { font-size: 0.8rem; color: var(--slate-600); }
+
+        input, select { width: 100%; padding: 8px 10px; border: 1px solid var(--slate-300); border-radius: var(--rounded-md); font-size: 12px; box-sizing: border-box; background-color: var(--white); color: var(--slate-700); font-family: 'Open Sans', sans-serif; resize: none; }
+        input:focus, select:focus { outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 1px var(--blue-500); }
+        input[type="range"] { padding: 0; }
+
+        #clear-text-btn {
+            position: absolute; right: 10px; top: 32px;
+            color: var(--slate-400); cursor: pointer; display: none;
+        }
+        #clear-text-btn:hover { color: var(--slate-600); }
+
+
+        #drop-area { border: 2px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 1rem; text-align: center; color: var(--slate-600); cursor: pointer; transition: background-color 0.2s, border-color 0.2s; background-color: #fcfcfc;}
+        #drop-area.highlight { background-color: #eff6ff; border-color: var(--kpmg-blue); }
+        #drop-area p { margin: 0 0 0.75rem 0; font-size: 0.9rem; pointer-events: none; }
+
+        .preview-area {
+            background-color: #ffffff;
+            background-image:
+                linear-gradient(45deg, var(--checker-color-1) 25%, var(--checker-color-2) 25%),
+                linear-gradient(-45deg, var(--checker-color-1) 25%, var(--checker-color-2) 25%),
+                linear-gradient(45deg, var(--checker-color-2) 75%, var(--checker-color-1) 75%),
+                linear-gradient(-45deg, var(--checker-color-2) 75%, var(--checker-color-1) 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border-radius: var(--rounded-md);
+            display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; flex-grow: 1;
+        }
+
+        .preview-area.dark-bg { background-image: none; background-color: #475569; }
+
+        #preview-image, #typed-signature-preview, #drawing-canvas, #font-preview-list { display: none; }
+        #preview-image, #typed-signature-preview { max-width: 100%; max-height: 90%; }
+        #drawing-canvas { position: absolute; top: 0; left: 0; cursor: crosshair; }
+        #typed-signature-preview { padding: 20px; text-align: center; color: var(--black); font-size: 70px; }
+
+        button { background-color: var(--kpmg-blue); color: white; padding: 8px 14px; border: none; border-radius: var(--rounded-md); cursor: pointer; font-size: 12px; font-weight: 600; transition: background-color 0.2s, box-shadow 0.2s; text-align: center; white-space: nowrap; }
+        button:hover:not(:disabled) { background-color: var(--blue-900); }
+        button:disabled { background-color: var(--slate-300); cursor: not-allowed; pointer-events: none; }
+
+        #mode-selection-buttons { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+        #mode-selection-buttons button { font-size: 0.9rem; padding: 10px 8px; border: 1px solid var(--slate-300); background-color: var(--slate-100); color: var(--slate-700); box-shadow: none; }
+        #mode-selection-buttons button:hover { background-color: var(--slate-200); }
+        #mode-selection-buttons button.active { background-color: var(--kpmg-blue); color: #ffffff; border-color: var(--kpmg-blue); }
+
+        .control-panel { display: none; margin-top: 0.75rem; }
+        .control-panel.active { display: block; }
+
+        .color-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; }
+        .color-buttons button { height: 28px; border: 2px solid transparent; border-radius: var(--rounded-md); }
+        .color-buttons button.active { box-shadow: 0 0 0 2px var(--kpmg-blue); }
+        #color-black { background-color: #000000; }
+        #color-white { background-color: #ffffff; border: 1px solid var(--slate-300); }
+        #color-kpmg-blue { background-color: #00338d; } #color-cobalt { background-color: #3b82f6; } #color-purple { background-color: #7c3aed; } #color-pink { background-color: #ec4899; }
+
+        .name-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        #error-message { color: var(--red-500); font-size: 0.875rem; margin-top: 0.5rem; display: none; text-align: center; }
+        .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .input-error { animation: shake 0.5s; border-color: var(--red-500) !important; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+
+        #font-preview-list { width: 100%; height: 100%; overflow-y: auto; text-align: center; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
+        .font-preview-item { font-size: 2.5rem; padding: 0.75rem; cursor: pointer; }
+        .font-preview-item:hover {
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 3px;
+        }
+
+        .export-buttons-wrapper { cursor: pointer; }
+        .export-buttons { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+
+        @media (max-width: 900px) {
+            html, body { height: auto; overflow: auto; }
+            .main-container { grid-template-columns: 1fr; height: auto; display: block; }
+            .card { margin-bottom: 1rem; }
+            .workspace-column .card { min-height: 400px; }
+        }
+
+        /* WELCOME PANEL + INTERACTIVE TOUR */
+        .welcome-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+        .welcome-overlay.visible { display: flex; }
+        .welcome-card { background: var(--white); border-radius: var(--rounded-xl); box-shadow: 0 20px 50px rgba(0,0,0,0.3); max-width: 540px; width: 100%; padding: 28px 32px; font-family: 'Open Sans', sans-serif; }
+        .welcome-card h2 { margin: 0 0 6px 0; font-size: 1.35rem; color: var(--kpmg-blue); font-weight: 700; }
+        .welcome-card .lede { color: var(--slate-700); font-size: 0.9rem; margin: 0 0 18px 0; line-height: 1.45; }
+        .welcome-steps { display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin: 0 0 18px 0; }
+        .welcome-step-num { background: var(--kpmg-blue); color: white; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+        .welcome-step-text { color: var(--slate-700); font-size: 0.85rem; line-height: 1.4; padding-top: 2px; }
+        .welcome-step-text b { color: var(--kpmg-blue); }
+        .welcome-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; border-top: 1px solid var(--slate-200); padding-top: 16px; flex-wrap: wrap; }
+        .welcome-actions label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--slate-700); margin-right: auto; cursor: pointer; white-space: nowrap; }
+        .welcome-card button.primary { background: var(--kpmg-blue); color: white; border: none; padding: 8px 18px; border-radius: var(--rounded-md); font-weight: 600; cursor: pointer; font-size: 0.85rem; font-family: 'Open Sans', sans-serif; }
+        .welcome-card button.primary:hover { background: var(--blue-900); }
+        .welcome-card button.secondary { background: transparent; color: var(--kpmg-blue); border: 1px solid var(--kpmg-blue); padding: 8px 18px; border-radius: var(--rounded-md); font-weight: 600; cursor: pointer; font-size: 0.85rem; font-family: 'Open Sans', sans-serif; }
+        .welcome-card button.secondary:hover { background: rgba(0, 51, 141, 0.05); }
+        #show-help-btn { position: fixed; bottom: 20px; right: 20px; z-index: 100; background: var(--white); border: 1px solid var(--slate-300); color: var(--slate-700); padding: 8px 12px; border-radius: 999px; font-size: 0.75rem; cursor: pointer; box-shadow: var(--shadow-sm); display: flex; align-items: center; gap: 6px; font-family: 'Open Sans', sans-serif; }
+        #show-help-btn:hover { color: var(--kpmg-blue); border-color: var(--blue-500); }
+        .tour-backdrop { position: fixed; inset: 0; z-index: 1900; pointer-events: none; display: none; }
+        .tour-backdrop.visible { display: block; }
+        .tour-backdrop > .tour-mask { position: absolute; background: rgba(15, 23, 42, 0.55); pointer-events: auto; }
+        .tour-highlight { position: fixed; z-index: 1901; pointer-events: none; border: 3px solid #00B8F5; border-radius: 8px; box-shadow: 0 0 0 4px rgba(0, 184, 245, 0.25); transition: all 0.25s ease; display: none; }
+        .tour-highlight.visible { display: block; }
+        .tour-tooltip { position: fixed; z-index: 1902; background: var(--white); border-radius: var(--rounded-md); box-shadow: 0 10px 25px rgba(0,0,0,0.25); padding: 16px 18px; max-width: 320px; font-family: 'Open Sans', sans-serif; transition: all 0.25s ease; display: none; }
+        .tour-tooltip.visible { display: block; }
+        .tour-tooltip .step-counter { font-size: 0.7rem; color: var(--slate-500); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+        .tour-tooltip h4 { margin: 0 0 6px 0; color: var(--kpmg-blue); font-size: 1rem; font-weight: 700; }
+        .tour-tooltip p { margin: 0 0 14px 0; color: var(--slate-700); font-size: 0.85rem; line-height: 1.45; }
+        .tour-tooltip .tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .tour-tooltip .tour-skip { background: transparent; border: none; color: var(--slate-500); font-size: 0.75rem; cursor: pointer; padding: 4px 6px; font-family: 'Open Sans', sans-serif; }
+        .tour-tooltip .tour-skip:hover { color: var(--kpmg-blue); }
+        .tour-tooltip .tour-nav { display: flex; gap: 6px; }
+        .tour-tooltip .tour-nav button { padding: 6px 14px; border-radius: var(--rounded-md); font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: 'Open Sans', sans-serif; }
+        .tour-tooltip .tour-back { background: transparent; color: var(--slate-700); border: 1px solid var(--slate-300); }
+        .tour-tooltip .tour-back:hover { background: var(--slate-200); color: var(--kpmg-blue); }
+        .tour-tooltip .tour-back:disabled { opacity: 0.4; cursor: not-allowed; }
+        .tour-tooltip .tour-next { background: var(--kpmg-blue); color: white; border: none; }
+        .tour-tooltip .tour-next:hover { background: var(--blue-900); }
+        .tour-tooltip::before { content: ''; position: absolute; width: 0; height: 0; border: 8px solid transparent; }
+        .tour-tooltip[data-arrow="left"]::before { top: 24px; left: -16px; border-right-color: var(--white); }
+        .tour-tooltip[data-arrow="right"]::before { top: 24px; right: -16px; border-left-color: var(--white); }
+        .tour-tooltip[data-arrow="top"]::before { left: 24px; top: -16px; border-bottom-color: var(--white); }
+        .tour-tooltip[data-arrow="bottom"]::before { left: 24px; bottom: -16px; border-top-color: var(--white); }
+    </style>
+</head>
+<body>
+    <main class="main-container">
+        <div class="card">
+            <div class="card-header"><b>Controls</b></div>
+            <div class="controls-container">
+                <div class="input-group">
+                    <label class="input-label">1. Method</label>
+                    <div id="mode-selection-buttons">
+                        <button data-mode="upload" class="active">Upload</button>
+                        <button data-mode="draw">Draw</button>
+                        <button data-mode="type">Type</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label">2. Create & style</label>
+                    <div id="upload-panel" class="control-panel active">
+                        <div id="drop-area">
+                            <p>Drag & drop image</p>
+                            <button id="browse-btn">Or browse files</button>
+                            <input type="file" id="fileElem" accept="image/*" style="display:none">
+                        </div>
+                    </div>
+                    <div id="draw-panel" class="control-panel">
+                        <p style="text-align: center; margin-top: 0; margin-bottom: 1rem;">Draw in the preview area</p>
+                        <div class="button-group">
+                            <button id="undo-btn" class="secondary" disabled>Undo</button>
+                            <button id="clear-btn" class="secondary" disabled>Clear</button>
+                        </div>
+                    </div>
+                    <div id="type-panel" class="control-panel">
+                        <div class="input-group">
+                            <label for="signature-text" class="input-helper">Your name</label>
+                            <input type="text" id="signature-text" placeholder="Type your name...">
+                            <i class="fas fa-times-circle" id="clear-text-btn"></i>
+                        </div>
+                         <p id="type-mode-instruction" class="input-helper" style="text-align:center; margin-top: 0.5rem; display:none;">Type your full name above, then click your preferred style on the right.</p>
+                    </div>
+
+                    <div class="input-group" style="margin-top: 0.75rem;">
+                        <label class="input-helper">Color</label>
+                        <div class="color-buttons" id="color-selectors">
+                            <button id="color-kpmg-blue" title="KPMG Blue"></button>
+                            <button id="color-cobalt" title="Cobalt"></button>
+                            <button id="color-purple" title="Purple"></button>
+                            <button id="color-pink" title="Pink"></button>
+                            <button id="color-black" title="Black"></button>
+                            <button id="color-white" title="White"></button>
+                        </div>
+                    </div>
+
+                    <div id="contextual-controls">
+                        <div id="sensitivity-control" class="input-group" style="display:none; margin-top: 0.75rem;">
+                            <label for="sensitivity-slider" class="input-helper">Background removal</label>
+                            <input type="range" id="sensitivity-slider" min="0" max="100" value="50">
+                        </div>
+                        <div id="smoothing-control" class="input-group" style="display:none; margin-top: 0.75rem;">
+                            <label for="smoothing-slider" class="input-helper">Smoothing (reduces grain &amp; jagged edges)</label>
+                            <input type="range" id="smoothing-slider" min="0" max="100" value="40">
+                        </div>
+                        <div id="size-control" class="input-group" style="display:none; margin-top: 0.75rem;">
+                            <label for="size-slider" class="input-helper">Pen size</label>
+                            <input type="range" id="size-slider" min="1" max="100" value="20">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label class="input-label">3. Export</label>
+                    <div class="name-inputs">
+                        <input type="text" id="firstName" placeholder="First Name">
+                        <input type="text" id="lastName" placeholder="Last Name">
+                    </div>
+                    <p id="error-message">First and last name are required</p>
+                    <div class="export-buttons-wrapper" style="margin-top: 0.5rem;">
+                        <div class="export-buttons">
+                            <button id="download-btn" disabled><i class="fas fa-download"></i> Download</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="workspace-column">
+            <div class="card">
+                <div class="preview-area" id="preview-area">
+                    <img id="preview-image" src="" alt="Signature preview">
+                    <div id="typed-signature-preview"></div>
+                    <div id="font-preview-list"></div>
+                    <canvas id="drawing-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <canvas id="processing-canvas" style="display:none;"></canvas>
+    </main>
+
+    <!-- Welcome panel — auto-shows on every visit -->
+    <div id="welcome-overlay" class="welcome-overlay">
+        <div class="welcome-card">
+            <h2>Welcome to Creative Services' Signature Formatter</h2>
+            <p class="lede">Three ways to make a clean, brand-colored signature for emails and documents: upload a scan, draw it yourself, or type it in a cursive font.</p>
+            <div class="welcome-steps">
+                <div class="welcome-step-num">1</div>
+                <div class="welcome-step-text"><b>Choose a method</b> — upload a photo or scan, draw with your mouse or finger, or type your name and pick a font.</div>
+                <div class="welcome-step-num">2</div>
+                <div class="welcome-step-text"><b>Pick a color</b> — KPMG Blue, Cobalt, Purple, Pink, Black, or White.</div>
+                <div class="welcome-step-num">3</div>
+                <div class="welcome-step-text"><b>Fine-tune</b> — adjust background removal and smoothing for crisp, clean output.</div>
+                <div class="welcome-step-num">4</div>
+                <div class="welcome-step-text"><b>Enter your name and download</b> — your file is named automatically.</div>
+            </div>
+            <div class="welcome-actions">
+                <label>
+                    <input type="checkbox" id="welcome-autoshow-toggle" checked>
+                    Show this on every visit
+                </label>
+                <button class="secondary" id="welcome-tour-btn">↪&nbsp; Start tour</button>
+                <button class="primary" id="welcome-dismiss-btn">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help button -->
+    <button id="show-help-btn" title="Show the welcome guide again">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 11.5a.75.75 0 111.5 0 .75.75 0 01-1.5 0zm.5-2.5V8.5c0-.42.17-.78.6-1.04l.45-.28c.36-.23.45-.42.45-.7 0-.42-.33-.73-.75-.73-.5 0-.78.3-.78.85a.5.5 0 01-1 0c0-1.1.7-1.85 1.78-1.85 1.05 0 1.75.66 1.75 1.66 0 .6-.27 1.04-.86 1.4l-.4.24c-.22.13-.28.24-.28.5V9a.5.5 0 01-1 0z"/>
+        </svg>
+        Help
+    </button>
+
+    <!-- Tour DOM -->
+    <div class="tour-backdrop" id="tour-backdrop">
+        <div class="tour-mask" id="tour-mask-top"></div>
+        <div class="tour-mask" id="tour-mask-bottom"></div>
+        <div class="tour-mask" id="tour-mask-left"></div>
+        <div class="tour-mask" id="tour-mask-right"></div>
+    </div>
+    <div class="tour-highlight" id="tour-highlight"></div>
+    <div class="tour-tooltip" id="tour-tooltip">
+        <div class="step-counter" id="tour-step-counter">Step 1 of 9</div>
+        <h4 id="tour-title">Title</h4>
+        <p id="tour-text">Description</p>
+        <div class="tour-actions">
+            <button class="tour-skip" id="tour-skip">Skip tour</button>
+            <div class="tour-nav">
+                <button class="tour-back" id="tour-back">Back</button>
+                <button class="tour-next" id="tour-next">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const state = { mode: 'upload', originalImageData: null, hasContent: false, currentColor: [0, 51, 141, 255], isDrawing: false, drawPoints: [], currentSize: 20, selectedFont: 'Allura' };
+        const dom = {
+            modeButtons: document.querySelectorAll('#mode-selection-buttons button'),
+            controlPanels: document.querySelectorAll('.control-panel'),
+            dropArea: document.getElementById('drop-area'),
+            browseBtn: document.getElementById('browse-btn'),
+            fileElem: document.getElementById('fileElem'),
+            sensitivitySlider: document.getElementById('sensitivity-slider'),
+            sensitivityControl: document.getElementById('sensitivity-control'),
+            smoothingSlider: document.getElementById('smoothing-slider'),
+            smoothingControl: document.getElementById('smoothing-control'),
+            sizeControl: document.getElementById('size-control'),
+            undoBtn: document.getElementById('undo-btn'),
+            clearBtn: document.getElementById('clear-btn'),
+            signatureText: document.getElementById('signature-text'),
+            clearTextBtn: document.getElementById('clear-text-btn'),
+            typeModeInstruction: document.getElementById('type-mode-instruction'),
+            fontPreviewList: document.getElementById('font-preview-list'),
+            colorSelectors: document.getElementById('color-selectors'),
+            sizeSlider: document.getElementById('size-slider'),
+            firstName: document.getElementById('firstName'),
+            lastName: document.getElementById('lastName'),
+            errorMessage: document.getElementById('error-message'),
+            exportButtonsWrapper: document.querySelector('.export-buttons-wrapper'),
+            downloadBtn: document.getElementById('download-btn'),
+            previewArea: document.getElementById('preview-area'),
+            previewImage: document.getElementById('preview-image'),
+            drawingCanvas: document.getElementById('drawing-canvas'),
+            typedSignaturePreview: document.getElementById('typed-signature-preview'),
+            processingCanvas: document.getElementById('processing-canvas')
+        };
+        const pCtx = dom.processingCanvas.getContext('2d');
+        const dCtx = dom.drawingCanvas.getContext('2d');
+        const colorValues = { 'color-kpmg-blue': { rgb: [0, 51, 141, 255] }, 'color-cobalt': { rgb: [59, 130, 246, 255] }, 'color-purple': { rgb: [124, 58, 237, 255] }, 'color-pink': { rgb: [236, 72, 153, 255] }, 'color-black': { rgb: [0, 0, 0, 255] }, 'color-white': { rgb: [255, 255, 255, 255] } };
+        const fontList = ['Great Vibes', 'Allura', 'Dancing Script', 'Caveat', 'Marck Script'];
+
+        function initialize() {
+            setupModeSwitcher(); setupUpload(); setupDrawing(); setupTyping(); setupStyling(); setupExport();
+            resetUIForMode('upload');
+            document.getElementById('color-kpmg-blue')?.click();
+        }
+
+        function setupModeSwitcher() {
+            dom.modeButtons.forEach(button => button.addEventListener('click', (e) => {
+                state.mode = e.currentTarget.dataset.mode;
+                dom.modeButtons.forEach(btn => btn.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                resetUIForMode(state.mode);
+            }));
+        }
+
+        function resetUIForMode(mode) {
+            state.hasContent = false; state.originalImageData = null; state.drawPoints = [];
+            dom.fileElem.value = ""; dom.signatureText.value = ""; dom.firstName.value = ""; dom.lastName.value = "";
+            hideError();
+            clearDrawing();
+            [dom.previewImage, dom.typedSignaturePreview, dom.drawingCanvas, dom.fontPreviewList].forEach(el => el.style.display = 'none');
+            dom.controlPanels.forEach(p => p.classList.remove('active'));
+            [dom.sensitivityControl, dom.smoothingControl, dom.sizeControl, dom.typeModeInstruction].forEach(c => c.style.display = 'none');
+            document.getElementById(`${mode}-panel`).classList.add('active');
+            if (mode === 'upload') { dom.sensitivityControl.style.display = 'block'; dom.smoothingControl.style.display = 'block'; }
+            else if (mode === 'draw') { dom.drawingCanvas.style.display = 'block'; dom.sizeControl.style.display = 'block'; }
+            else if (mode === 'type') { dom.fontPreviewList.style.display = 'flex'; dom.typeModeInstruction.style.display = 'block'; updateTypedSignature(); }
+            checkDownloadReadiness();
+        }
+
+        function setupUpload() {
+            const highlight = (e) => { e.preventDefault(); dom.dropArea.classList.add('highlight'); };
+            const unhighlight = (e) => { e.preventDefault(); dom.dropArea.classList.remove('highlight'); };
+            dom.dropArea.addEventListener('dragenter', highlight); dom.dropArea.addEventListener('dragover', highlight);
+            dom.dropArea.addEventListener('dragleave', unhighlight); dom.dropArea.addEventListener('drop', (e) => { unhighlight(e); handleFiles(e.dataTransfer.files); });
+            dom.browseBtn.addEventListener('click', () => dom.fileElem.click());
+            dom.fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
+            dom.sensitivitySlider.addEventListener('input', processUploadedImage);
+            dom.smoothingSlider.addEventListener('input', processUploadedImage);
+        }
+
+        function handleFiles(files) {
+            if (!files.length || !files[0].type.startsWith('image/')) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    dom.processingCanvas.width = img.width; dom.processingCanvas.height = img.height;
+                    pCtx.drawImage(img, 0, 0);
+                    state.originalImageData = pCtx.getImageData(0, 0, img.width, img.height);
+                    dom.previewImage.style.display = 'block';
+                    if (!state.hasContent) { state.hasContent = true; }
+                    processUploadedImage();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(files[0]);
+        }
+
+        function processUploadedImage() {
+            if (!state.originalImageData) return;
+            const { data, width, height } = state.originalImageData;
+            const sensitivity = parseInt(dom.sensitivitySlider.value, 10);
+            const smoothing = parseInt(dom.smoothingSlider.value, 10);
+
+            const lum = new Float32Array(width * height);
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                if (data[i + 3] < 128) {
+                    lum[p] = 1.0;
+                } else {
+                    lum[p] = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]) / 255;
+                }
+            }
+
+            const blurRadius = Math.round((smoothing / 100) * 3);
+            const lumProcessed = blurRadius > 0 ? boxBlur(lum, width, height, blurRadius) : lum;
+
+            let minL = 1.0, maxL = 0.0;
+            for (let p = 0; p < lumProcessed.length; p++) {
+                const l = lumProcessed[p];
+                if (l < minL) minL = l;
+                if (l > maxL) maxL = l;
+            }
+            if (maxL - minL < 0.05) {
+                const blank = pCtx.createImageData(width, height);
+                pCtx.putImageData(blank, 0, 0);
+                dom.previewImage.src = dom.processingCanvas.toDataURL();
+                checkDownloadReadiness();
+                return;
+            }
+            const threshold = minL + (maxL - minL) * (sensitivity / 100);
+            const rampWidth = 0.04 + (smoothing / 100) * 0.12;
+
+            const processed = pCtx.createImageData(width, height);
+            const [cr, cg, cb] = state.currentColor;
+            for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+                if (data[i + 3] < 128) continue;
+                const l = lumProcessed[p];
+                let alpha;
+                if (l <= threshold - rampWidth) alpha = 255;
+                else if (l >= threshold) alpha = 0;
+                else alpha = Math.round(255 * (threshold - l) / rampWidth);
+                if (alpha > 0) {
+                    processed.data[i]     = cr;
+                    processed.data[i + 1] = cg;
+                    processed.data[i + 2] = cb;
+                    processed.data[i + 3] = alpha;
+                }
+            }
+            pCtx.putImageData(processed, 0, 0);
+            dom.previewImage.src = dom.processingCanvas.toDataURL();
+            checkDownloadReadiness();
+        }
+
+        function boxBlur(src, width, height, radius) {
+            const tmp = new Float32Array(src.length);
+            const dst = new Float32Array(src.length);
+            const window = radius * 2 + 1;
+
+            for (let y = 0; y < height; y++) {
+                let sum = 0;
+                const rowStart = y * width;
+                for (let x = -radius; x <= radius; x++) {
+                    sum += src[rowStart + Math.max(0, Math.min(width - 1, x))];
+                }
+                for (let x = 0; x < width; x++) {
+                    tmp[rowStart + x] = sum / window;
+                    const outIdx = rowStart + Math.max(0, x - radius);
+                    const inIdx  = rowStart + Math.min(width - 1, x + radius + 1);
+                    sum += src[inIdx] - src[outIdx];
+                }
+            }
+            for (let x = 0; x < width; x++) {
+                let sum = 0;
+                for (let y = -radius; y <= radius; y++) {
+                    sum += tmp[Math.max(0, Math.min(height - 1, y)) * width + x];
+                }
+                for (let y = 0; y < height; y++) {
+                    dst[y * width + x] = sum / window;
+                    const outIdx = Math.max(0, y - radius) * width + x;
+                    const inIdx  = Math.min(height - 1, y + radius + 1) * width + x;
+                    sum += tmp[inIdx] - tmp[outIdx];
+                }
+            }
+            return dst;
+        }
+
+        function setupDrawing() {
+            const resizeCanvas = () => {
+                const rect = dom.previewArea.getBoundingClientRect();
+                dom.drawingCanvas.width = rect.width;
+                dom.drawingCanvas.height = rect.height;
+                redrawDrawing();
+            }
+            const getPos = (e) => {
+                const rect = dom.drawingCanvas.getBoundingClientRect();
+                const event = e.touches ? e.touches[0] : e;
+                return [event.clientX - rect.left, event.clientY - rect.top];
+            }
+            const startDrawing = (e) => {
+                if(state.mode !== 'draw') return;
+                e.preventDefault();
+                state.isDrawing = true;
+                state.drawPoints.push([ getPos(e) ]);
+            };
+            const draw = (e) => {
+                if (!state.isDrawing || state.mode !== 'draw') return;
+                e.preventDefault();
+                const pos = getPos(e);
+                state.drawPoints[state.drawPoints.length - 1].push(pos);
+                redrawDrawing();
+            };
+            const stopDrawing = () => {
+                if (!state.isDrawing || state.mode !== 'draw') return;
+                state.isDrawing = false;
+                if (state.drawPoints[state.drawPoints.length - 1]?.length > 1) {
+                    if (!state.hasContent) { state.hasContent = true; }
+                    dom.undoBtn.disabled = false;
+                    dom.clearBtn.disabled = false;
+                    checkDownloadReadiness();
+                }
+            };
+            ['mousedown', 'touchstart'].forEach(evt => dom.drawingCanvas.addEventListener(evt, startDrawing, { passive: false }));
+            ['mousemove', 'touchmove'].forEach(evt => dom.drawingCanvas.addEventListener(evt, draw, { passive: false }));
+            ['mouseup', 'touchend', 'mouseleave'].forEach(evt => document.addEventListener(evt, stopDrawing));
+            dom.undoBtn.addEventListener('click', undo);
+            dom.clearBtn.addEventListener('click', clearDrawing);
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+        }
+
+        function redrawDrawing() {
+            dCtx.clearRect(0, 0, dom.drawingCanvas.width, dom.drawingCanvas.height);
+            updateDrawingStyle();
+            state.drawPoints.forEach(path => {
+                if (path.length < 2) return;
+
+                dCtx.beginPath();
+                dCtx.moveTo(path[0][0], path[0][1]);
+
+                for (let i = 1; i < path.length - 2; i++) {
+                    const p1 = path[i];
+                    const p2 = path[i + 1];
+                    const midPoint = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+                    dCtx.quadraticCurveTo(p1[0], p1[1], midPoint[0], midPoint[1]);
+                }
+                if(path.length > 1) {
+                    dCtx.lineTo(path[path.length - 1][0], path[path.length - 1][1]);
+                }
+                dCtx.stroke();
+            });
+        }
+        function undo() {
+            if (state.drawPoints.length > 0) state.drawPoints.pop();
+            if (state.drawPoints.length === 0) state.hasContent = false;
+            dom.undoBtn.disabled = state.drawPoints.length === 0;
+            dom.clearBtn.disabled = state.drawPoints.length === 0;
+            redrawDrawing();
+            checkDownloadReadiness();
+        }
+        function clearDrawing() {
+            state.drawPoints = [];
+            state.hasContent = false;
+            dom.undoBtn.disabled = true;
+            dom.clearBtn.disabled = true;
+            redrawDrawing();
+            checkDownloadReadiness();
+        }
+
+        function setupTyping() {
+            dom.signatureText.addEventListener('input', () => {
+                const hasValue = dom.signatureText.value.trim().length > 0;
+                dom.clearTextBtn.style.display = hasValue ? 'block' : 'none';
+                updateTypedSignature(false);
+                const words = dom.signatureText.value.trim().split(/\s+/);
+                dom.firstName.value = words[0] || '';
+                if (words.length > 1) dom.lastName.value = words[words.length - 1]; else dom.lastName.value = '';
+                if(dom.firstName.value) hideError();
+                checkDownloadReadiness();
+            });
+
+            dom.clearTextBtn.addEventListener('click', () => {
+                dom.signatureText.value = '';
+                dom.signatureText.dispatchEvent(new Event('input'));
+            });
+
+            dom.fontPreviewList.addEventListener('click', (e) => {
+                const item = e.target.closest('.font-preview-item');
+                if (item) {
+                    state.selectedFont = item.dataset.font;
+                    if (!state.hasContent && dom.signatureText.value.trim().length > 0) { }
+                    state.hasContent = true;
+                    updateTypedSignature(true);
+                }
+            });
+        }
+        function updateTypedSignature(fontSelected) {
+            if (state.mode !== 'type') return;
+            const text = dom.signatureText.value;
+            const hasText = text.trim().length > 0;
+
+            if (fontSelected && hasText) {
+                dom.fontPreviewList.style.display = 'none';
+                dom.typedSignaturePreview.style.display = 'block';
+                dom.typedSignaturePreview.style.fontFamily = `'${state.selectedFont}', cursive`;
+                dom.typedSignaturePreview.innerText = text;
+                state.hasContent = true;
+            } else {
+                state.hasContent = false;
+                dom.fontPreviewList.style.display = 'flex';
+                dom.typedSignaturePreview.style.display = 'none';
+                dom.fontPreviewList.innerHTML = '';
+                fontList.forEach(font => {
+                    const item = document.createElement('div');
+                    item.className = 'font-preview-item';
+                    item.style.fontFamily = `'${font}', cursive`;
+                    item.textContent = text || font;
+                    item.dataset.font = font;
+                    dom.fontPreviewList.appendChild(item);
+                });
+            }
+            updateTypedStyle();
+            checkDownloadReadiness();
+        }
+
+        function setupStyling() {
+            dom.colorSelectors.addEventListener('click', (e) => { const button = e.target.closest('button'); if (button && colorValues[button.id]) { state.currentColor = colorValues[button.id].rgb; dom.colorSelectors.querySelector('.active')?.classList.remove('active'); button.classList.add('active'); dom.previewArea.classList.toggle('dark-bg', button.id === 'color-white'); applyStyles(); } });
+            dom.sizeSlider.addEventListener('input', (e) => { state.currentSize = e.target.value; applyStyles(); });
+        }
+        function applyStyles() { if (state.mode === 'upload') processUploadedImage(); else if (state.mode === 'draw') redrawDrawing(); else if (state.mode === 'type') updateTypedSignature(); }
+        function updateDrawingStyle() { dCtx.strokeStyle = `rgba(${state.currentColor.join(',')})`; dCtx.lineWidth = state.currentSize / 10; dCtx.lineCap = 'round'; dCtx.lineJoin = 'round'; }
+        function updateTypedStyle() { const color = `rgba(${state.currentColor.join(',')})`; dom.typedSignaturePreview.style.color = color; dom.fontPreviewList.querySelectorAll('.font-preview-item').forEach(item => item.style.color = color); }
+
+        function setupExport() {
+            [dom.firstName, dom.lastName].forEach(input => input.addEventListener('input', () => { if(dom.firstName.value.trim() && dom.lastName.value.trim()) hideError(); checkDownloadReadiness(); }));
+            dom.exportButtonsWrapper.addEventListener('click', (e) => {
+                 if (checkCanExport(e)) { }
+            });
+            dom.downloadBtn.addEventListener('click', downloadImage);
+        }
+
+        function checkCanExport() {
+            const namesFilled = dom.firstName.value.trim() && dom.lastName.value.trim();
+            if (!state.hasContent || !namesFilled) {
+                if (state.hasContent) showError();
+                return false;
+            }
+            hideError();
+            return true;
+        }
+
+        function showError(){ dom.errorMessage.style.display = 'block'; if(!dom.firstName.value.trim()) dom.firstName.classList.add('input-error'); if(!dom.lastName.value.trim()) dom.lastName.classList.add('input-error'); }
+        function hideError(){ dom.errorMessage.style.display = 'none'; dom.firstName.classList.remove('input-error'); dom.lastName.classList.remove('input-error'); }
+        function checkDownloadReadiness() { const namesFilled = dom.firstName.value.trim() && dom.lastName.value.trim(); const canExport = state.hasContent && namesFilled; dom.downloadBtn.disabled = !canExport; }
+
+        function getCanvasForExport() { let source = null; if (state.mode === 'upload' && state.hasContent) source = dom.processingCanvas; else if (state.mode === 'draw' && state.hasContent) source = dom.drawingCanvas; else if (state.mode === 'type' && state.hasContent) source = dom.typedSignaturePreview; if (!source) return Promise.reject("No content to export."); if (source.tagName === 'CANVAS') return Promise.resolve(source); return html2canvas(source, { backgroundColor: null, logging: false }); }
+
+        function getCroppedBlob() {
+            return new Promise((resolve, reject) => {
+                getCanvasForExport().then(sourceCanvas => {
+                    const tCtx = document.createElement('canvas').getContext('2d');
+                    const { data, width, height } = sourceCanvas.getContext('2d').getImageData(0, 0, sourceCanvas.width, sourceCanvas.height);
+                    let minX = width, minY = height, maxX = -1, maxY = -1;
+                    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) { if (data[(y * width + x) * 4 + 3] > 10) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; } }
+                    if (maxX === -1) return reject("Could not find signature.");
+                    const padding = 20; minX = Math.max(0, minX - padding); minY = Math.max(0, minY - padding); maxX = Math.min(width, maxX + padding); maxY = Math.min(height, maxY + padding);
+                    const cropW = maxX - minX, cropH = maxY - minY; if (cropW <= 0 || cropH <= 0) return reject("Could not calculate dimensions.");
+                    tCtx.canvas.width = cropW; tCtx.canvas.height = cropH; tCtx.drawImage(sourceCanvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+                    tCtx.canvas.toBlob(blob => resolve(blob), 'image/png');
+                }).catch(reject);
+            });
+        }
+
+        function downloadImage() {
+            if (!checkCanExport()) return;
+            getCroppedBlob().then(blob => {
+                const link = document.createElement('a');
+                link.download = `${dom.lastName.value.trim()}_${dom.firstName.value.trim()}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                URL.revokeObjectURL(link.href);
+                window.open('https://experience.kpmg.com/signature-formatter-thank-you-download', '_blank');
+            }).catch(err => alert(err));
+        }
+
+        // ============================================================
+        // WELCOME PANEL + INTERACTIVE TOUR
+        // ============================================================
+        const WELCOME_AUTOSHOW_KEY = 'signature-welcome-autoshow-v1';
+
+        const TOUR_STEPS = [
+            { selector: '#mode-selection-buttons', title: 'Choose a method', text: 'Three ways to make a signature: Upload a scan or photo, Draw it with your mouse or finger, or Type your name in a cursive font. Try whichever fits your situation.', arrow: 'left' },
+            { selector: '#upload-panel', title: 'Method-specific controls', text: 'These controls change based on the method you picked. Upload shows a drop zone. Draw shows Undo and Clear. Type shows a text field, and font choices appear in the preview area.', arrow: 'left' },
+            { selector: '#color-selectors', title: 'Pick a color', text: 'Choose KPMG Blue, Cobalt, Purple, Pink, Black, or White. The background switches to gray when White is selected so you can still see your signature.', arrow: 'left' },
+            { selector: '#sensitivity-control', title: 'Background removal', text: 'For uploaded photos and scans, this slider controls how aggressively the white paper gets removed. Slide left to keep more detail, right to remove more background.', arrow: 'left' },
+            { selector: '#smoothing-control', title: 'Smoothing', text: 'For grainy phone photos or rough scans, slide this up to reduce dot-speckle and soften jagged edges. For clean scans, leave it low. This is the main fix for chunky-looking output.', arrow: 'left' },
+            { selector: '.name-inputs', title: 'Your name', text: 'Enter your first and last name. These auto-populate from the Type field. The downloaded file is named lastname_firstname.png so files stay organized.', arrow: 'left' },
+            { selector: '#download-btn', title: 'Download', text: 'When everything is set, click here to save the file. The signature is automatically cropped tight to its visible bounds with a small padding margin.', arrow: 'left' },
+            { selector: '#preview-area', title: 'Live preview', text: 'Everything you do shows up here in real time. Drag to draw, watch sliders update the signature instantly, or see fonts side-by-side for the Type method.', arrow: 'right' },
+            { selector: '#show-help-btn', title: 'Need help again?', text: 'Click this button any time to reopen the welcome panel or restart this tour.', arrow: 'bottom' }
+        ];
+
+        let tourCurrentStep = 0;
+        let tourActive = false;
+
+        function setupWelcomePanel() {
+            const overlay = document.getElementById('welcome-overlay');
+            const dismissBtn = document.getElementById('welcome-dismiss-btn');
+            const tourBtn = document.getElementById('welcome-tour-btn');
+            const showBtn = document.getElementById('show-help-btn');
+            const autoShowToggle = document.getElementById('welcome-autoshow-toggle');
+
+            const storedPref = localStorage.getItem(WELCOME_AUTOSHOW_KEY);
+            const autoShow = storedPref === null ? true : storedPref === '1';
+            autoShowToggle.checked = autoShow;
+            if (autoShow) overlay.classList.add('visible');
+
+            autoShowToggle.addEventListener('change', () => {
+                localStorage.setItem(WELCOME_AUTOSHOW_KEY, autoShowToggle.checked ? '1' : '0');
+            });
+
+            const dismissWelcome = () => overlay.classList.remove('visible');
+            dismissBtn.addEventListener('click', dismissWelcome);
+            tourBtn.addEventListener('click', () => { dismissWelcome(); setTimeout(() => startTour(), 200); });
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) dismissWelcome(); });
+            showBtn.addEventListener('click', () => overlay.classList.add('visible'));
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('visible')) dismissWelcome(); });
+        }
+
+        function startTour() {
+            tourCurrentStep = 0;
+            tourActive = true;
+            const highlight = document.getElementById('tour-highlight');
+            highlight.style.transition = 'none';
+            ['top', 'left', 'width', 'height'].forEach(p => highlight.style[p] = '');
+            document.getElementById('tour-backdrop').classList.add('visible');
+            highlight.classList.add('visible');
+            document.getElementById('tour-tooltip').classList.add('visible');
+            renderTourStep();
+            requestAnimationFrame(() => { requestAnimationFrame(() => { highlight.style.transition = ''; }); });
+            window.addEventListener('resize', renderTourStep);
+            window.addEventListener('scroll', renderTourStep, true);
+        }
+
+        function endTour() {
+            tourActive = false;
+            document.getElementById('tour-backdrop').classList.remove('visible');
+            const highlight = document.getElementById('tour-highlight');
+            highlight.classList.remove('visible');
+            highlight.style.display = '';
+            document.getElementById('tour-tooltip').classList.remove('visible');
+            window.removeEventListener('resize', renderTourStep);
+            window.removeEventListener('scroll', renderTourStep, true);
+        }
+
+        function isElementVisible(el) {
+            if (!el) return false;
+            if (el.getClientRects().length === 0) return false;
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none' || style.visibility === 'hidden') return false;
+            return true;
+        }
+
+        function renderTourStep() {
+            if (!tourActive) return;
+            const step = TOUR_STEPS[tourCurrentStep];
+            const target = document.querySelector(step.selector);
+            if (!isElementVisible(target)) {
+                positionTourCenter(step, true);
+                return;
+            }
+            const rect = target.getBoundingClientRect();
+            const pad = 6;
+            const r = { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
+
+            const w = window.innerWidth, h = window.innerHeight;
+            setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: Math.max(0, r.top) });
+            setMask('tour-mask-bottom', { top: r.top + r.height, left: 0, width: w, height: Math.max(0, h - r.top - r.height) });
+            setMask('tour-mask-left',   { top: r.top, left: 0, width: Math.max(0, r.left), height: r.height });
+            setMask('tour-mask-right',  { top: r.top, left: r.left + r.width, width: Math.max(0, w - r.left - r.width), height: r.height });
+
+            const highlight = document.getElementById('tour-highlight');
+            Object.assign(highlight.style, { top: r.top + 'px', left: r.left + 'px', width: r.width + 'px', height: r.height + 'px', display: 'block' });
+
+            const tooltip = document.getElementById('tour-tooltip');
+            document.getElementById('tour-step-counter').textContent = `Step ${tourCurrentStep + 1} of ${TOUR_STEPS.length}`;
+            document.getElementById('tour-title').textContent = step.title;
+            document.getElementById('tour-text').textContent = step.text;
+            document.getElementById('tour-back').disabled = tourCurrentStep === 0;
+            document.getElementById('tour-next').textContent = tourCurrentStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+
+            tooltip.style.left = '-9999px';
+            tooltip.style.top = '0px';
+            const tw = tooltip.offsetWidth;
+            const th = tooltip.offsetHeight;
+
+            const { left, top, arrow } = computeTooltipPlacement(r, tw, th, step.arrow, w, h);
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            tooltip.dataset.arrow = arrow;
+        }
+
+        function setMask(id, rect) {
+            const el = document.getElementById(id);
+            Object.assign(el.style, { top: rect.top + 'px', left: rect.left + 'px', width: rect.width + 'px', height: rect.height + 'px' });
+        }
+
+        function positionTourCenter(step, adaptIfModeMismatch) {
+            const w = window.innerWidth, h = window.innerHeight;
+            setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: h });
+            setMask('tour-mask-bottom', { top: 0, left: 0, width: 0, height: 0 });
+            setMask('tour-mask-left',   { top: 0, left: 0, width: 0, height: 0 });
+            setMask('tour-mask-right',  { top: 0, left: 0, width: 0, height: 0 });
+            document.getElementById('tour-highlight').style.display = 'none';
+            const tooltip = document.getElementById('tour-tooltip');
+            document.getElementById('tour-step-counter').textContent = `Step ${tourCurrentStep + 1} of ${TOUR_STEPS.length}`;
+            document.getElementById('tour-title').textContent = step.title;
+            let text = step.text;
+            if (adaptIfModeMismatch && (step.selector === '#sensitivity-control' || step.selector === '#smoothing-control')) {
+                text = '(Switch to Upload mode to use this control.) ' + step.text;
+            }
+            document.getElementById('tour-text').textContent = text;
+            document.getElementById('tour-back').disabled = tourCurrentStep === 0;
+            document.getElementById('tour-next').textContent = tourCurrentStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+            tooltip.style.left = (w / 2 - tooltip.offsetWidth / 2) + 'px';
+            tooltip.style.top = (h / 2 - tooltip.offsetHeight / 2) + 'px';
+            tooltip.dataset.arrow = 'none';
+        }
+
+        function computeTooltipPlacement(rect, tw, th, preferredArrow, w, h) {
+            const margin = 20;
+            const candidates = {
+                left:   { left: rect.left + rect.width + margin, top: rect.top, arrow: 'left' },
+                right:  { left: rect.left - tw - margin,         top: rect.top, arrow: 'right' },
+                top:    { left: rect.left, top: rect.top + rect.height + margin, arrow: 'top' },
+                bottom: { left: rect.left, top: rect.top - th - margin,          arrow: 'bottom' }
+            };
+            const tryOrder = [preferredArrow, 'left', 'right', 'top', 'bottom'].filter((v, i, a) => a.indexOf(v) === i);
+            for (const a of tryOrder) {
+                const c = candidates[a];
+                if (c.left >= 10 && c.top >= 10 && c.left + tw <= w - 10 && c.top + th <= h - 10) {
+                    return { left: c.left, top: c.top, arrow: a };
+                }
+            }
+            return {
+                left: Math.max(10, Math.min(w - tw - 10, rect.left)),
+                top:  Math.max(10, Math.min(h - th - 10, rect.top + rect.height + margin)),
+                arrow: 'none'
+            };
+        }
+
+        document.getElementById('tour-next').addEventListener('click', () => {
+            if (tourCurrentStep < TOUR_STEPS.length - 1) {
+                tourCurrentStep++;
+                document.getElementById('tour-highlight').style.display = 'block';
+                renderTourStep();
+            } else {
+                endTour();
+            }
+        });
+        document.getElementById('tour-back').addEventListener('click', () => {
+            if (tourCurrentStep > 0) {
+                tourCurrentStep--;
+                document.getElementById('tour-highlight').style.display = 'block';
+                renderTourStep();
+            }
+        });
+        document.getElementById('tour-skip').addEventListener('click', endTour);
+        document.addEventListener('keydown', (e) => {
+            if (tourActive && e.key === 'Escape') endTour();
+        });
+
+        // Credit
+        console.log('%cCreative Services\' Signature Formatter', 'color:#00338D;font-weight:700;font-size:14px;');
+        console.log('Developed and produced by Heath Cushman');
+
+        initialize();
+        setupWelcomePanel();
+    });
+    </script>
+</body>
+</html>
