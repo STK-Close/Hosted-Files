@@ -9,10 +9,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Creative Services' Signature Formatter</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com>" crossorigin>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <!-- LIBRARIES -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 
     <!-- FONTS -->
@@ -119,12 +118,12 @@
         .export-buttons-wrapper { cursor: pointer; }
         .export-buttons { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
 
-        @media (max-width: 900px) {
-            html, body { height: auto; overflow: auto; }
-            .main-container { grid-template-columns: 1fr; height: auto; display: block; }
-            .card { margin-bottom: 1rem; }
-            .workspace-column .card { min-height: 400px; }
-        }
+        /* Stacked one-column layout for phones. Set by the fit-to-frame script
+           (not a media query) because the tool is often shown inside a smaller frame. */
+        html.stacked, html.stacked body { height: auto; overflow: auto; }
+        html.stacked .main-container { grid-template-columns: 1fr; height: auto; display: block; }
+        html.stacked .card { margin-bottom: 1rem; }
+        html.stacked .workspace-column .card { min-height: 400px; }
 
         /* WELCOME PANEL + INTERACTIVE TOUR */
         .welcome-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
@@ -172,6 +171,32 @@
     </style>
 </head>
 <body>
+    <script>
+    /* Fit to frame: when the window or embedding frame (for example Zoomforth) is
+       smaller than the size the layout needs, scale the whole tool down evenly so it
+       fits with no scrollbars. Phones use the stacked one-column layout instead. */
+    (function () {
+        const FIT_MIN_WIDTH = 900;    // smallest width the two-column layout fits in
+        const FIT_MIN_HEIGHT = 640;   // smallest height with every control visible
+        const FIT_MIN_SCALE = 0.55;   // below this, text gets too small; stack instead
+        window.fitScale = 1;
+        function fitToFrame() {
+            const root = document.documentElement, body = document.body;
+            const w = window.innerWidth, h = window.innerHeight;
+            // Inside a frame, always scale to fit. In a normal browser tab, keep the
+            // stacked layout for small screens.
+            const inFrame = window.self !== window.top;
+            const stacked = inFrame ? w / FIT_MIN_WIDTH < FIT_MIN_SCALE : w <= 900;
+            const scale = stacked ? 1 : Math.max(FIT_MIN_SCALE, Math.min(1, w / FIT_MIN_WIDTH, h / FIT_MIN_HEIGHT));
+            window.fitScale = scale;
+            root.classList.toggle('stacked', stacked);
+            body.style.zoom = scale === 1 ? '' : String(scale);
+            body.style.height = stacked ? '' : (h / scale) + 'px';
+        }
+        fitToFrame();
+        window.addEventListener('resize', fitToFrame);
+    })();
+    </script>
     <main class="main-container">
         <div class="card">
             <div class="card-header"><b>Controls</b></div>
@@ -325,7 +350,7 @@
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        const state = { mode: 'upload', originalImageData: null, hasContent: false, currentColor: [0, 51, 141, 255], isDrawing: false, drawPoints: [], currentSize: 20, selectedFont: 'Allura' };
+        const state = { mode: 'upload', originalImageData: null, hasContent: false, currentColor: [0, 51, 141, 255], isDrawing: false, drawPoints: [], currentSize: 20, selectedFont: 'Allura', fontChosen: false };
         const dom = {
             modeButtons: document.querySelectorAll('#mode-selection-buttons button'),
             controlPanels: document.querySelectorAll('.control-panel'),
@@ -377,7 +402,7 @@
         }
 
         function resetUIForMode(mode) {
-            state.hasContent = false; state.originalImageData = null; state.drawPoints = [];
+            state.hasContent = false; state.originalImageData = null; state.drawPoints = []; state.fontChosen = false;
             dom.fileElem.value = ""; dom.signatureText.value = ""; dom.firstName.value = ""; dom.lastName.value = "";
             hideError();
             clearDrawing();
@@ -396,6 +421,8 @@
             const unhighlight = (e) => { e.preventDefault(); dom.dropArea.classList.remove('highlight'); };
             dom.dropArea.addEventListener('dragenter', highlight); dom.dropArea.addEventListener('dragover', highlight);
             dom.dropArea.addEventListener('dragleave', unhighlight); dom.dropArea.addEventListener('drop', (e) => { unhighlight(e); handleFiles(e.dataTransfer.files); });
+            // Stop the browser from opening a file dropped anywhere else on the page.
+            ['dragover', 'drop'].forEach(evt => window.addEventListener(evt, (e) => e.preventDefault()));
             dom.browseBtn.addEventListener('click', () => dom.fileElem.click());
             dom.fileElem.addEventListener('change', (e) => handleFiles(e.target.files));
             dom.sensitivitySlider.addEventListener('input', processUploadedImage);
@@ -478,7 +505,7 @@
         function boxBlur(src, width, height, radius) {
             const tmp = new Float32Array(src.length);
             const dst = new Float32Array(src.length);
-            const window = radius * 2 + 1;
+            const windowSize = radius * 2 + 1;
 
             for (let y = 0; y < height; y++) {
                 let sum = 0;
@@ -487,7 +514,7 @@
                     sum += src[rowStart + Math.max(0, Math.min(width - 1, x))];
                 }
                 for (let x = 0; x < width; x++) {
-                    tmp[rowStart + x] = sum / window;
+                    tmp[rowStart + x] = sum / windowSize;
                     const outIdx = rowStart + Math.max(0, x - radius);
                     const inIdx  = rowStart + Math.min(width - 1, x + radius + 1);
                     sum += src[inIdx] - src[outIdx];
@@ -499,7 +526,7 @@
                     sum += tmp[Math.max(0, Math.min(height - 1, y)) * width + x];
                 }
                 for (let y = 0; y < height; y++) {
-                    dst[y * width + x] = sum / window;
+                    dst[y * width + x] = sum / windowSize;
                     const outIdx = Math.max(0, y - radius) * width + x;
                     const inIdx  = Math.min(height - 1, y + radius + 1) * width + x;
                     sum += tmp[inIdx] - tmp[outIdx];
@@ -510,15 +537,19 @@
 
         function setupDrawing() {
             const resizeCanvas = () => {
-                const rect = dom.previewArea.getBoundingClientRect();
-                dom.drawingCanvas.width = rect.width;
-                dom.drawingCanvas.height = rect.height;
+                // Use layout size (not on-screen size) so the canvas still fills the
+                // preview when the tool is scaled to fit a frame.
+                dom.drawingCanvas.width = dom.previewArea.clientWidth;
+                dom.drawingCanvas.height = dom.previewArea.clientHeight;
                 redrawDrawing();
             }
             const getPos = (e) => {
                 const rect = dom.drawingCanvas.getBoundingClientRect();
                 const event = e.touches ? e.touches[0] : e;
-                return [event.clientX - rect.left, event.clientY - rect.top];
+                // Convert screen position to canvas pixels (they differ when scaled).
+                const sx = dom.drawingCanvas.width / (rect.width || 1);
+                const sy = dom.drawingCanvas.height / (rect.height || 1);
+                return [(event.clientX - rect.left) * sx, (event.clientY - rect.top) * sy];
             }
             const startDrawing = (e) => {
                 if(state.mode !== 'draw') return;
@@ -536,7 +567,13 @@
             const stopDrawing = () => {
                 if (!state.isDrawing || state.mode !== 'draw') return;
                 state.isDrawing = false;
-                if (state.drawPoints[state.drawPoints.length - 1]?.length > 1) {
+                const lastPath = state.drawPoints[state.drawPoints.length - 1];
+                // A tap or click without moving becomes a dot (for i's and periods).
+                if (lastPath && lastPath.length === 1) {
+                    lastPath.push([lastPath[0][0] + 0.01, lastPath[0][1]]);
+                    redrawDrawing();
+                }
+                if (lastPath?.length > 1) {
                     if (!state.hasContent) { state.hasContent = true; }
                     dom.undoBtn.disabled = false;
                     dom.clearBtn.disabled = false;
@@ -594,7 +631,8 @@
             dom.signatureText.addEventListener('input', () => {
                 const hasValue = dom.signatureText.value.trim().length > 0;
                 dom.clearTextBtn.style.display = hasValue ? 'block' : 'none';
-                updateTypedSignature(false);
+                state.fontChosen = false;
+                updateTypedSignature();
                 const words = dom.signatureText.value.trim().split(/\s+/);
                 dom.firstName.value = words[0] || '';
                 if (words.length > 1) dom.lastName.value = words[words.length - 1]; else dom.lastName.value = '';
@@ -611,18 +649,17 @@
                 const item = e.target.closest('.font-preview-item');
                 if (item) {
                     state.selectedFont = item.dataset.font;
-                    if (!state.hasContent && dom.signatureText.value.trim().length > 0) { }
-                    state.hasContent = true;
-                    updateTypedSignature(true);
+                    state.fontChosen = true;
+                    updateTypedSignature();
                 }
             });
         }
-        function updateTypedSignature(fontSelected) {
+        function updateTypedSignature() {
             if (state.mode !== 'type') return;
             const text = dom.signatureText.value;
             const hasText = text.trim().length > 0;
 
-            if (fontSelected && hasText) {
+            if (state.fontChosen && hasText) {
                 dom.fontPreviewList.style.display = 'none';
                 dom.typedSignaturePreview.style.display = 'block';
                 dom.typedSignaturePreview.style.fontFamily = `'${state.selectedFont}', cursive`;
@@ -676,7 +713,35 @@
         function hideError(){ dom.errorMessage.style.display = 'none'; dom.firstName.classList.remove('input-error'); dom.lastName.classList.remove('input-error'); }
         function checkDownloadReadiness() { const namesFilled = dom.firstName.value.trim() && dom.lastName.value.trim(); const canExport = state.hasContent && namesFilled; dom.downloadBtn.disabled = !canExport; }
 
-        function getCanvasForExport() { let source = null; if (state.mode === 'upload' && state.hasContent) source = dom.processingCanvas; else if (state.mode === 'draw' && state.hasContent) source = dom.drawingCanvas; else if (state.mode === 'type' && state.hasContent) source = dom.typedSignaturePreview; if (!source) return Promise.reject("No content to export."); if (source.tagName === 'CANVAS') return Promise.resolve(source); return html2canvas(source, { backgroundColor: null, logging: false }); }
+        // Typed signatures are drawn straight onto a canvas. (A page screenshot library
+        // garbled the letters when the tool was scaled to fit a frame.)
+        async function renderTypedSignature() {
+            const text = dom.signatureText.value.trim();
+            const fontSize = 70, pad = 20, scale = Math.max(1, window.devicePixelRatio || 1);
+            const font = `${fontSize}px '${state.selectedFont}', cursive`;
+            try { await document.fonts.load(font, text); } catch (e) { /* use fallback font */ }
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.font = font;
+            const m = ctx.measureText(text);
+            const ascent = m.actualBoundingBoxAscent || fontSize, descent = m.actualBoundingBoxDescent || fontSize * 0.3;
+            const left = m.actualBoundingBoxLeft || 0, right = m.actualBoundingBoxRight || m.width;
+            canvas.width = Math.ceil((left + right + pad * 2) * scale);
+            canvas.height = Math.ceil((ascent + descent + pad * 2) * scale);
+            ctx.scale(scale, scale);
+            ctx.font = font;
+            ctx.fillStyle = `rgba(${state.currentColor.join(',')})`;
+            ctx.fillText(text, pad + left, pad + ascent);
+            return canvas;
+        }
+
+        function getCanvasForExport() {
+            if (!state.hasContent) return Promise.reject("No content to export.");
+            if (state.mode === 'upload') return Promise.resolve(dom.processingCanvas);
+            if (state.mode === 'draw') return Promise.resolve(dom.drawingCanvas);
+            if (state.mode === 'type') return renderTypedSignature();
+            return Promise.reject("No content to export.");
+        }
 
         function getCroppedBlob() {
             return new Promise((resolve, reject) => {
@@ -701,7 +766,7 @@
                 link.download = `${dom.lastName.value.trim()}_${dom.firstName.value.trim()}.png`;
                 link.href = URL.createObjectURL(blob);
                 link.click();
-                URL.revokeObjectURL(link.href);
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
                 window.open('https://experience.kpmg.com/signature-formatter-thank-you-download', '_blank');
             }).catch(err => alert(err));
         }
@@ -792,11 +857,14 @@
                 positionTourCenter(step, true);
                 return;
             }
-            const rect = target.getBoundingClientRect();
+            // The tour layers are inside the scaled page, so convert screen sizes to page units.
+            const z = window.fitScale || 1;
+            const b = target.getBoundingClientRect();
+            const rect = { top: b.top / z, left: b.left / z, width: b.width / z, height: b.height / z };
             const pad = 6;
             const r = { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
 
-            const w = window.innerWidth, h = window.innerHeight;
+            const w = window.innerWidth / z, h = window.innerHeight / z;
             setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: Math.max(0, r.top) });
             setMask('tour-mask-bottom', { top: r.top + r.height, left: 0, width: w, height: Math.max(0, h - r.top - r.height) });
             setMask('tour-mask-left',   { top: r.top, left: 0, width: Math.max(0, r.left), height: r.height });
@@ -829,7 +897,8 @@
         }
 
         function positionTourCenter(step, adaptIfModeMismatch) {
-            const w = window.innerWidth, h = window.innerHeight;
+            const z = window.fitScale || 1;
+            const w = window.innerWidth / z, h = window.innerHeight / z;
             setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: h });
             setMask('tour-mask-bottom', { top: 0, left: 0, width: 0, height: 0 });
             setMask('tour-mask-left',   { top: 0, left: 0, width: 0, height: 0 });
