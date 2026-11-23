@@ -1,0 +1,2470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KPMG Headshot Formatter</title>
+
+    <!-- LIBRARIES -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- MediaPipe kept as fallback only -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            /* Palette */
+            --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0; --slate-300: #cbd5e1;
+            --slate-400: #94a3b8; --slate-500: #64748b; --slate-600: #475569; --slate-700: #334155;
+            --blue-500: #3b82f6; --blue-800: #1e40af; --blue-900: #1e3a8a; --kpmg-blue: #00338d;
+            --white: #ffffff; --black: #000000;
+
+            /* UI Vars */
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --rounded-md: 0.375rem; --rounded-xl: 0.75rem;
+
+            /* Export Gradient Colors */
+            --grad-top: #d1d3d8;
+            --grad-btm: #ffffff;
+            /* Checkerboard for transparency */
+            --checkerboard-light: #cccccc;
+            --checkerboard-dark: #ffffff;
+        }
+
+        /* DARK MODE */
+        [data-theme="dark"] {
+            --slate-50: #0f172a; --slate-100: #1e293b; --slate-200: #334155;
+            --slate-300: #475569; --slate-400: #64748b; --slate-600: #94a3b8; --slate-700: #f1f5f9;
+            --white: #1e293b; --blue-900: #60a5fa; --kpmg-blue: #3b82f6;
+            color-scheme: dark;
+            --checkerboard-light: #64748b;
+            --checkerboard-dark: #475569;
+        }
+
+        html, body { height: 100vh; margin: 0; overflow: hidden; }
+        body { font-family: 'Open Sans', sans-serif; background-color: var(--slate-50); color: var(--slate-700); font-size: 13px; display: flex; flex-direction: column; }
+
+        /* HEADER */
+        .header-container { background-color: var(--white); box-shadow: var(--shadow-sm); padding: 0.75rem 1.5rem; z-index: 10; flex-shrink: 0; }
+        .header { display: flex; align-items: center; justify-content: space-between; max-width: 100%; margin: 0 auto; }
+        .header-left { display: flex; align-items: center; gap: 0.75rem; }
+        .header .icon { height: 28px; }
+        h1 { color: var(--blue-900); font-weight: 600; font-size: 1.1rem; margin-left: 0.5rem; }
+
+        #theme-toggle { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-300); padding: 6px 10px; border-radius: var(--rounded-md); cursor: pointer; font-size: 1.1rem; transition: all 0.2s; }
+        [data-theme="dark"] #theme-toggle { border-color: var(--slate-400); color: var(--slate-300); }
+
+        /* MAIN LAYOUT - 3-COLUMN */
+        .main-container {
+            flex-grow: 1; display: grid; grid-template-columns: 320px minmax(0, 1fr) 320px;
+            gap: 1rem; padding: 1rem; box-sizing: border-box; min-height: 0;
+            max-width: 2200px; margin: 0 auto; width: 100%;
+        }
+
+        /* CARD STYLES */
+        .card { background: var(--white); border-radius: var(--rounded-xl); box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
+        .card-header { font-size: 0.95rem; font-weight: 700; color: var(--blue-900); padding: 1rem; border-bottom: 1px solid var(--slate-100); flex-shrink: 0; }
+
+        /* LEFT & RIGHT COLUMNS */
+        .controls-column, .gallery-column { display: flex; flex-direction: column; gap: 1rem; height: 100%; min-height: 0; min-width: 0; }
+        .upload-content { padding: 1rem; overflow-y: auto; }
+
+        .instructions { font-size: 0.8rem; color: var(--slate-600); margin-bottom: 1rem; line-height: 1.4; }
+
+        #drop-zone {
+            border: 2px dashed var(--slate-300); border-radius: var(--rounded-md); padding: 1.5rem 1rem;
+            text-align: center; color: var(--slate-600); background: var(--slate-50);
+            cursor: pointer; transition: all 0.2s; margin-bottom: 1rem;
+        }
+        [data-theme="dark"] #drop-zone { background-color: #0f172a; border-color: var(--slate-600); color: var(--slate-300); }
+        #drop-zone:hover, #drop-zone.dragover { border-color: var(--kpmg-blue); background: #eff6ff; }
+        #drop-zone i { font-size: 28px; color: var(--slate-400); margin-bottom: 8px; }
+        #drop-zone p { margin: 0; font-size: 13px; font-weight: 600; }
+        #drop-zone span { font-size: 11px; color: var(--slate-400); display: block; margin-top: 5px; }
+        .file-types { font-size: 0.7rem; color: var(--slate-400); display:block; margin-top: 8px; }
+
+        #imageLoader { display: none; }
+        #upload-status { font-size: 0.8rem; color: var(--blue-800); margin-top: 1rem; font-style: italic; text-align: center; min-height: 20px; line-height: 1.4; }
+        [data-theme="dark"] #upload-status { color: #60a5fa; }
+
+        /* Quality indicator badge */
+        .quality-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px; border-radius: 999px;
+            font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-top: 8px;
+        }
+        .quality-badge.hd {
+            background: rgba(0, 51, 141, 0.1); color: var(--kpmg-blue);
+        }
+        .quality-badge.standard {
+            background: rgba(100, 116, 139, 0.15); color: var(--slate-600);
+        }
+        [data-theme="dark"] .quality-badge.hd { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+
+        /* UPLOAD CONTROLS */
+        .upload-controls-container { display: flex; flex-direction: column; gap: 12px; }
+        .control-group label {
+            font-size: 0.75rem; font-weight: 700; color: var(--blue-900);
+            display: block; margin-bottom: 5px;
+        }
+        .control-group select {
+            width: 100%; padding: 8px 10px; font-size: 0.75rem; border-radius: var(--rounded-md);
+            border: 1px solid var(--slate-300); background-color: var(--white); color: var(--slate-700);
+            box-sizing: border-box;
+        }
+        .control-group input[type="range"] {
+            width: 100%;
+        }
+
+        [data-theme="dark"] .control-group select { border-color: var(--slate-400); background-color: var(--slate-200); color: var(--slate-600); }
+        [data-theme="dark"] .control-group label { color: var(--blue-900); }
+
+
+        /* Gallery */
+        .gallery-card { flex-grow: 1; min-height: 0; display: flex; flex-direction: column; }
+        .gallery-header-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1rem; border-bottom: 1px solid var(--slate-100); flex-shrink: 0;
+        }
+        .gallery-header-row .card-title { font-size: 0.95rem; font-weight: 700; color: var(--blue-900); }
+        .gallery-progress-badge {
+            font-size: 0.72rem; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+            background: var(--slate-100); color: var(--slate-600);
+        }
+        .gallery-progress-badge.all-named { background: #dcfce7; color: #166534; }
+        .gallery-progress-badge.needs-names { background: #fef2f2; color: #b91c1c; }
+
+        .thumbnail-gallery {
+            padding: 10px; flex-grow: 1; overflow-y: auto;
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+            gap: 10px; align-content: start; background: var(--slate-50);
+        }
+        [data-theme="dark"] .thumbnail-gallery { background: #0f172a; }
+        .thumb-item {
+            position: relative; display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; border-radius: var(--rounded-md); padding: 4px;
+            background: var(--white); border: 2px solid transparent;
+            box-shadow: var(--shadow-sm); transition: all 0.2s;
+        }
+        [data-theme="dark"] .thumb-item { background: var(--slate-100); }
+        .thumb-item:hover { border-color: var(--slate-300); }
+        .thumb-item.active { border-color: var(--blue-500); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
+        .thumb-item.missing-name:not(.active) { border-color: rgba(239, 68, 68, 0.45); }
+        .thumb-img-wrap {
+            position: relative; width: 100%; aspect-ratio: 3/4; border-radius: 4px; overflow: hidden;
+            background-image: linear-gradient(to bottom, var(--grad-top), var(--grad-btm));
+        }
+        .thumb-img-wrap img {
+            width: 100%; height: 100%; object-fit: cover; display: block;
+        }
+        .thumb-status-dot {
+            position: absolute; top: 4px; right: 4px; width: 16px; height: 16px;
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 9px; color: #fff; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+        }
+        .thumb-status-dot.valid { background: #16a34a; }
+        .thumb-status-dot.invalid { background: #ef4444; }
+        .thumb-caption {
+            width: 100%; font-size: 0.68rem; font-weight: 600; color: var(--slate-700);
+            text-align: center; margin-top: 4px; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; line-height: 1.2;
+        }
+        .thumb-caption.unnamed { color: #ef4444; font-style: italic; font-weight: 400; }
+
+        /* CENTER WORKSPACE */
+        .workspace-column { height: 100%; min-height: 0; min-width: 0; }
+        .workspace-card { height: 100%; display: flex; flex-direction: column; }
+        .workspace-content {
+            flex-grow: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            padding: 1rem; gap: 1rem; overflow: hidden; box-sizing: border-box; min-height: 0;
+        }
+
+        .single-preview-wrapper {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 12px; width: 100%; max-width: 450px;
+            flex-grow: 1; flex-shrink: 1;
+            justify-content: center; min-height: 0;
+        }
+        .preview-media-holder {
+            width: 100%; min-height: 0; display: flex; align-items: center; justify-content: center;
+        }
+        .preview-info { width: 100%; max-width: 400px; flex-shrink: 0; text-align: center; }
+        .preview-info h4 { margin: 0 0 2px 0; font-size: 0.9rem; }
+        .preview-info p { margin: 0; font-size: 0.75rem; }
+
+        /* Canvas Wrapper */
+        .canvas-wrapper {
+            position: relative; padding: 0; cursor: grab;
+            display: flex; align-items: center; justify-content: center;
+            width: auto; height: auto; max-width: 100%; max-height: 100%;
+            box-shadow: var(--shadow-md);
+            border-radius: 0;
+            overflow: hidden;
+            transition: border-radius 0.3s ease;
+        }
+        .canvas-wrapper.gradient-bg { background-image: linear-gradient(to bottom, var(--grad-top), var(--grad-btm)); }
+        .canvas-wrapper.transparent-bg {
+            background-color: var(--checkerboard-dark);
+            background-image:
+                linear-gradient(45deg, var(--checkerboard-light) 25%, transparent 25%, transparent 75%, var(--checkerboard-light) 75%, var(--checkerboard-light)),
+                linear-gradient(45deg, var(--checkerboard-light) 25%, transparent 25%, transparent 75%, var(--checkerboard-light) 75%, var(--checkerboard-light));
+            background-size: 20px 20px; background-position: 0 0, 10px 10px;
+        }
+        .canvas-wrapper:active { cursor: grabbing; }
+        .canvas-wrapper.circle { border-radius: 50%; }
+        .canvas-wrapper canvas { display: block; width: 100%; height: 100%; }
+
+        .spinner {
+            position: absolute; width: 40px; height: 40px; border: 4px solid var(--slate-300);
+            border-top-color: var(--blue-500); border-radius: 50%; animation: spin 1s linear infinite;
+            display: none; z-index: 100;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Adjustment Bar */
+        .adjustment-bar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 12px 15px; flex-wrap: wrap; flex-shrink: 0;
+            width: 100%; max-width: 650px;
+            /* border-box keeps the padding INSIDE the 100% width, so the bar never
+               spills past the workspace card at any browser zoom level */
+            box-sizing: border-box;
+            background: var(--slate-50); padding: 12px 20px; border-radius: 28px;
+            box-shadow: var(--shadow-sm); border: 1px solid var(--slate-200);
+        }
+
+        .range-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 0 1 180px; }
+        .range-group label { font-size: 0.75rem; font-weight: 700; color: var(--blue-900); letter-spacing: 0.5px; }
+        input[type="range"] { width: 180px; max-width: 100%; cursor: pointer; }
+        .range-group input[type="range"] { width: 100%; }
+        .adjustment-divider { width: 1px; height: 30px; background: var(--slate-300); margin: 0 4px; flex-shrink: 0; }
+        .adjustment-hint { font-size: 0.8rem; color: var(--slate-600); margin: 0; }
+        .icon-btn {
+            background: transparent; border: 1px solid var(--slate-300); color: var(--slate-600);
+            width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        /* File Naming & Action Buttons */
+        .export-panel {
+            width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 6px;
+            background: var(--slate-50); border: 1px solid var(--slate-200);
+            border-radius: var(--rounded-md); padding: 10px 12px; box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        [data-theme="dark"] .workspace-card .export-panel {
+            background: #f8fafc; border-color: #e2e8f0;
+        }
+        .export-panel-header {
+            display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+        }
+        .export-panel-header:not(:has(.batch-nav.visible)) { display: none; }
+        .batch-nav {
+            display: none; align-items: center; gap: 4px; font-size: 0.72rem; font-weight: 600; color: var(--slate-600);
+        }
+        .batch-nav.visible { display: inline-flex; }
+        .batch-nav button {
+            background: var(--white); border: 1px solid var(--slate-300); color: var(--slate-700);
+            width: 22px; height: 22px; border-radius: 4px; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center; font-size: 0.65rem;
+            padding: 0; transition: all 0.15s;
+        }
+        .batch-nav button:hover:not(:disabled) { border-color: var(--kpmg-blue); color: var(--kpmg-blue); }
+        .name-inputs {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%;
+        }
+        .name-inputs input {
+            width: 100%; padding: 7px 10px; border: 1px solid var(--slate-300);
+            border-radius: var(--rounded-md); font-size: 12px; box-sizing: border-box;
+            background-color: #ffffff; color: #334155;
+            font-family: 'Open Sans', sans-serif; transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .name-inputs input:focus {
+            outline: none; border-color: var(--blue-500); box-shadow: 0 0 0 1px var(--blue-500);
+        }
+        .name-inputs input:disabled {
+            background-color: var(--slate-100); cursor: not-allowed; opacity: 0.7;
+        }
+        #name-error-message {
+            color: #ef4444; font-size: 0.75rem; font-weight: 600; margin: 0;
+            display: none; text-align: center;
+        }
+        .input-error {
+            animation: shake 0.45s; border-color: #ef4444 !important;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-5px); }
+            40%, 80% { transform: translateX(5px); }
+        }
+        .actions-row-wrapper { width: 100%; cursor: pointer; }
+        .actions-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; width: 100%; }
+        .btn-action {
+            padding: 8px 12px; font-size: 0.85rem; font-weight: 600; border: none; border-radius: var(--rounded-md);
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;
+            width: 100%; box-sizing: border-box;
+        }
+        .btn-primary { background: var(--blue-800); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--blue-900); }
+        .btn-secondary { background: #cbd5e1 !important; color: #1e3a8a !important; }
+        .btn-secondary:hover:not(:disabled) { background: #94a3b8 !important; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; background: var(--slate-300); color: var(--slate-500); }
+        [data-theme="dark"] .btn-secondary { background-color: var(--slate-300) !important; color: var(--slate-700) !important; }
+        [data-theme="dark"] .btn-secondary:hover:not(:disabled) { background: var(--slate-400) !important; }
+
+        /* SELECTIVE DARK MODE OVERRIDES */
+        [data-theme="dark"] .workspace-card {
+            background-color: #ffffff;
+            color: #334155;
+        }
+        [data-theme="dark"] .workspace-card .card-header {
+            color: #1e3a8a;
+            border-bottom-color: #f1f5f9;
+        }
+        [data-theme="dark"] .workspace-card .preview-info h4,
+        [data-theme="dark"] .adjustment-bar label {
+            color: #1e3a8a;
+        }
+        [data-theme="dark"] .workspace-card .preview-info p,
+        [data-theme="dark"] .adjustment-bar p {
+            color: #475569;
+        }
+        [data-theme="dark"] .adjustment-bar {
+            background: #f8fafc;
+            border-color: #e2e8f0;
+        }
+
+        /* Medium screens (most laptops at 100% zoom): narrower side columns so
+           the gallery stays visible instead of being hidden. */
+        @media (max-width: 1400px) {
+            .main-container { grid-template-columns: 260px minmax(0, 1fr) 240px; }
+        }
+        /* Small screens: stack everything in one column, gallery included. */
+        @media (max-width: 1024px) {
+            html, body { height: auto; overflow: auto; }
+            .main-container { grid-template-columns: 1fr; display: flex; flex-direction: column; height: auto; }
+            .controls-column, .workspace-column, .gallery-column { height: auto; }
+            .workspace-content { padding: 1rem; }
+            .thumbnail-gallery { min-height: 140px; max-height: 360px; }
+        }
+
+        /* WELCOME PANEL + INTERACTIVE TOUR — same pattern as the other tools */
+        .welcome-overlay {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+            display: none; align-items: center; justify-content: center;
+            z-index: 2000; padding: 20px;
+        }
+        .welcome-overlay.visible { display: flex; }
+        .welcome-card {
+            background: var(--white); border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            max-width: 540px; width: 100%; padding: 28px 32px;
+            font-family: 'Arial', sans-serif;
+        }
+        .welcome-card h2 {
+            margin: 0 0 6px 0; font-size: 1.35rem; color: var(--kpmg-blue); font-weight: 700;
+        }
+        .welcome-card .lede {
+            color: var(--slate-700); font-size: 0.9rem; margin: 0 0 18px 0; line-height: 1.45;
+        }
+        .welcome-steps {
+            display: grid; grid-template-columns: auto 1fr; gap: 10px 14px; margin: 0 0 18px 0;
+        }
+        .welcome-step-num {
+            background: var(--kpmg-blue); color: white;
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.75rem; font-weight: 700; flex-shrink: 0;
+        }
+        .welcome-step-text {
+            color: var(--slate-700); font-size: 0.85rem; line-height: 1.4; padding-top: 2px;
+        }
+        .welcome-step-text b { color: var(--kpmg-blue); }
+        .welcome-actions {
+            display: flex; gap: 8px; justify-content: flex-end; align-items: center;
+            border-top: 1px solid var(--slate-200); padding-top: 16px;
+            flex-wrap: wrap;
+        }
+        .welcome-actions label {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 0.78rem; color: var(--slate-700); margin-right: auto; cursor: pointer;
+        }
+        .welcome-card button.primary {
+            background: var(--kpmg-blue); color: white; border: none;
+            padding: 8px 18px; border-radius: 6px;
+            font-weight: 600; cursor: pointer; font-size: 0.85rem;
+            font-family: 'Arial', sans-serif;
+        }
+        .welcome-card button.primary:hover { background: var(--blue-900); }
+        .welcome-card button.secondary {
+            background: transparent; color: var(--kpmg-blue); border: 1px solid var(--kpmg-blue);
+            padding: 8px 18px; border-radius: 6px;
+            font-weight: 600; cursor: pointer; font-size: 0.85rem;
+            font-family: 'Arial', sans-serif;
+        }
+        .welcome-card button.secondary:hover { background: rgba(0, 51, 141, 0.05); }
+
+        #show-help-btn {
+            position: fixed; bottom: 20px; right: 20px; z-index: 100;
+            background: var(--white); border: 1px solid var(--slate-300);
+            color: var(--slate-700); padding: 8px 12px; border-radius: 999px;
+            font-size: 0.75rem; cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            display: flex; align-items: center; gap: 6px;
+            font-family: 'Arial', sans-serif;
+        }
+        #show-help-btn:hover { color: var(--kpmg-blue); border-color: var(--blue-500); }
+
+        .tour-backdrop {
+            position: fixed; inset: 0; z-index: 1900;
+            pointer-events: none; display: none;
+        }
+        .tour-backdrop.visible { display: block; }
+        .tour-backdrop > .tour-mask {
+            position: absolute; background: rgba(15, 23, 42, 0.55);
+            pointer-events: auto; transition: all 0.25s ease;
+        }
+        .tour-highlight {
+            position: fixed; z-index: 1901; pointer-events: none;
+            border: 3px solid #00B8F5; border-radius: 8px;
+            box-shadow: 0 0 0 4px rgba(0, 184, 245, 0.25);
+            transition: all 0.25s ease;
+            display: none;
+        }
+        .tour-highlight.visible { display: block; }
+        .tour-tooltip {
+            position: fixed; z-index: 1902;
+            background: var(--white); border-radius: 6px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            padding: 16px 18px; max-width: 320px;
+            font-family: 'Arial', sans-serif;
+            transition: all 0.25s ease;
+            display: none;
+        }
+        .tour-tooltip.visible { display: block; }
+        .tour-tooltip .step-counter {
+            font-size: 0.7rem; color: var(--slate-500); font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+        }
+        .tour-tooltip h4 {
+            margin: 0 0 6px 0; color: var(--kpmg-blue); font-size: 1rem; font-weight: 700;
+        }
+        .tour-tooltip p {
+            margin: 0 0 14px 0; color: var(--slate-700); font-size: 0.85rem; line-height: 1.45;
+        }
+        .tour-tooltip .tour-actions {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+        .tour-tooltip .tour-skip {
+            background: transparent; border: none; color: var(--slate-500);
+            font-size: 0.75rem; cursor: pointer; padding: 4px 6px;
+            font-family: 'Arial', sans-serif;
+        }
+        .tour-tooltip .tour-skip:hover { color: var(--kpmg-blue); }
+        .tour-tooltip .tour-nav { display: flex; gap: 6px; }
+        .tour-tooltip .tour-nav button {
+            padding: 6px 14px; border-radius: 6px;
+            font-size: 0.8rem; font-weight: 600; cursor: pointer;
+            font-family: 'Arial', sans-serif;
+        }
+        .tour-tooltip .tour-back {
+            background: transparent; color: var(--slate-700); border: 1px solid var(--slate-300);
+        }
+        .tour-tooltip .tour-back:hover { background: var(--slate-200); color: var(--kpmg-blue); }
+        .tour-tooltip .tour-back:disabled { opacity: 0.4; cursor: not-allowed; }
+        .tour-tooltip .tour-next {
+            background: var(--kpmg-blue); color: white; border: none;
+        }
+        .tour-tooltip .tour-next:hover { background: var(--blue-900); }
+        .tour-tooltip::before {
+            content: ''; position: absolute; width: 0; height: 0;
+            border: 8px solid transparent;
+        }
+        .tour-tooltip[data-arrow="left"]::before {
+            top: 24px; left: -16px; border-right-color: var(--white);
+        }
+        .tour-tooltip[data-arrow="right"]::before {
+            top: 24px; right: -16px; border-left-color: var(--white);
+        }
+        .tour-tooltip[data-arrow="top"]::before {
+            left: 24px; top: -16px; border-bottom-color: var(--white);
+        }
+        .tour-tooltip[data-arrow="bottom"]::before {
+            left: 24px; bottom: -16px; border-top-color: var(--white);
+        }
+    </style>
+</head>
+<body>
+    <header class="header-container">
+        <div class="header">
+            <div class="header-left"></div>
+        </div>
+    </header>
+
+    <div class="main-container">
+
+        <!-- LEFT SIDEBAR -->
+        <div class="controls-column">
+            <div class="card" style="flex-grow:1;">
+                <div class="card-header">Controls</div>
+                <div class="upload-content">
+
+                    <div class="instructions">
+                        <p>Use <b>drag and drop</b> or browse. Select multiple with Ctrl/Cmd.</p>
+                    </div>
+                    <div id="drop-zone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Drag & drop files here</p>
+                        <span>or click to browse</span>
+                        <span class="file-types">(Accepts: png, bmp, gif, jpg, webp)</span>
+                        <input type="file" id="imageLoader" accept="image/png, image/bmp, image/gif, image/jpeg, image/webp" multiple>
+                    </div>
+
+                    <div class="upload-controls-container">
+                        <div class="control-group">
+                            <label for="size-select">Output Size</label>
+                            <select id="size-select">
+                                <option value="rect">Resume (207x230)</option>
+                                <option value="kpmgBioNew">KPMG bio card (240x320)</option>
+                                <option value="email">Email (105x126)</option>
+                                <option value="ppt">PPT (440x520)</option>
+                                <option value="print">Print (900x1500)</option>
+                                <option value="circ">Microsite (200x200)</option>
+                                <option value="linkedin">LinkedIn (400x400)</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="background-select">Background</label>
+                            <select id="background-select">
+                                <option value="gradient">Gradient</option>
+                                <option value="transparent">Transparent</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                             <label for="sharpen-slider">Sharpening</label>
+                             <input type="range" id="sharpen-slider" min="0" max="100" value="0">
+                        </div>
+                        <div class="control-group">
+                             <label for="edge-shift-slider" style="display:flex; justify-content:space-between; align-items:center;">
+                                <span>Edge refine</span>
+                                <span id="edge-shift-value" style="font-weight:400; color:var(--slate-500); font-size:0.7rem;">0</span>
+                             </label>
+                             <input type="range" id="edge-shift-slider" min="-15" max="15" value="0" title="Contract (–) removes halo · Expand (+) recovers missing edge">
+                             <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--slate-400); margin-top:2px;">
+                                <span>← Contract</span>
+                                <span>Expand →</span>
+                             </div>
+                        </div>
+                    </div>
+
+                    <div id="upload-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER WORKSPACE -->
+        <div class="workspace-column">
+            <div class="card workspace-card">
+                <div class="card-header">Workspace and preview</div>
+                <div class="workspace-content">
+                    <div id="dynamic-preview-container" class="single-preview-wrapper">
+                        <!-- Content injected by JS -->
+                    </div>
+
+                    <div class="adjustment-bar">
+                        <div class="range-group">
+                            <label for="scaleSlider"><i class="fas fa-search"></i> Zoom subject</label>
+                            <input type="range" id="scaleSlider" min="0" max="100" value="50" disabled>
+                        </div>
+                        <button id="reset-zoom" class="icon-btn" title="Reset all adjustments" aria-label="Reset all adjustments" disabled><i class="fas fa-undo"></i></button>
+                        <div class="adjustment-divider" aria-hidden="true"></div>
+                        <p class="adjustment-hint"><i class="fas fa-arrows-alt"></i> Drag image to position</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT GALLERY -->
+        <div class="gallery-column">
+            <div class="card gallery-card">
+                <div class="gallery-header-row">
+                    <span class="card-title">Gallery</span>
+                    <span id="gallery-progress-badge" class="gallery-progress-badge" style="display:none;">0 / 0 named</span>
+                </div>
+                <div id="thumbnail-gallery" class="thumbnail-gallery"></div>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+// ============================================================
+// BACKGROUND REMOVAL: BiRefNet_lite (MIT license)
+//   Model:  ZhengPeng7/BiRefNet_lite (MIT), ONNX export onnx-community/BiRefNet_lite
+//   Runtime: Transformers.js (Apache-2.0), loaded from jsDelivr
+// The weights (~180 MB) are fetched from Hugging Face on first use and
+// cached by the browser. Everything else is in this file.
+// Colours always come from the ORIGINAL photo; the model only produces the mask.
+// ============================================================
+import { pipeline, RawImage, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/+esm';
+
+env.allowLocalModels = false;
+
+// MODNet: portrait/hair matting, Apache-2.0, ~45 MB. Runs on the CPU (WASM).
+const MODEL_ID = 'Xenova/modnet';
+// Cap for the edge-refinement pass. Very large photos are refined at this size
+// and the result is upsampled, which keeps memory reasonable.
+const WORK_MAX_SIDE = 2000;
+
+let model = null;
+let loadPromise = null;
+
+async function loadBiRefNet() {
+    if (model) return true;
+    if (!loadPromise) {
+        loadPromise = (async () => {
+            const status = document.getElementById('upload-status');
+            // Show download progress so the one-time model fetch doesn't look frozen.
+            const progress_callback = (info) => {
+                if (info.status === 'progress' && info.total) {
+                    const pct = Math.round((info.loaded / info.total) * 100);
+                    if (status) status.textContent = `Downloading background model (first use only)... ${pct}%`;
+                }
+            };
+            // CPU (WASM) only. WebGPU is avoided: the stock exports exceed its
+            // per-shader buffer limit and hang instead of failing cleanly.
+            try {
+                model = await pipeline('background-removal', MODEL_ID, { device: 'wasm', dtype: 'fp32', progress_callback });
+                console.info('MODNet loaded on wasm');
+                if (status) status.textContent = '';
+                return true;
+            } catch (err) {
+                console.warn('MODNet failed to load:', err);
+                return false;
+            }
+        })().catch(err => {
+            console.warn('BiRefNet unavailable:', err);
+            return false;
+        });
+    }
+    return loadPromise;
+}
+
+const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/** Stretch contrast on the model INPUT only, for dark or flat photos. */
+function boostLowContrast(ctx, w, h) {
+    const data = ctx.getImageData(0, 0, w, h);
+    const d = data.data;
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < d.length; i += 4) {
+        hist[(0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) | 0]++;
+    }
+    const total = d.length / 4;
+    let cum = 0, lo = 0, hi = 255;
+    for (let i = 0; i < 256; i++) {
+        cum += hist[i];
+        if (cum < total * 0.02) lo = i;
+        if (cum < total * 0.98) hi = i;
+    }
+    const range = Math.max(1, hi - lo);
+    if (range >= 180) return; // already full-range, leave alone
+    const stretch = 220 / range;
+    for (let i = 0; i < d.length; i += 4) {
+        for (let ch = 0; ch < 3; ch++) {
+            let v = (d[i + ch] - lo) * stretch;
+            v = 255 * Math.pow(clamp01(v / 255), 0.85);
+            d[i + ch] = v;
+        }
+    }
+    ctx.putImageData(data, 0, 0);
+}
+
+/** Separable box filter with clamped edges, O(N). */
+function boxFilter(src, w, h, r) {
+    const tmp = new Float32Array(w * h);
+    const out = new Float32Array(w * h);
+    const pre = new Float64Array(Math.max(w, h) + 1);
+    for (let y = 0; y < h; y++) {
+        const row = y * w;
+        pre[0] = 0;
+        for (let x = 0; x < w; x++) pre[x + 1] = pre[x] + src[row + x];
+        for (let x = 0; x < w; x++) {
+            const x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r);
+            tmp[row + x] = (pre[x1 + 1] - pre[x0]) / (x1 - x0 + 1);
+        }
+    }
+    for (let x = 0; x < w; x++) {
+        pre[0] = 0;
+        for (let y = 0; y < h; y++) pre[y + 1] = pre[y] + tmp[y * w + x];
+        for (let y = 0; y < h; y++) {
+            const y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r);
+            out[y * w + x] = (pre[y1 + 1] - pre[y0]) / (y1 - y0 + 1);
+        }
+    }
+    return out;
+}
+
+/**
+ * Guided filter (He et al.) — snaps the mask to the photo's real edges, so hair
+ * and shoulders follow actual image structure instead of the model's blocky grid.
+ * guide: grey image in 0..1, p: mask in 0..1.
+ */
+function guidedFilter(guide, p, w, h, r, eps) {
+    const N = w * h;
+    const mI = boxFilter(guide, w, h, r);
+    const mP = boxFilter(p, w, h, r);
+    const II = new Float32Array(N), IP = new Float32Array(N);
+    for (let i = 0; i < N; i++) { II[i] = guide[i] * guide[i]; IP[i] = guide[i] * p[i]; }
+    const mII = boxFilter(II, w, h, r);
+    const mIP = boxFilter(IP, w, h, r);
+    const a = new Float32Array(N), b = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        const varI = mII[i] - mI[i] * mI[i];
+        const covIP = mIP[i] - mI[i] * mP[i];
+        a[i] = covIP / (varI + eps);
+        b[i] = mP[i] - a[i] * mI[i];
+    }
+    const mA = boxFilter(a, w, h, r);
+    const mB = boxFilter(b, w, h, r);
+    const q = new Float32Array(N);
+    for (let i = 0; i < N; i++) q[i] = clamp01(mA[i] * guide[i] + mB[i]);
+    return q;
+}
+
+/**
+ * Minimum filter on the alpha channel (square window of radius r), done as a
+ * horizontal pass then a vertical pass. Shrinks the cutout by r pixels.
+ */
+function erodeAlpha(d, w, h, r) {
+    const tmp = new Uint8ClampedArray(w * h);
+    for (let y = 0; y < h; y++) {
+        const row = y * w;
+        for (let x = 0; x < w; x++) {
+            let m = 255;
+            const x0 = Math.max(0, x - r), x1 = Math.min(w - 1, x + r);
+            for (let k = x0; k <= x1; k++) { const v = d[(row + k) * 4 + 3]; if (v < m) m = v; }
+            tmp[row + x] = m;
+        }
+    }
+    for (let x = 0; x < w; x++) {
+        for (let y = 0; y < h; y++) {
+            let m = 255;
+            const y0 = Math.max(0, y - r), y1 = Math.min(h - 1, y + r);
+            for (let k = y0; k <= y1; k++) { const v = tmp[k * w + x]; if (v < m) m = v; }
+            d[(y * w + x) * 4 + 3] = m;
+        }
+    }
+}
+
+/**
+ * Colour decontamination on partially transparent pixels: pulls the RGB of
+ * soft edge pixels toward a nearby opaque pixel, removing the old background's
+ * fringe. Only touches edge pixels; alpha is not changed.
+ */
+function decontaminateEdges(d, w, h) {
+    // Wide enough to reach past a soft halo, which can be several pixels deep at full size.
+    const RADIUS = 6;
+    const original = new Uint8ClampedArray(d);
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            const a = d[i + 3];
+            if (a === 0 || a === 255) continue;
+            // Take the NEAREST fully opaque pixel: that is the subject's own colour.
+            // If none is in range, fall back to the strongest pixel nearby.
+            let nearD2 = Infinity, nearI = -1;
+            let bestA = 0, bestI = -1;
+            for (let dy = -RADIUS; dy <= RADIUS; dy++) {
+                const ny = y + dy;
+                if (ny < 0 || ny >= h) continue;
+                for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+                    const nx = x + dx;
+                    if (nx < 0 || nx >= w || (dx === 0 && dy === 0)) continue;
+                    const ni = (ny * w + nx) * 4;
+                    const na = original[ni + 3];
+                    if (na >= 250) {
+                        const d2 = dx * dx + dy * dy;
+                        if (d2 < nearD2) { nearD2 = d2; nearI = ni; }
+                    } else if (na > bestA) {
+                        bestA = na; bestI = ni;
+                    }
+                }
+            }
+            const src = nearI >= 0 ? nearI : bestI;
+            if (src < 0) continue;
+            const bestR = original[src], bestG = original[src + 1], bestB = original[src + 2];
+            const pull = 1 - a / 255;
+            d[i]     = original[i]     + (bestR - original[i])     * pull;
+            d[i + 1] = original[i + 1] + (bestG - original[i + 1]) * pull;
+            d[i + 2] = original[i + 2] + (bestB - original[i + 2]) * pull;
+        }
+    }
+}
+
+/** Returns a PNG data URL of the cutout at the original resolution, or null. */
+async function removeBackground(img) {
+    if (!(await loadBiRefNet())) return null;
+
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+
+    // 1. Original pixels — the colour source for the output.
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = w; origCanvas.height = h;
+    const octx = origCanvas.getContext('2d', { willReadFrequently: true });
+    octx.drawImage(img, 0, 0, w, h);
+    const origData = octx.getImageData(0, 0, w, h);
+
+    // 2. Model input: contrast-boosted copy (helps dark photos and same-colour edges).
+    const inCanvas = document.createElement('canvas');
+    inCanvas.width = w; inCanvas.height = h;
+    const ictx = inCanvas.getContext('2d', { willReadFrequently: true });
+    // Lift shadows and contrast before matting, so dark clothing on a dark or warm
+    // background isn't mistaken for background. Only the model input is changed.
+    // Only for dark photos: on bright photos the lift washes out cream or white clothing.
+    let lumSum = 0, lumN = 0;
+    for (let i = 0; i < origData.data.length; i += 40) {
+        lumSum += 0.2126 * origData.data[i] + 0.7152 * origData.data[i + 1] + 0.0722 * origData.data[i + 2];
+        lumN++;
+    }
+    const isDarkPhoto = lumN > 0 && lumSum / lumN < 110;
+    ictx.filter = isDarkPhoto ? 'brightness(1.35) contrast(1.1)' : 'none';
+    ictx.drawImage(img, 0, 0, w, h);
+    ictx.filter = 'none';
+    boostLowContrast(ictx, w, h);
+    const rawImage = await RawImage.fromURL(inCanvas.toDataURL('image/png'));
+
+    // 3. Run MODNet via the background-removal pipeline. It returns the image with the
+    // matte in its alpha channel, at the same size as the input.
+    let matted;
+    try {
+        [matted] = await model(rawImage);
+    } catch (err) {
+        console.error('MODNet inference failed:', err);
+        throw err;
+    }
+    const mw = matted.width, mh = matted.height, mch = matted.channels;
+    const mpx = matted.data;
+
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = mw; maskCanvas.height = mh;
+    const mctx = maskCanvas.getContext('2d');
+    const mimg = mctx.createImageData(mw, mh);
+    for (let i = 0; i < mw * mh; i++) {
+        // With 4 channels the matte is in alpha; otherwise use the single channel.
+        mimg.data[i * 4 + 3] = mch === 4 ? mpx[i * mch + 3] : mpx[i * mch];
+    }
+    mctx.putImageData(mimg, 0, 0);
+
+    // 4. Work size for refinement.
+    const scale = Math.min(1, WORK_MAX_SIDE / Math.max(w, h));
+    const ww = Math.max(1, Math.round(w * scale));
+    const wh = Math.max(1, Math.round(h * scale));
+    const N = ww * wh;
+
+    const wctx = (c) => { const x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; return x; };
+
+    // Mask at work size
+    const pCanvas = document.createElement('canvas');
+    pCanvas.width = ww; pCanvas.height = wh;
+    const pctx = wctx(pCanvas);
+    pctx.drawImage(maskCanvas, 0, 0, ww, wh);
+    const pPx = pctx.getImageData(0, 0, ww, wh).data;
+    const p = new Float32Array(N);
+    for (let i = 0; i < N; i++) p[i] = pPx[i * 4 + 3] / 255;
+
+    // Grey guide at work size, from the ORIGINAL pixels
+    const gCanvas = document.createElement('canvas');
+    gCanvas.width = ww; gCanvas.height = wh;
+    const gctx = wctx(gCanvas);
+    gctx.drawImage(origCanvas, 0, 0, ww, wh);
+    const gPx = gctx.getImageData(0, 0, ww, wh).data;
+    const guide = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+        guide[i] = (0.299 * gPx[i * 4] + 0.587 * gPx[i * 4 + 1] + 0.114 * gPx[i * 4 + 2]) / 255;
+    }
+
+    // 5. Edge refinement: guided filter on the mask.
+    const r = Math.max(2, Math.round(Math.min(ww, wh) / 60));
+    // The guided filter is skipped: on low-contrast photos (grey suit on grey backdrop)
+    // it smeared the outline and pulled background into the hair and head.
+    const refined = p;
+
+    // 6. Upsample refined mask to full resolution.
+    const qCanvas = document.createElement('canvas');
+    qCanvas.width = ww; qCanvas.height = wh;
+    const qctx = qCanvas.getContext('2d');
+    const qImg = qctx.createImageData(ww, wh);
+    for (let i = 0; i < N; i++) qImg.data[i * 4 + 3] = Math.round(refined[i] * 255);
+    qctx.putImageData(qImg, 0, 0);
+
+    const fullAlpha = document.createElement('canvas');
+    fullAlpha.width = w; fullAlpha.height = h;
+    const fctx = wctx(fullAlpha);
+    fctx.drawImage(qCanvas, 0, 0, w, h);
+    const aPx = fctx.getImageData(0, 0, w, h).data;
+
+    // 7. Compose: original RGB + refined alpha, then clean the edge colour.
+    // Steeper alpha curve: faint values (the soft halo around hair and shoulders)
+    // go fully transparent, the interior goes fully opaque, and only a thin band stays soft.
+    const d = new Uint8ClampedArray(origData.data);
+    // LO/HI: values below LO become fully transparent, above HI fully opaque.
+    // Raised from 30/200 to remove the faint halo that shows around hair and shoulders.
+    const LO = 60, HI = 220;
+    for (let i = 0; i < w * h; i++) {
+        const v = aPx[i * 4 + 3];
+        let t = (v - LO) / (HI - LO);
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        d[i * 4 + 3] = Math.round(t * t * (3 - 2 * t) * 255);
+    }
+    // Contract the cutout by 2 px at full size. This removes the thin light rim that
+    // the model leaves around hair and shoulders (tested on the blazer and teal photos).
+    // Scaled to photo size: 2 px on a large original, nothing on a small one.
+    const erodeR = Math.floor(Math.max(w, h) / 1000);
+    if (erodeR > 0) erodeAlpha(d, w, h, erodeR);
+    decontaminateEdges(d, w, h);
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = w; outCanvas.height = h;
+    outCanvas.getContext('2d').putImageData(new ImageData(d, w, h), 0, 0);
+    return outCanvas.toDataURL('image/png');
+}
+
+// Exposed to the main script
+window.__loadHDRemover = loadBiRefNet;
+window.__removeBackground = removeBackground;
+window.__isBiRefNetReady = () => !!model;
+window.__decontaminateEdges = decontaminateEdges;
+</script>
+
+<!-- Welcome panel — auto-shows on every visit by default -->
+<div id="welcome-overlay" class="welcome-overlay">
+    <div class="welcome-card">
+        <h2>Welcome to the Headshot Formatter</h2>
+        <p class="lede">Drop in a photo, and the tool automatically fits it to all seven KPMG photo guides — Resume, Bio, Email, PowerPoint, Print, Microsite, and LinkedIn.</p>
+        <div class="welcome-steps">
+            <div class="welcome-step-num">1</div>
+            <div class="welcome-step-text"><b>Upload your photo</b> — drag and drop, or click to browse.</div>
+            <div class="welcome-step-num">2</div>
+            <div class="welcome-step-text"><b>Background removes automatically.</b> The photo gets fitted into each KPMG format size.</div>
+            <div class="welcome-step-num">3</div>
+            <div class="welcome-step-text"><b>Fine-tune if needed</b> — refine the edges, adjust zoom, or drag the photo to reposition it.</div>
+            <div class="welcome-step-num">4</div>
+            <div class="welcome-step-text"><b>Enter subject name(s) and download</b> — each headshot is saved using the <b>last_first</b> naming standard.</div>
+        </div>
+        <div class="welcome-actions">
+            <label>
+                <input type="checkbox" id="welcome-autoshow-toggle" checked>
+                Show this on every visit
+            </label>
+            <button class="secondary" id="welcome-tour-btn">↪&nbsp; Start tour</button>
+            <button class="primary" id="welcome-dismiss-btn">Got it</button>
+        </div>
+    </div>
+</div>
+
+<!-- Help button — bottom-right -->
+<button id="show-help-btn" title="Show the welcome guide again">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 1a7 7 0 100 14A7 7 0 008 1zM7.25 11.5a.75.75 0 111.5 0 .75.75 0 01-1.5 0zm.5-2.5V8.5c0-.42.17-.78.6-1.04l.45-.28c.36-.23.45-.42.45-.7 0-.42-.33-.73-.75-.73-.5 0-.78.3-.78.85a.5.5 0 01-1 0c0-1.1.7-1.85 1.78-1.85 1.05 0 1.75.66 1.75 1.66 0 .6-.27 1.04-.86 1.4l-.4.24c-.22.13-.28.24-.28.5V9a.5.5 0 01-1 0z"/>
+    </svg>
+    Help
+</button>
+
+<!-- Tour DOM -->
+<div class="tour-backdrop" id="tour-backdrop">
+    <div class="tour-mask" id="tour-mask-top"></div>
+    <div class="tour-mask" id="tour-mask-bottom"></div>
+    <div class="tour-mask" id="tour-mask-left"></div>
+    <div class="tour-mask" id="tour-mask-right"></div>
+</div>
+<div class="tour-highlight" id="tour-highlight"></div>
+<div class="tour-tooltip" id="tour-tooltip">
+    <div class="step-counter" id="tour-step-counter">Step 1 of 9</div>
+    <h4 id="tour-title">Title</h4>
+    <p id="tour-text">Description</p>
+    <div class="tour-actions">
+        <button class="tour-skip" id="tour-skip">Skip tour</button>
+        <div class="tour-nav">
+            <button class="tour-back" id="tour-back">Back</button>
+            <button class="tour-next" id="tour-next">Next</button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    /* --- CONFIG & DOM --- */
+    const canvasesConfig = {
+        rect: { id: 'canvas-rect', title: '207x230 px', desc: 'Resumes', w: 207, h: 230, isCircle: false },
+        kpmgBioNew: { id: 'canvas-kpmgbionew', title: '240x320 px', desc: 'KPMG Bio card', w: 240, h: 320, isCircle: false },
+        email: { id: 'canvas-email', title: '105x126 px', desc: 'Email signature', w: 105, h: 126, isCircle: false },
+        ppt: { id: 'canvas-ppt', title: '440x520 px', desc: 'PPT (2.2x2.6" @ 200dpi)', w: 440, h: 520, isCircle: false },
+        print: { id: 'canvas-print', title: '900x1500 px', desc: 'Print (3x5" @ 300dpi)', w: 900, h: 1500, isCircle: false },
+        circ: { id: 'canvas-circ', title: '200x200 px', desc: 'Microsites, Apps', w: 200, h: 200, isCircle: true },
+        linkedin: { id: 'canvas-linkedin', title: '400x400 px', desc: 'LinkedIn', w: 400, h: 400, isCircle: true }
+    };
+
+    const guideConfig = {
+        rect:       { top: 10,  bottom: 50, lineWidth: 1.5 },
+        kpmgBioNew: { top: 10,  bottom: 50, lineWidth: 1.5 },
+        email:      { top: 10,  bottom: 26, lineWidth: 1.5 },
+        ppt:        { top: 60,  bottom: 120, lineWidth: 3.0 },
+        print:      { top: 100, bottom: 450, lineWidth: 7.0 },
+        circ:       { isCircle: true, lineWidth: 1.5 },
+        linkedin:   { isCircle: true, lineWidth: 1.5 }
+    };
+
+    let activeCanvas = {};
+
+    const dom = {
+        imageLoader: document.getElementById('imageLoader'),
+        dropZone: document.getElementById('drop-zone'),
+        gallery: document.getElementById('thumbnail-gallery'),
+        uploadStatus: document.getElementById('upload-status'),
+        scaleSlider: document.getElementById('scaleSlider'),
+        resetZoomBtn: document.getElementById('reset-zoom'),
+        backgroundSelect: document.getElementById('background-select'),
+        sizeSelect: document.getElementById('size-select'),
+        sharpenSlider: document.getElementById('sharpen-slider'),
+        edgeShiftSlider: document.getElementById('edge-shift-slider'),
+        edgeShiftValue: document.getElementById('edge-shift-value'),
+        dynamicPreviewContainer: document.getElementById('dynamic-preview-container'),
+        galleryProgressBadge: document.getElementById('gallery-progress-badge'),
+    };
+
+    let images = [];
+    let activeImageIndex = -1;
+    let modelsLoaded = false;
+    let hdRemoverReady = false;
+    let isDragging = false;
+    let lastPosition = { x: 0, y: 0 };
+    const baseZoomRange = { min: 0.5, max: 2 };
+
+    const thankYouPageSave = "https://experience.kpmg.com/headshot-formatter-thank-you-save";
+    const thankYouPageSaveAll = "https://experience.kpmg.com/headshot-formatter-thank-you-save-all";
+
+    /* --- INITIALIZATION --- */
+    async function initializeApp() {
+        dom.uploadStatus.textContent = "Loading AI models...";
+        dom.dropZone.style.pointerEvents = 'none';
+        disableImageControls(true);
+
+        // Load face detection (small, fast)
+        try {
+            await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/');
+            modelsLoaded = true;
+        } catch (error) {
+            console.error("Face AI Model Loading Error:", error);
+            dom.uploadStatus.textContent = 'Failed to load face models. Refresh to retry.';
+            dom.uploadStatus.style.color = 'red';
+        }
+
+        // Start loading the background model in the background. Uploads wait for it
+        // if it isn't finished yet; if it can't load, the MediaPipe fallback is used.
+        if (typeof window.__loadHDRemover === 'function') {
+            window.__loadHDRemover().then(ok => { hdRemoverReady = !!ok; }).catch(() => {});
+        }
+
+        if (modelsLoaded) {
+            dom.uploadStatus.textContent = "";
+            dom.dropZone.style.pointerEvents = 'auto';
+        }
+        disableImageControls(images.length === 0);
+
+        setupEventListeners();
+        renderActivePreview();
+        drawPlaceholder();
+    }
+
+    /* --- UI & EVENTS --- */
+    function disableImageControls(disabled) {
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const controls = [dom.scaleSlider, dom.resetZoomBtn, dom.sharpenSlider, dom.edgeShiftSlider, firstNameInput, lastNameInput];
+        controls.forEach(el => { if (el) el.disabled = disabled; });
+        checkDownloadReadiness();
+    }
+
+    function parseNameFromFilename(rawFileName) {
+        if (!rawFileName) return { firstName: '', lastName: '' };
+        // Remove common suffixes like dimensions, copy numbers, or headshot tags
+        let cleaned = rawFileName
+            .replace(/[_-]?\d{2,4}x\d{2,4}$/i, '')
+            .replace(/[_-]?(headshot|portrait|crop|edited|final|copy|v\d+)$/i, '')
+            .replace(/\s*\(\d+\)$/, '')
+            .trim();
+
+        // Ignore generic camera/placeholder names
+        if (!cleaned || /^(img|dsc|photo|image|pic|p|untitled|screenshot|whatsapp|signal|frame)[_-]?\d*$/i.test(cleaned) || /^\d+$/.test(cleaned)) {
+            return { firstName: '', lastName: '' };
+        }
+
+        // Case 1: "Last, First"
+        if (cleaned.includes(',')) {
+            const parts = cleaned.split(',').map(s => s.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+                return { lastName: parts[0], firstName: parts[1].split(/\s+/)[0] };
+            }
+        }
+
+        // Case 2: "last_first" (underscore separated)
+        if (cleaned.includes('_')) {
+            const parts = cleaned.split('_').map(s => s.trim()).filter(Boolean);
+            if (parts.length === 2) {
+                return { lastName: parts[0], firstName: parts[1] };
+            } else if (parts.length > 2) {
+                return { lastName: parts[0], firstName: parts.slice(1).join(' ') };
+            }
+        }
+
+        // Case 3: "First Last" (space separated)
+        if (cleaned.includes(' ')) {
+            const parts = cleaned.split(/\s+/).map(s => s.trim()).filter(Boolean);
+            if (parts.length >= 2) {
+                return { firstName: parts[0], lastName: parts[parts.length - 1] };
+            }
+        }
+
+        return { firstName: '', lastName: '' };
+    }
+
+    function sanitizeNamePart(str) {
+        return (str || '').trim().replace(/[^a-zA-Z0-9'-]/g, '');
+    }
+
+    function isStateNamed(state) {
+        return !!(state && sanitizeNamePart(state.firstName) && sanitizeNamePart(state.lastName));
+    }
+
+    function getFormattedBaseName(state) {
+        const last = sanitizeNamePart(state?.lastName) || 'last';
+        const first = sanitizeNamePart(state?.firstName) || 'first';
+        return `${last}_${first}`;
+    }
+
+    // Updates the batch navigation (1 of N). The on-screen filename preview was removed.
+    function updateFilenamePreview() {
+        const batchNav = document.getElementById('batch-nav');
+        const batchCounter = document.getElementById('batch-counter');
+        const prevBtn = document.getElementById('prev-img-btn');
+        const nextBtn = document.getElementById('next-img-btn');
+
+        if (batchNav && batchCounter) {
+            if (images.length > 1 && activeImageIndex > -1) {
+                batchNav.classList.add('visible');
+                batchCounter.textContent = `${activeImageIndex + 1} of ${images.length}`;
+                if (prevBtn) prevBtn.disabled = activeImageIndex === 0;
+                if (nextBtn) nextBtn.disabled = activeImageIndex === images.length - 1;
+            } else {
+                batchNav.classList.remove('visible');
+            }
+        }
+    }
+
+    function updateGalleryCaptions() {
+        const items = dom.gallery.querySelectorAll('.thumb-item');
+        let namedCount = 0;
+        images.forEach((state, idx) => {
+            const valid = isStateNamed(state);
+            if (valid) namedCount++;
+            const item = items[idx];
+            if (!item) return;
+            item.classList.toggle('missing-name', !valid);
+            const dot = item.querySelector('.thumb-status-dot');
+            if (dot) {
+                dot.className = `thumb-status-dot ${valid ? 'valid' : 'invalid'}`;
+                dot.innerHTML = valid ? '<i class="fas fa-check"></i>' : '!';
+                dot.title = valid ? `Named: ${getFormattedBaseName(state)}` : 'Missing First or Last Name';
+            }
+            const cap = item.querySelector('.thumb-caption');
+            if (cap) {
+                if (valid) {
+                    cap.textContent = getFormattedBaseName(state);
+                    cap.classList.remove('unnamed');
+                } else {
+                    cap.textContent = 'Name required';
+                    cap.classList.add('unnamed');
+                }
+            }
+        });
+
+        if (dom.galleryProgressBadge) {
+            if (images.length === 0) {
+                dom.galleryProgressBadge.style.display = 'none';
+            } else {
+                dom.galleryProgressBadge.style.display = 'inline-block';
+                dom.galleryProgressBadge.textContent = `${namedCount} / ${images.length} named`;
+                dom.galleryProgressBadge.classList.toggle('all-named', namedCount === images.length);
+                dom.galleryProgressBadge.classList.toggle('needs-names', namedCount < images.length);
+            }
+        }
+    }
+
+    function showNameError(msg, highlightActiveInputs = true) {
+        const errEl = document.getElementById('name-error-message');
+        const firstEl = document.getElementById('firstName');
+        const lastEl = document.getElementById('lastName');
+        if (errEl) {
+            errEl.textContent = msg || 'First and last name are required';
+            errEl.style.display = 'block';
+        }
+        if (highlightActiveInputs) {
+            if (firstEl && !sanitizeNamePart(firstEl.value)) {
+                firstEl.classList.remove('input-error');
+                void firstEl.offsetWidth;
+                firstEl.classList.add('input-error');
+            }
+            if (lastEl && !sanitizeNamePart(lastEl.value)) {
+                lastEl.classList.remove('input-error');
+                void lastEl.offsetWidth;
+                lastEl.classList.add('input-error');
+            }
+        }
+    }
+
+    function hideNameError() {
+        const errEl = document.getElementById('name-error-message');
+        const firstEl = document.getElementById('firstName');
+        const lastEl = document.getElementById('lastName');
+        if (errEl) errEl.style.display = 'none';
+        if (firstEl) firstEl.classList.remove('input-error');
+        if (lastEl) lastEl.classList.remove('input-error');
+    }
+
+    function checkDownloadReadiness() {
+        const size = dom.sizeSelect.value;
+        const singleBtn = document.getElementById(`download-${size}-single`);
+        const allBtn = document.getElementById(`download-${size}-all`);
+        const hasImages = images.length > 0 && activeImageIndex > -1;
+        const activeNamed = hasImages && isStateNamed(images[activeImageIndex]);
+        const allNamed = hasImages && images.every(isStateNamed);
+
+        if (singleBtn) singleBtn.disabled = !activeNamed;
+        if (allBtn) allBtn.disabled = !allNamed;
+        updateFilenamePreview();
+        updateGalleryCaptions();
+    }
+
+    function setupEventListeners() {
+        dom.dropZone.addEventListener('dragover', e => { e.preventDefault(); dom.dropZone.classList.add('dragover'); });
+        dom.dropZone.addEventListener('dragleave', () => dom.dropZone.classList.remove('dragover'));
+        dom.dropZone.addEventListener('drop', e => { e.preventDefault(); dom.dropZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+        dom.dropZone.addEventListener('click', () => dom.imageLoader.click());
+        dom.imageLoader.addEventListener('change', e => handleFiles(e.target.files));
+
+        dom.scaleSlider.addEventListener('input', () => {
+            if (activeImageIndex > -1) images[activeImageIndex].sliderValue = parseInt(dom.scaleSlider.value, 10);
+            handleZoom();
+        });
+        dom.resetZoomBtn.addEventListener('click', () => {
+            if (activeImageIndex < 0) return;
+            // Reset all per-image adjustments back to defaults
+            dom.sharpenSlider.value = 0;
+            dom.edgeShiftSlider.value = 0;
+            dom.edgeShiftValue.textContent = '0';
+            const state = images[activeImageIndex];
+            state.sliderValue = 50;
+            state.edgeShift = 0;
+            // Recalculate auto position (this resets zoom/pan and sets slider to 50)
+            calculateAutoPosition(state, canvasesConfig[dom.sizeSelect.value]);
+            // Reset the cutout to its clean baseline (clears any prior edge shift)
+            if (state.baselineImageData) {
+                const c = document.createElement('canvas');
+                c.width = state.baselineW; c.height = state.baselineH;
+                c.getContext('2d').putImageData(state.baselineImageData, 0, 0);
+                state.processed = new Image();
+                state.processed.onload = () => drawAllCanvases();
+                state.processed.src = c.toDataURL('image/png');
+            } else {
+                drawAllCanvases();
+            }
+        });
+
+        dom.dynamicPreviewContainer.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', endDrag);
+        dom.dynamicPreviewContainer.addEventListener('mouseleave', endDrag);
+
+        dom.backgroundSelect.addEventListener('change', () => drawAllCanvases());
+        dom.sizeSelect.addEventListener('change', () => {
+            // Re-auto-position every image for the new canvas dimensions and
+            // reset their saved zoom — saved sliderValue would apply to an
+            // outdated initialScale otherwise.
+            const cfg = canvasesConfig[dom.sizeSelect.value];
+            images.forEach(state => {
+                calculateAutoPosition(state, cfg);
+                state.sliderValue = 50;
+            });
+            dom.scaleSlider.value = 50;
+            renderActivePreview();
+            drawAllCanvases();
+        });
+        dom.sharpenSlider.addEventListener('input', () => drawAllCanvases());
+        // Edge refine — debounced re-render of the current cutout
+        let edgeShiftTimer = null;
+        dom.edgeShiftSlider.addEventListener('input', () => {
+            const v = parseInt(dom.edgeShiftSlider.value, 10);
+            dom.edgeShiftValue.textContent = v === 0 ? '0' : (v > 0 ? `+${v}` : `${v}`);
+            if (activeImageIndex > -1) images[activeImageIndex].edgeShift = v;
+            // Debounce — running the morphological op on every pixel of slider
+            // movement is too slow for big images. 60ms feels live but doesn't choke.
+            clearTimeout(edgeShiftTimer);
+            edgeShiftTimer = setTimeout(() => applyEdgeShiftToActive(), 60);
+        });
+    }
+
+    function renderActivePreview() {
+        const size = dom.sizeSelect.value;
+        const config = canvasesConfig[size];
+        activeCanvas = { el: document.createElement('canvas'), ...config };
+        activeCanvas.ctx = activeCanvas.el.getContext('2d');
+        activeCanvas.el.id = config.id;
+        activeCanvas.el.width = Math.round(config.w);
+        activeCanvas.el.height = Math.round(config.h);
+
+        const currentState = activeImageIndex > -1 ? images[activeImageIndex] : null;
+        const currentFirst = currentState ? (currentState.firstName || '') : '';
+        const currentLast = currentState ? (currentState.lastName || '') : '';
+
+        const previewHTML = `
+            <div class="preview-media-holder">
+                <div class="canvas-wrapper ${config.isCircle ? 'circle' : ''}">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+            <div class="preview-info">
+                <h4>${config.title}</h4><p>${config.desc}</p>
+            </div>
+            <div class="export-panel" id="export-panel">
+                <div class="export-panel-header">
+                    <div class="batch-nav" id="batch-nav">
+                        <button type="button" id="prev-img-btn" title="Previous headshot (Shift+Enter)" aria-label="Previous headshot"><i class="fas fa-chevron-left"></i></button>
+                        <span id="batch-counter">1 of 1</span>
+                        <button type="button" id="next-img-btn" title="Next headshot (Enter)" aria-label="Next headshot"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div class="name-inputs">
+                    <input type="text" id="firstName" placeholder="First Name" aria-label="First name" value="${currentFirst.replace(/"/g, '&quot;')}" autocomplete="off">
+                    <input type="text" id="lastName" placeholder="Last Name" aria-label="Last name" value="${currentLast.replace(/"/g, '&quot;')}" autocomplete="off">
+                </div>
+                <p id="name-error-message">First and last name are required</p>
+                <div class="actions-row-wrapper" id="actions-row-wrapper">
+                    <div class="actions-row">
+                        <button id="download-${size}-single" class="btn-action btn-primary" disabled><i class="fas fa-download"></i> Save</button>
+                        <button id="download-${size}-all" class="btn-action btn-secondary" disabled><i class="fas fa-file-archive"></i> Save All</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        dom.dynamicPreviewContainer.innerHTML = previewHTML;
+
+        const wrapper = dom.dynamicPreviewContainer.querySelector('.canvas-wrapper');
+        wrapper.style.aspectRatio = `${config.w} / ${config.h}`;
+        wrapper.prepend(activeCanvas.el);
+
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        const prevImgBtn = document.getElementById('prev-img-btn');
+        const nextImgBtn = document.getElementById('next-img-btn');
+        const actionsRowWrapper = document.getElementById('actions-row-wrapper');
+        const singleBtn = document.getElementById(`download-${size}-single`);
+        const allBtn = document.getElementById(`download-${size}-all`);
+
+        const handleNameInput = () => {
+            if (activeImageIndex < 0 || !images[activeImageIndex]) return;
+            images[activeImageIndex].firstName = firstNameInput.value;
+            images[activeImageIndex].lastName = lastNameInput.value;
+            if (isStateNamed(images[activeImageIndex])) {
+                hideNameError();
+            }
+            checkDownloadReadiness();
+        };
+
+        firstNameInput.addEventListener('input', handleNameInput);
+        lastNameInput.addEventListener('input', handleNameInput);
+
+        // Allow pressing Enter in First/Last Name to jump to next field or next image in batch
+        firstNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                lastNameInput.focus();
+                lastNameInput.select();
+            }
+        });
+        lastNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && images.length > 1) {
+                e.preventDefault();
+                const nextIdx = e.shiftKey
+                    ? Math.max(0, activeImageIndex - 1)
+                    : (activeImageIndex + 1) % images.length;
+                switchActiveImage(nextIdx);
+                const newFirst = document.getElementById('firstName');
+                if (newFirst) { newFirst.focus(); newFirst.select(); }
+            }
+        });
+
+        if (prevImgBtn) {
+            prevImgBtn.addEventListener('click', () => {
+                if (activeImageIndex > 0) switchActiveImage(activeImageIndex - 1);
+            });
+        }
+        if (nextImgBtn) {
+            nextImgBtn.addEventListener('click', () => {
+                if (activeImageIndex < images.length - 1) switchActiveImage(activeImageIndex + 1);
+            });
+        }
+
+        // Handle clicks on wrapper when Save / Save All buttons are disabled
+        actionsRowWrapper.addEventListener('click', (e) => {
+            if (images.length === 0 || activeImageIndex < 0) return;
+            const rect = actionsRowWrapper.getBoundingClientRect();
+            const clickedRightHalf = (e.clientX - rect.left) > (rect.width / 2);
+
+            if (!clickedRightHalf && singleBtn.disabled) {
+                showNameError('First and last name are required to save this headshot', true);
+            } else if (clickedRightHalf && allBtn.disabled) {
+                const firstMissingIdx = images.findIndex(st => !isStateNamed(st));
+                if (firstMissingIdx > -1) {
+                    const missingCount = images.filter(st => !isStateNamed(st)).length;
+                    if (firstMissingIdx !== activeImageIndex) {
+                        switchActiveImage(firstMissingIdx);
+                    }
+                    showNameError(
+                        images.length > 1
+                            ? `All headshots need a first & last name before Save All (${missingCount} remaining)`
+                            : 'First and last name are required',
+                        true
+                    );
+                }
+            }
+        });
+
+        singleBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!singleBtn.disabled) {
+                await download(true, size);
+                window.open(thankYouPageSave, '_blank');
+            }
+        });
+        allBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!allBtn.disabled) {
+                await download(false, size);
+                window.open(thankYouPageSaveAll, '_blank');
+            }
+        });
+
+        disableImageControls(images.length === 0);
+    }
+
+    /* --- PROCESSING LOGIC --- */
+    async function handleFiles(files) {
+        if (!files.length || !modelsLoaded) return;
+        images = []; dom.gallery.innerHTML = ''; activeImageIndex = -1;
+        const firstEl = document.getElementById('firstName');
+        const lastEl = document.getElementById('lastName');
+        if (firstEl) firstEl.value = '';
+        if (lastEl) lastEl.value = '';
+        hideNameError();
+
+        const currentSpinner = dom.dynamicPreviewContainer.querySelector('.spinner');
+        if (currentSpinner) currentSpinner.style.display = 'block';
+        drawPlaceholder(true);
+        dom.dropZone.style.pointerEvents = 'none';
+        disableImageControls(true);
+
+        const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+        if (!imageFiles.length) {
+            dom.uploadStatus.textContent = "Invalid file type.";
+            if (currentSpinner) currentSpinner.style.display = 'none';
+            dom.dropZone.style.pointerEvents = 'auto';
+            drawPlaceholder(); return;
+        }
+
+        // First use downloads the model (~180 MB, then cached by the browser).
+        if (!hdRemoverReady && typeof window.__loadHDRemover === 'function') {
+            dom.uploadStatus.textContent = "Loading background model (first use only, may take a minute)...";
+            hdRemoverReady = !!(await window.__loadHDRemover());
+        }
+        dom.uploadStatus.textContent = "Processing files...";
+
+        let processedImages = [];
+        for (const [i, file] of imageFiles.entries()) {
+            dom.uploadStatus.textContent = `Processing ${i + 1}/${imageFiles.length}...`;
+            const result = await processFile(file);
+            if (result) processedImages.push(result);
+        }
+        images = processedImages;
+        images.forEach((state, index) => dom.gallery.appendChild(createThumbnail(state.processed.src, index)));
+
+        if (images.length > 0) {
+            switchActiveImage(0);
+            dom.uploadStatus.textContent = `${images.length} image(s) loaded.`;
+        } else {
+            dom.uploadStatus.textContent = "Failed to process any images.";
+            drawPlaceholder();
+        }
+
+        if (currentSpinner) currentSpinner.style.display = 'none';
+        dom.dropZone.style.pointerEvents = 'auto';
+        disableImageControls(images.length === 0);
+    }
+
+    /** Returns the image scaled so its longest side is at most maxSide. */
+    function downscaleImage(img, maxSide) {
+        return new Promise((resolve) => {
+            const w = img.naturalWidth || img.width;
+            const h = img.naturalHeight || img.height;
+            const s = Math.min(1, maxSide / Math.max(w, h));
+            if (s >= 1) return resolve(img);
+            const c = document.createElement('canvas');
+            c.width = Math.round(w * s);
+            c.height = Math.round(h * s);
+            const ctx = c.getContext('2d');
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, c.width, c.height);
+            const out = new Image();
+            out.onload = () => resolve(out);
+            out.src = c.toDataURL('image/png');
+        });
+    }
+
+    function processFile(file) {
+        return new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = event => {
+                let img = new Image(); img.src = event.target.result;
+                img.onload = async () => {
+                    // Shrink very large photos first. Output is at most 900x1500, and full-size
+                    // photos (40+ megapixels) exhaust the browser's memory during processing.
+                    img = await downscaleImage(img, 2048);
+                    const rawBaseName = file.name.replace(/\.[^/.]+$/, "");
+                    const parsedName = parseNameFromFilename(rawBaseName);
+                    const newState = {
+                        original: img,
+                        processed: new Image(),
+                        faceResult: null,
+                        fileName: rawBaseName,
+                        firstName: parsedName.firstName,
+                        lastName: parsedName.lastName
+                    };
+                    let removalSucceeded = false;
+
+                    // Path 1: BiRefNet_lite (MIT). Model mask -> guided-filter edge
+                    // refinement at full resolution -> original colours.
+                    if (hdRemoverReady && typeof window.__removeBackground === 'function') {
+                        try {
+                            const dataURL = await window.__removeBackground(img);
+                            if (dataURL) {
+                                newState.processed.src = dataURL;
+                                await new Promise((res, rej) => { newState.processed.onload = res; newState.processed.onerror = rej; });
+                                removalSucceeded = true;
+                            }
+                        } catch (err) {
+                            console.warn('BiRefNet removal failed for this image, falling back:', err);
+                        }
+                    }
+
+                    // Path 2: Fallback to MediaPipe SelfieSegmentation
+                    if (!removalSucceeded) {
+                        try {
+                            const segmentation = new SelfieSegmentation({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}` });
+                            segmentation.setOptions({ modelSelection: 1 });
+                            const bgRemovedImage = await processWithSelfieSegmentation(segmentation, img);
+                            // Run the same refinement on the fallback output
+                            const refinedDataURL = await refineExistingCutout(bgRemovedImage);
+                            newState.processed.src = refinedDataURL;
+                            await new Promise(res => newState.processed.onload = res);
+                            await segmentation.close();
+                            removalSucceeded = true;
+                        } catch (err) {
+                            console.warn('MediaPipe fallback failed, using original image:', err);
+                            newState.processed.src = img.src;
+                            await new Promise(res => newState.processed.onload = res);
+                        }
+                    }
+
+                    // Cache the baseline ImageData so edge-shift slider can be
+                    // applied quickly later without re-running the full pipeline.
+                    if (removalSucceeded || newState.processed.src) {
+                        await cacheBaselineImageData(newState);
+                    }
+
+                    await detectFaceAndStore(newState);
+                    calculateAutoPosition(newState, canvasesConfig[dom.sizeSelect.value]);
+                    // Per-image UI state — preserved across thumbnail switches
+                    newState.sliderValue = 50;
+                    newState.edgeShift = 0;
+                    resolve(newState);
+                };
+                img.onerror = () => resolve(null);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    /**
+     * Mask refinement for the MediaPipe fallback path, in place.
+     * Alpha is thresholded with a smoothstep, then edge colours are decontaminated.
+     */
+    function refineImageData(imgData, w, h) {
+        const d = imgData.data;
+        const len = d.length;
+
+        // --- Step 1: alpha threshold ---
+        const LO = 25, HI = 230;
+        for (let i = 3; i < len; i += 4) {
+            const a = d[i];
+            if (a <= LO) d[i] = 0;
+            else if (a >= HI) d[i] = 255;
+            else {
+                const t = (a - LO) / (HI - LO);
+                const s = t * t * (3 - 2 * t);
+                d[i] = (s * 255) | 0;
+            }
+        }
+
+        // --- Step 2: colour decontamination ---
+        // Defined in the module script, which exposes it on window before this runs.
+        window.__decontaminateEdges(d, w, h);
+    }
+
+    /**
+     * Refine an already-cut-out image (used for the MediaPipe fallback path).
+     */
+    function refineExistingCutout(cutoutImg) {
+        return new Promise((resolve) => {
+            const c = document.createElement('canvas');
+            c.width = cutoutImg.width; c.height = cutoutImg.height;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(cutoutImg, 0, 0);
+            const data = ctx.getImageData(0, 0, c.width, c.height);
+            refineImageData(data, c.width, c.height);
+            ctx.putImageData(data, 0, 0);
+            resolve(c.toDataURL('image/png'));
+        });
+    }
+
+    /**
+     * Cache the post-refinement cutout as raw ImageData on the state so the
+     * edge-shift slider can re-apply shifts cheaply without re-running the
+     * segmentation pipeline.
+     */
+    function cacheBaselineImageData(state) {
+        return new Promise((resolve) => {
+            if (!state.processed.complete || !state.processed.naturalWidth) {
+                state.processed.addEventListener('load', () => cacheBaselineImageData(state).then(resolve), { once: true });
+                return;
+            }
+            const w = state.processed.naturalWidth;
+            const h = state.processed.naturalHeight;
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(state.processed, 0, 0);
+            state.baselineImageData = ctx.getImageData(0, 0, w, h);
+            state.baselineW = w;
+            state.baselineH = h;
+            resolve();
+        });
+    }
+
+    /**
+     * Apply the current edge-shift slider value to the active image.
+     *
+     * Positive values DILATE (expand) the alpha mask; negative values ERODE
+     * (contract) it. Both operate purely on the alpha channel — RGB is
+     * untouched, so the cutout's colours stay perfect.
+     */
+    function applyEdgeShiftToActive() {
+        if (activeImageIndex < 0) return;
+        const state = images[activeImageIndex];
+        if (!state.baselineImageData) return;
+
+        const shift = parseInt(dom.edgeShiftSlider.value, 10);
+        const w = state.baselineW;
+        const h = state.baselineH;
+
+        // Always start from the clean baseline so shifts don't compound
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+
+        if (shift === 0) {
+            ctx.putImageData(state.baselineImageData, 0, 0);
+        } else {
+            const shifted = morphAlpha(state.baselineImageData, w, h, shift);
+            ctx.putImageData(shifted, 0, 0);
+        }
+
+        // Update the processed image with the shifted version
+        const newSrc = c.toDataURL('image/png');
+        state.processed = new Image();
+        state.processed.onload = () => drawAllCanvases();
+        state.processed.src = newSrc;
+    }
+
+    /**
+     * Morphological alpha-channel shift.
+     *
+     * Positive radius dilates (extends mask outward) by sampling the MAX alpha
+     * in a square neighbourhood of that radius.
+     * Negative radius erodes (pulls mask inward) by sampling the MIN alpha
+     * in a square neighbourhood of |radius|.
+     *
+     * We use a separable two-pass approach (horizontal then vertical) which
+     * is O(w*h*r) instead of O(w*h*r²) — fast enough to run live on
+     * 4-megapixel headshots within the slider debounce window.
+     */
+    function morphAlpha(srcImageData, w, h, shift) {
+        const radius = Math.abs(shift);
+        const isDilate = shift > 0;
+        const src = srcImageData.data;
+        const out = new ImageData(w, h);
+        const outData = out.data;
+
+        // Copy RGB unchanged
+        for (let i = 0; i < src.length; i += 4) {
+            outData[i]     = src[i];
+            outData[i + 1] = src[i + 1];
+            outData[i + 2] = src[i + 2];
+        }
+
+        // Pass 1: horizontal, write to intermediate alpha array
+        const tempAlpha = new Uint8ClampedArray(w * h);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                let bestA = isDilate ? 0 : 255;
+                const x0 = Math.max(0, x - radius);
+                const x1 = Math.min(w - 1, x + radius);
+                for (let xx = x0; xx <= x1; xx++) {
+                    const a = src[(y * w + xx) * 4 + 3];
+                    if (isDilate) { if (a > bestA) bestA = a; }
+                    else          { if (a < bestA) bestA = a; }
+                }
+                tempAlpha[y * w + x] = bestA;
+            }
+        }
+
+        // Pass 2: vertical, write final alpha
+        for (let x = 0; x < w; x++) {
+            for (let y = 0; y < h; y++) {
+                let bestA = isDilate ? 0 : 255;
+                const y0 = Math.max(0, y - radius);
+                const y1 = Math.min(h - 1, y + radius);
+                for (let yy = y0; yy <= y1; yy++) {
+                    const a = tempAlpha[yy * w + x];
+                    if (isDilate) { if (a > bestA) bestA = a; }
+                    else          { if (a < bestA) bestA = a; }
+                }
+                outData[(y * w + x) * 4 + 3] = bestA;
+            }
+        }
+
+        return out;
+    }
+
+    function processWithSelfieSegmentation(segmentationInstance, image) {
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject("Segmentation timeout"), 10000);
+            segmentationInstance.onResults(results => {
+                clearTimeout(timeout);
+                if (!results.segmentationMask) return reject("No segmentation mask");
+                const c = document.createElement('canvas'); c.width = image.width; c.height = image.height;
+                const ctx = c.getContext('2d'); ctx.drawImage(image, 0, 0);
+                ctx.globalCompositeOperation = 'destination-in'; ctx.drawImage(results.segmentationMask, 0, 0, c.width, c.height);
+                const res = new Image(); res.src = c.toDataURL(); res.onload = () => resolve(res); res.onerror = reject;
+            });
+            segmentationInstance.send({ image });
+        });
+    }
+
+    async function detectFaceAndStore(state) {
+        try {
+            const detections = await faceapi.detectAllFaces(state.processed, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+            if (detections.length > 0) state.faceResult = detections[0];
+        } catch (error) { state.faceResult = null; }
+    }
+
+    function calculateAutoPosition(state, canvasConfig) {
+        const size = dom.sizeSelect.value;
+        const guides = guideConfig[size];
+
+        if (state.faceResult && !guides.isCircle) {
+            const { detection, landmarks } = state.faceResult;
+            const chin = landmarks.getJawOutline()[8];
+            const headTopY = detection.box.y - (detection.box.height * 0.3);
+            const headH = chin.y - headTopY;
+
+            const scale = (canvasConfig.h - (guides.top + guides.bottom)) / headH;
+            state.initialScale = state.scale = scale;
+
+            state.offsetX = (canvasConfig.w / 2) - ((detection.box.x + (detection.box.width / 2)) * scale);
+            state.offsetY = (canvasConfig.h - guides.bottom) - (chin.y * scale);
+        } else {
+            state.initialScale = state.scale = Math.min(canvasConfig.w / state.processed.width, canvasConfig.h / state.processed.height);
+            state.offsetX = (canvasConfig.w - state.processed.width * state.scale) / 2;
+            state.offsetY = (canvasConfig.h - state.processed.height * state.scale) / 2;
+        }
+        dom.scaleSlider.value = 50;
+    }
+
+    function createThumbnail(src, index) {
+        const state = images[index];
+        const valid = isStateNamed(state);
+        const item = document.createElement('div');
+        item.className = `thumb-item ${valid ? '' : 'missing-name'}`;
+        item.onclick = () => switchActiveImage(index);
+
+        const imgWrap = document.createElement('div');
+        imgWrap.className = 'thumb-img-wrap';
+        const thumb = new Image();
+        thumb.src = src;
+        imgWrap.appendChild(thumb);
+
+        const dot = document.createElement('div');
+        dot.className = `thumb-status-dot ${valid ? 'valid' : 'invalid'}`;
+        dot.innerHTML = valid ? '<i class="fas fa-check"></i>' : '!';
+        dot.title = valid ? `Named: ${getFormattedBaseName(state)}` : 'Missing First or Last Name';
+        imgWrap.appendChild(dot);
+
+        const caption = document.createElement('div');
+        caption.className = `thumb-caption ${valid ? '' : 'unnamed'}`;
+        caption.textContent = valid ? getFormattedBaseName(state) : 'Name required';
+
+        item.appendChild(imgWrap);
+        item.appendChild(caption);
+        return item;
+    }
+
+    function switchActiveImage(index) {
+        if (activeImageIndex === index) return;
+        activeImageIndex = index;
+        dom.gallery.querySelectorAll('.thumb-item').forEach((item, idx) => item.classList.toggle('active', idx == index));
+
+        const state = images[activeImageIndex];
+
+        // Restore the UI controls to this image's saved state
+        dom.scaleSlider.value = state.sliderValue != null ? state.sliderValue : 50;
+        const eshift = state.edgeShift != null ? state.edgeShift : 0;
+        dom.edgeShiftSlider.value = eshift;
+        dom.edgeShiftValue.textContent = eshift === 0 ? '0' : (eshift > 0 ? `+${eshift}` : `${eshift}`);
+
+        // Restore per-image First & Last Name fields
+        const firstNameInput = document.getElementById('firstName');
+        const lastNameInput = document.getElementById('lastName');
+        if (firstNameInput) firstNameInput.value = state.firstName || '';
+        if (lastNameInput) lastNameInput.value = state.lastName || '';
+        hideNameError();
+
+        // Rebuild the processed image from the cached baseline with this
+        // image's edge shift applied. scale/offsetX/offsetY persist on the
+        // state object across switches — do NOT recalculate auto-position.
+        if (state.baselineImageData) {
+            const c = document.createElement('canvas');
+            c.width = state.baselineW; c.height = state.baselineH;
+            const ctx = c.getContext('2d');
+            if (eshift === 0) {
+                ctx.putImageData(state.baselineImageData, 0, 0);
+            } else {
+                ctx.putImageData(morphAlpha(state.baselineImageData, state.baselineW, state.baselineH, eshift), 0, 0);
+            }
+            state.processed = new Image();
+            state.processed.onload = () => drawAllCanvases();
+            state.processed.src = c.toDataURL('image/png');
+        } else {
+            drawAllCanvases();
+        }
+        disableImageControls(false);
+    }
+
+    function drawGuides(ctx, w, h, isCircle, size) {
+        const guides = guideConfig[size];
+        if (!guides) return;
+
+        ctx.save();
+        ctx.strokeStyle = '#00FFFF';
+        ctx.lineWidth = guides.lineWidth || 1.5;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+
+        if (guides.isCircle) {
+            ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+            ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2);
+        } else {
+            ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+            ctx.moveTo(0, guides.top); ctx.lineTo(w, guides.top);
+            ctx.moveTo(0, h - guides.bottom); ctx.lineTo(w, h - guides.bottom);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    function drawAllCanvases() {
+        if (!activeCanvas.el) return;
+        const { ctx, w, h, isCircle } = activeCanvas;
+
+        const wrapper = activeCanvas.el.closest('.canvas-wrapper');
+        const useTransparent = dom.backgroundSelect.value === 'transparent';
+        if (wrapper) {
+            wrapper.classList.toggle('transparent-bg', useTransparent);
+            wrapper.classList.toggle('gradient-bg', !useTransparent);
+        }
+
+        ctx.clearRect(0, 0, w, h);
+        if (activeImageIndex < 0) { drawPlaceholder(); return; }
+
+        if (!useTransparent) {
+            const gradVar = getComputedStyle(document.documentElement);
+            const g = ctx.createLinearGradient(0, 0, 0, h);
+            g.addColorStop(0, gradVar.getPropertyValue('--grad-top').trim());
+            g.addColorStop(1, gradVar.getPropertyValue('--grad-btm').trim());
+            ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        }
+
+        const state = images[activeImageIndex];
+        const sharpenAmount = dom.sharpenSlider.value / 100;
+
+        if (sharpenAmount > 0) {
+            // Sharpen the subject in isolation, THEN composite onto the gradient.
+            // Sharpening the composited gradient produces a black row at the
+            // pure-white end because the unsharp formula overshoots into negative
+            // values, which clamp to zero. Isolating the subject avoids this.
+            const subjectCanvas = document.createElement('canvas');
+            subjectCanvas.width = w;
+            subjectCanvas.height = h;
+            const sctx = subjectCanvas.getContext('2d');
+            sctx.drawImage(state.processed, state.offsetX, state.offsetY, state.processed.width * state.scale, state.processed.height * state.scale);
+            applySharpen(sctx, w, h, sharpenAmount);
+            ctx.drawImage(subjectCanvas, 0, 0);
+        } else {
+            ctx.drawImage(state.processed, state.offsetX, state.offsetY, state.processed.width * state.scale, state.processed.height * state.scale);
+        }
+
+        drawGuides(ctx, w, h, isCircle, dom.sizeSelect.value);
+    }
+
+    function drawPlaceholder(clearOnly = false) {
+        if (!activeCanvas.el) return;
+        const { ctx, w, h, isCircle } = activeCanvas;
+        const wrapper = activeCanvas.el.closest('.canvas-wrapper');
+        const useTransparent = dom.backgroundSelect.value === 'transparent';
+        if (wrapper) {
+            wrapper.classList.toggle('transparent-bg', useTransparent);
+            wrapper.classList.toggle('gradient-bg', !useTransparent);
+        }
+        ctx.clearRect(0, 0, w, h);
+
+        if (!clearOnly) {
+             if (!useTransparent) {
+                const gradVar = getComputedStyle(document.documentElement);
+                const g = ctx.createLinearGradient(0, 0, 0, h);
+                g.addColorStop(0, gradVar.getPropertyValue('--grad-top').trim());
+                g.addColorStop(1, gradVar.getPropertyValue('--grad-btm').trim());
+                ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+            }
+            ctx.font = "16px 'Open Sans'";
+            ctx.fillStyle = "#94a3b8";
+            ctx.textAlign = "center";
+            ctx.fillText("Preview", w/2, h/2);
+            drawGuides(ctx, w, h, isCircle, dom.sizeSelect.value);
+        }
+    }
+
+    function handleZoom() {
+        if (activeImageIndex < 0) return;
+        const state = images[activeImageIndex];
+        const oldScale = state.scale;
+        const sliderValue = dom.scaleSlider.value / 100;
+        const zoomMult = sliderValue < 0.5 ? baseZoomRange.min + (sliderValue * 2) * (1 - baseZoomRange.min) : 1 + (sliderValue - 0.5) * 2 * (baseZoomRange.max - 1);
+        state.scale = state.initialScale * zoomMult;
+
+        const size = dom.sizeSelect.value;
+        const guides = guideConfig[size];
+        let zoomOriginY = activeCanvas.h / 2;
+        if (guides && !guides.isCircle) {
+            zoomOriginY = activeCanvas.h - guides.bottom;
+        }
+
+        state.offsetX = (activeCanvas.w / 2) - (((activeCanvas.w / 2) - state.offsetX) / oldScale * state.scale);
+        state.offsetY = zoomOriginY - ((zoomOriginY - state.offsetY) / oldScale * state.scale);
+        drawAllCanvases();
+    }
+
+    function startDrag(e) {
+        if (activeImageIndex > -1 && e.target.closest('.canvas-wrapper')) {
+            isDragging = true; lastPosition = { x: e.clientX, y: e.clientY };
+            e.target.closest('.canvas-wrapper').style.cursor = 'grabbing';
+        }
+    }
+    function endDrag(e) {
+        if (isDragging) {
+            const wrapper = dom.dynamicPreviewContainer.querySelector('.canvas-wrapper');
+            if(wrapper) wrapper.style.cursor = 'grab';
+        }
+        isDragging = false;
+    }
+    function drag(e) {
+        if (isDragging) {
+            const state = images[activeImageIndex];
+            state.offsetX += e.clientX - lastPosition.x;
+            state.offsetY += e.clientY - lastPosition.y;
+            lastPosition = { x: e.clientX, y: e.clientY };
+            drawAllCanvases();
+        }
+    }
+
+    /**
+     * Sharpen with full alpha awareness AND no-darken guarantee.
+     *
+     * The unsharp formula `center * (1+4k) - k * (sum of neighbours)` can drive
+     * a pixel darker than its source when neighbours are brighter than centre
+     * — including at the subject's bottom edge where the slight luminance
+     * differences inside the alpha-feather zone get amplified.
+     *
+     * Defensive fix that handles all edge cases: **never let sharpening DARKEN
+     * a pixel**. Compute the sharpened value, then take max(sharpened, original)
+     * per channel. This means sharpening only ever increases local contrast by
+     * brightening highlights — never by darkening shadows at edges. Visually
+     * it's nearly identical to a standard sharpen on the interior, but
+     * eliminates the dark-fringe failure mode entirely.
+     */
+    function applySharpen(ctx, width, height, amount) {
+        if (amount <= 0) return;
+        const k = amount * 0.5;
+        const weights = [0, -k, 0, -k, 1 + 4 * k, -k, 0, -k, 0];
+        const side = 3;
+        const halfSide = 1;
+        const src = ctx.getImageData(0, 0, width, height);
+        const dst = ctx.createImageData(width, height);
+        const srcData = src.data;
+        const dstData = dst.data;
+
+        const ALPHA_OPAQUE_THRESHOLD = 250; // require near-fully-opaque before sharpening
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const dstOff = (y * width + x) * 4;
+                const centerR = srcData[dstOff];
+                const centerG = srcData[dstOff + 1];
+                const centerB = srcData[dstOff + 2];
+                const centerA = srcData[dstOff + 3];
+
+                // 1. Don't touch the outermost border — convolution is undefined there.
+                // 2. Don't sharpen any pixel that isn't fully (or near-fully) opaque.
+                const isBorder = (x === 0 || y === 0 || x === width - 1 || y === height - 1);
+                if (isBorder || centerA < ALPHA_OPAQUE_THRESHOLD) {
+                    dstData[dstOff]     = centerR;
+                    dstData[dstOff + 1] = centerG;
+                    dstData[dstOff + 2] = centerB;
+                    dstData[dstOff + 3] = centerA;
+                    continue;
+                }
+
+                // Also require ALL 8 neighbours to be near-fully-opaque. If any
+                // neighbour is on the soft edge, skip sharpening this pixel
+                // entirely — it's too close to the boundary to sharpen safely.
+                let anyEdgyNeighbour = false;
+                for (let cy = -1; cy <= 1 && !anyEdgyNeighbour; cy++) {
+                    for (let cx = -1; cx <= 1 && !anyEdgyNeighbour; cx++) {
+                        if (cy === 0 && cx === 0) continue;
+                        let sy = y + cy, sx = x + cx;
+                        if (sy < 0) sy = 0; else if (sy >= height) sy = height - 1;
+                        if (sx < 0) sx = 0; else if (sx >= width)  sx = width - 1;
+                        if (srcData[(sy * width + sx) * 4 + 3] < ALPHA_OPAQUE_THRESHOLD) {
+                            anyEdgyNeighbour = true;
+                        }
+                    }
+                }
+                if (anyEdgyNeighbour) {
+                    dstData[dstOff]     = centerR;
+                    dstData[dstOff + 1] = centerG;
+                    dstData[dstOff + 2] = centerB;
+                    dstData[dstOff + 3] = centerA;
+                    continue;
+                }
+
+                // Standard convolution on safe interior pixels
+                let r = 0, g = 0, b = 0;
+                for (let cy = 0; cy < side; cy++) {
+                    for (let cx = 0; cx < side; cx++) {
+                        const sy = y + cy - halfSide;
+                        const sx = x + cx - halfSide;
+                        const srcOff = (sy * width + sx) * 4;
+                        const wt = weights[cy * side + cx];
+                        r += srcData[srcOff] * wt;
+                        g += srcData[srcOff + 1] * wt;
+                        b += srcData[srcOff + 2] * wt;
+                    }
+                }
+
+                // No-darken guarantee: never let the sharpened value go below
+                // the source value. Sharpening can only brighten, never darken.
+                // This eliminates any residual dark-fringe failure mode.
+                if (r < centerR) r = centerR;
+                if (g < centerG) g = centerG;
+                if (b < centerB) b = centerB;
+
+                dstData[dstOff]     = r > 255 ? 255 : r;
+                dstData[dstOff + 1] = g > 255 ? 255 : g;
+                dstData[dstOff + 2] = b > 255 ? 255 : b;
+                dstData[dstOff + 3] = centerA;
+            }
+        }
+        ctx.putImageData(dst, 0, 0);
+    }
+
+    async function download(isSingle, type) {
+        const config = canvasesConfig[type];
+        dom.uploadStatus.textContent = isSingle ? "Saving..." : "Zipping...";
+
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        const shift = parseInt(dom.edgeShiftSlider.value, 10);
+
+        const tasks = isSingle ? [images[activeImageIndex]] : images;
+        const zip = new JSZip();
+
+        for (const state of tasks) {
+            // Apply the current edge shift to this image's cutout. The active
+            // image already has it baked in, but other batch images may not.
+            const sourceImg = await getProcessedForExport(state, shift);
+
+            const cw = Math.round(config.w);
+            const ch = Math.round(config.h);
+            tempCanvas.width = cw;
+            tempCanvas.height = ch;
+            tempCtx.clearRect(0, 0, cw, ch);
+
+            if (config.isCircle) { tempCtx.beginPath(); tempCtx.arc(cw/2, cw/2, cw/2, 0, Math.PI*2); tempCtx.clip(); }
+
+            if (dom.backgroundSelect.value !== 'transparent') {
+                const g = tempCtx.createLinearGradient(0, 0, 0, ch);
+                g.addColorStop(0, '#d1d3d8'); g.addColorStop(1, '#ffffff');
+                tempCtx.fillStyle = g; tempCtx.fillRect(0, 0, cw, ch);
+            }
+
+            const sharpenAmount = dom.sharpenSlider.value / 100;
+
+            if (sharpenAmount > 0) {
+                // Sharpen the subject in isolation, then composite (see drawAllCanvases comment).
+                const subjectCanvas = document.createElement('canvas');
+                subjectCanvas.width = cw;
+                subjectCanvas.height = ch;
+                const sctx = subjectCanvas.getContext('2d');
+                sctx.drawImage(sourceImg, state.offsetX, state.offsetY, sourceImg.width * state.scale, sourceImg.height * state.scale);
+                applySharpen(sctx, cw, ch, sharpenAmount);
+                tempCtx.drawImage(subjectCanvas, 0, 0);
+            } else {
+                tempCtx.drawImage(sourceImg, state.offsetX, state.offsetY, sourceImg.width * state.scale, sourceImg.height * state.scale);
+            }
+
+            const blob = await new Promise(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+
+            const baseName = getFormattedBaseName(state);
+            const exportFileName = `${baseName}_${config.w}x${config.h}.png`;
+            if (isSingle) {
+                downloadBlob(blob, exportFileName);
+            } else {
+                // Handle duplicate names in a batch gracefully so files don't overwrite in ZIP
+                let finalZipName = exportFileName;
+                let dupCounter = 2;
+                while (zip.file(finalZipName)) {
+                    finalZipName = `${baseName}_${dupCounter}_${config.w}x${config.h}.png`;
+                    dupCounter++;
+                }
+                zip.file(finalZipName, blob);
+            }
+        }
+
+        if (!isSingle) {
+            const zipBlob = await zip.generateAsync({ type: "blob" });
+            downloadBlob(zipBlob, `Headshots_${type}.zip`);
+        }
+
+        dom.uploadStatus.textContent = "Complete.";
+        setTimeout(() => dom.uploadStatus.textContent = `${images.length} image(s) loaded.`, 2000);
+    }
+
+    /**
+     * Returns an Image ready to draw, with the requested edge shift applied.
+     * If shift is 0 or no baseline is cached, returns state.processed as-is.
+     */
+    function getProcessedForExport(state, shift) {
+        return new Promise((resolve) => {
+            if (shift === 0 || !state.baselineImageData) {
+                return resolve(state.processed);
+            }
+            const w = state.baselineW, h = state.baselineH;
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            const shifted = morphAlpha(state.baselineImageData, w, h, shift);
+            ctx.putImageData(shifted, 0, 0);
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = c.toDataURL('image/png');
+        });
+    }
+
+    function downloadBlob(blob, name) {
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(a.href);
+    }
+
+    // ============================================================
+    // WELCOME PANEL + INTERACTIVE TOUR
+    // Auto-shows on every visit by default. Users can opt out via
+    // a checkbox. The Help button (bottom-right) reopens it.
+    // ============================================================
+    const WELCOME_AUTOSHOW_KEY = 'headshot-welcome-autoshow-v1';
+
+    const TOUR_STEPS = [
+        {
+            selector: '#drop-zone',
+            title: 'Upload your photo',
+            text: 'Drag and drop your headshot here, or click to browse. The tool works best with clear, well-lit photos where the face is fully visible. If your photo is blurry, too tight, or needs more canvas, enhance it first with <a href="http://agentspace.us.kpmg.com/" target="_blank" rel="noopener" style="color:var(--kpmg-blue); font-weight:600; text-decoration:underline;">aIQ Gemini</a> before uploading.',
+            arrow: 'left'
+        },
+        {
+            selector: '#size-select',
+            title: 'Pick a format',
+            text: 'Choose which KPMG photo size you want to preview — Resume, Bio, Email, PowerPoint, Print, Microsite, or LinkedIn. The tool fits your photo to all seven automatically; this dropdown just controls which one you see right now.',
+            arrow: 'left'
+        },
+        {
+            selector: '#dynamic-preview-container',
+            title: 'The horizontal guides',
+            text: 'Each format has two horizontal lines. The top line marks where the top of the head should land. The bottom line marks where the chin should land. This keeps every headshot in the directory looking consistent. The tool aligns your photo to these guides automatically.',
+            arrow: 'left'
+        },
+        {
+            selector: '#dynamic-preview-container',
+            title: 'Background removed for you',
+            text: 'The tool automatically removes the background so your headshot sits on a clean gradient. If you notice rough edges or a faint halo around the hair, the next slider fixes that.',
+            arrow: 'left'
+        },
+        {
+            selector: '#edge-shift-slider',
+            title: 'Edge Refine',
+            text: 'Slide LEFT to tighten edges and remove any halo. Slide RIGHT to recover edge detail if too much was cut. Resets automatically when you upload a new photo.',
+            arrow: 'left'
+        },
+        {
+            selector: '#scaleSlider',
+            title: 'Adjust zoom and position',
+            text: 'Use this slider to zoom in or out. To reposition the photo within the frame, click and drag directly on the preview image.',
+            arrow: 'left'
+        },
+        {
+            selector: '#reset-zoom',
+            title: 'Reset adjustments',
+            text: 'Brings the current photo back to its automatic state — undoes any zoom, repositioning, sharpening, or edge refinement you applied.',
+            arrow: 'left'
+        },
+        {
+            selector: '#export-panel',
+            title: 'Name & save (last_first)',
+            text: 'Enter the subject\'s First and Last Name. Every headshot is automatically named <b>lastname_firstname_WxH.png</b>. When working with a batch, each photo stores its own name — use the Gallery or press Enter to step through and name each one before clicking "Save" or "Save All".',
+            arrow: 'right'
+        },
+        {
+            selector: '#show-help-btn',
+            title: 'Need help again?',
+            text: 'Click this button any time to reopen the welcome panel or restart this tour.',
+            arrow: 'bottom'
+        }
+    ];
+
+    let tourCurrentStep = 0;
+    let tourActive = false;
+
+    function setupWelcomePanel() {
+        const overlay = document.getElementById('welcome-overlay');
+        const dismissBtn = document.getElementById('welcome-dismiss-btn');
+        const tourBtn = document.getElementById('welcome-tour-btn');
+        const showBtn = document.getElementById('show-help-btn');
+        const autoShowToggle = document.getElementById('welcome-autoshow-toggle');
+
+        const storedPref = localStorage.getItem(WELCOME_AUTOSHOW_KEY);
+        const autoShow = storedPref === null ? true : storedPref === '1';
+        autoShowToggle.checked = autoShow;
+        if (autoShow) overlay.classList.add('visible');
+
+        autoShowToggle.addEventListener('change', () => {
+            localStorage.setItem(WELCOME_AUTOSHOW_KEY, autoShowToggle.checked ? '1' : '0');
+        });
+
+        const dismissWelcome = () => overlay.classList.remove('visible');
+
+        dismissBtn.addEventListener('click', dismissWelcome);
+
+        tourBtn.addEventListener('click', () => {
+            dismissWelcome();
+            setTimeout(() => startTour(), 200);
+        });
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) dismissWelcome();
+        });
+
+        showBtn.addEventListener('click', () => overlay.classList.add('visible'));
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && overlay.classList.contains('visible')) dismissWelcome();
+        });
+    }
+
+    function startTour() {
+        tourCurrentStep = 0;
+        tourActive = true;
+        document.getElementById('tour-backdrop').classList.add('visible');
+        document.getElementById('tour-highlight').classList.add('visible');
+        document.getElementById('tour-tooltip').classList.add('visible');
+        renderTourStep();
+        window.addEventListener('resize', renderTourStep);
+        window.addEventListener('scroll', renderTourStep, true);
+    }
+
+    function endTour() {
+        tourActive = false;
+        document.getElementById('tour-backdrop').classList.remove('visible');
+        const highlight = document.getElementById('tour-highlight');
+        highlight.classList.remove('visible');
+        highlight.style.display = '';
+        document.getElementById('tour-tooltip').classList.remove('visible');
+        window.removeEventListener('resize', renderTourStep);
+        window.removeEventListener('scroll', renderTourStep, true);
+    }
+
+    function renderTourStep() {
+        if (!tourActive) return;
+        const step = TOUR_STEPS[tourCurrentStep];
+        const target = document.querySelector(step.selector);
+        if (!target) {
+            positionTourCenter(step);
+            return;
+        }
+        const rect = target.getBoundingClientRect();
+        const pad = 6;
+        const r = { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
+
+        const w = window.innerWidth, h = window.innerHeight;
+        setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: Math.max(0, r.top) });
+        setMask('tour-mask-bottom', { top: r.top + r.height, left: 0, width: w, height: Math.max(0, h - r.top - r.height) });
+        setMask('tour-mask-left',   { top: r.top, left: 0, width: Math.max(0, r.left), height: r.height });
+        setMask('tour-mask-right',  { top: r.top, left: r.left + r.width, width: Math.max(0, w - r.left - r.width), height: r.height });
+
+        const highlight = document.getElementById('tour-highlight');
+        Object.assign(highlight.style, {
+            top: r.top + 'px', left: r.left + 'px',
+            width: r.width + 'px', height: r.height + 'px',
+            display: 'block'
+        });
+
+        const tooltip = document.getElementById('tour-tooltip');
+        document.getElementById('tour-step-counter').textContent = `Step ${tourCurrentStep + 1} of ${TOUR_STEPS.length}`;
+        document.getElementById('tour-title').textContent = step.title;
+        document.getElementById('tour-text').innerHTML = step.text;
+        document.getElementById('tour-back').disabled = tourCurrentStep === 0;
+        document.getElementById('tour-next').textContent = tourCurrentStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+
+        tooltip.style.left = '-9999px';
+        tooltip.style.top = '0px';
+        const tw = tooltip.offsetWidth;
+        const th = tooltip.offsetHeight;
+
+        const { left, top, arrow } = computeTooltipPlacement(r, tw, th, step.arrow, w, h);
+        tooltip.style.left = left + 'px';
+        tooltip.style.top = top + 'px';
+        tooltip.dataset.arrow = arrow;
+    }
+
+    function setMask(id, rect) {
+        const el = document.getElementById(id);
+        Object.assign(el.style, {
+            top: rect.top + 'px', left: rect.left + 'px',
+            width: rect.width + 'px', height: rect.height + 'px'
+        });
+    }
+
+    function positionTourCenter(step) {
+        const w = window.innerWidth, h = window.innerHeight;
+        setMask('tour-mask-top',    { top: 0, left: 0, width: w, height: h });
+        setMask('tour-mask-bottom', { top: 0, left: 0, width: 0, height: 0 });
+        setMask('tour-mask-left',   { top: 0, left: 0, width: 0, height: 0 });
+        setMask('tour-mask-right',  { top: 0, left: 0, width: 0, height: 0 });
+        document.getElementById('tour-highlight').style.display = 'none';
+        const tooltip = document.getElementById('tour-tooltip');
+        document.getElementById('tour-step-counter').textContent = `Step ${tourCurrentStep + 1} of ${TOUR_STEPS.length}`;
+        document.getElementById('tour-title').textContent = step.title;
+        document.getElementById('tour-text').innerHTML = step.text;
+        document.getElementById('tour-back').disabled = tourCurrentStep === 0;
+        document.getElementById('tour-next').textContent = tourCurrentStep === TOUR_STEPS.length - 1 ? 'Finish' : 'Next';
+        tooltip.style.left = (w / 2 - tooltip.offsetWidth / 2) + 'px';
+        tooltip.style.top = (h / 2 - tooltip.offsetHeight / 2) + 'px';
+        tooltip.dataset.arrow = 'none';
+    }
+
+    function computeTooltipPlacement(rect, tw, th, preferredArrow, w, h) {
+        const margin = 20;
+        const candidates = {
+            left:   { left: rect.left + rect.width + margin, top: rect.top, arrow: 'left' },
+            right:  { left: rect.left - tw - margin,         top: rect.top, arrow: 'right' },
+            top:    { left: rect.left, top: rect.top + rect.height + margin, arrow: 'top' },
+            bottom: { left: rect.left, top: rect.top - th - margin,          arrow: 'bottom' }
+        };
+        const tryOrder = [preferredArrow, 'left', 'right', 'top', 'bottom'].filter((v, i, a) => a.indexOf(v) === i);
+        for (const a of tryOrder) {
+            const c = candidates[a];
+            if (c.left >= 10 && c.top >= 10 && c.left + tw <= w - 10 && c.top + th <= h - 10) {
+                return { left: c.left, top: c.top, arrow: a };
+            }
+        }
+        return {
+            left: Math.max(10, Math.min(w - tw - 10, rect.left)),
+            top:  Math.max(10, Math.min(h - th - 10, rect.top + rect.height + margin)),
+            arrow: 'none'
+        };
+    }
+
+    document.getElementById('tour-next').addEventListener('click', () => {
+        if (tourCurrentStep < TOUR_STEPS.length - 1) {
+            tourCurrentStep++;
+            document.getElementById('tour-highlight').style.display = 'block';
+            renderTourStep();
+        } else {
+            endTour();
+        }
+    });
+    document.getElementById('tour-back').addEventListener('click', () => {
+        if (tourCurrentStep > 0) {
+            tourCurrentStep--;
+            document.getElementById('tour-highlight').style.display = 'block';
+            renderTourStep();
+        }
+    });
+    document.getElementById('tour-skip').addEventListener('click', endTour);
+    document.addEventListener('keydown', (e) => {
+        if (tourActive && e.key === 'Escape') endTour();
+    });
+
+    setupWelcomePanel();
+
+    initializeApp();
+});
+</script>
+</body>
+</html>
