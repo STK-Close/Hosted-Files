@@ -41,10 +41,6 @@
         .header { display: flex; align-items: center; justify-content: space-between; max-width: 1600px; margin: 0 auto; }
         h1 { color: var(--blue-900); font-weight: 600; font-size: 1.1rem; margin: 0; }
 
-        #theme-toggle { background: transparent; color: var(--slate-600); border: 1px solid var(--slate-300); padding: 6px 10px; border-radius: var(--rounded-md); cursor: pointer; font-size: 1.1rem; transition: all 0.2s; }
-        #theme-toggle:hover { background-color: var(--slate-100); color: var(--blue-900); }
-        [data-theme="dark"] #theme-toggle { color: #cbd5e1; border-color: #475569; }
-        [data-theme="dark"] #theme-toggle:hover { background-color: #334155; color: white; }
 
         .main-container { flex-grow: 1; display: grid; grid-template-columns: 360px 1fr; gap: 1rem; width: 100%; max-width: 1600px; margin: 0 auto; padding: 1rem; box-sizing: border-box; min-height: 0; overflow: hidden; }
         .controls-column, .workspace-column { display: flex; flex-direction: column; min-height: 0; height: 100%; }
@@ -501,10 +497,10 @@
         .welcome-card .lede, .welcome-step-text, .tour-tooltip p { font-size: var(--text-sm) !important; }
         .card-sentence, .placeholder p.muted, .controls-card .helper, .axis-label-row,
         .card-description:empty:before, .axis-label:empty:before, .tour-tooltip .step-counter { color: var(--muted-text) !important; }
-        .control-btn, .example-chip, .output-actions button, .chart-type-menu button, #theme-toggle,
+        .control-btn, .example-chip, .output-actions button, .chart-type-menu button,
         #show-help-btn, .welcome-card button.primary, .tour-tooltip .tour-skip,
         .tour-tooltip .tour-nav button, .opt-select { min-height: var(--target-min); }
-        .card-actions button, #theme-toggle { min-width: var(--target-min); min-height: var(--target-min); }
+        .card-actions button { min-width: var(--target-min); min-height: var(--target-min); }
         .welcome-step-num { width: 26px; height: 26px; }
         .welcome-actions label { min-height: var(--target-min); }
         button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible,
@@ -644,13 +640,11 @@
         <div class="workspace-column">
             <div class="workspace-card">
                 <div class="output-header">
-                    <h3 id="output-title">Visualizations</h3>
                     <div class="output-actions">
                         <button id="download-all-pptx" disabled title="Download all charts as a single PowerPoint deck (one slide per chart, charts are editable in PowerPoint)"><i class="fas fa-file-powerpoint"></i>&nbsp; Download as PPT</button>
                         <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files, useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
                         <button id="download-all-png" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; Download all PNG</button>
                         <button id="clear-charts-btn" class="danger" disabled title="Remove all charts from the gallery"><i class="fas fa-trash"></i>&nbsp; Clear charts</button>
-                        <button type="button" id="theme-toggle" title="Switch between light and dark mode" aria-label="Switch between light and dark mode"><i class="fas fa-moon"></i></button>
                     </div>
                 </div>
                 <div class="gallery" id="gallery">
@@ -1400,9 +1394,7 @@ const dom = {
     downloadAllPptx: document.getElementById('download-all-pptx'),
     downloadAllHtml: document.getElementById('download-all-html'),
     downloadAllPng: document.getElementById('download-all-png'),
-    themeToggle: document.getElementById('theme-toggle'),
-    toast: document.getElementById('toast'),
-    outputTitle: document.getElementById('output-title')
+    toast: document.getElementById('toast')
 };
 
 const examples = {
@@ -1547,19 +1539,8 @@ function destroyAllCharts() {
 }
 
 // ---------- THEME ----------
-function setupTheme() {
-    if (store.get('chart-theme') === 'dark') applyTheme(true);
-    dom.themeToggle.addEventListener('click', () => applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark'));
-}
-function applyTheme(isDark) {
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    if (!isDark) document.documentElement.removeAttribute('data-theme');
-    dom.themeToggle.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    store.set('chart-theme', isDark ? 'dark' : 'light');
-    // Re-render to pick up theme colors
-    if (currentClaims.length > 0) renderClaims(currentClaims);
-}
-setupTheme();
+// Light theme only, to match the other tools (the light/dark switch was removed).
+document.documentElement.removeAttribute('data-theme');
 
 // ---------- WELCOME / HELP PANEL ----------
 // Auto-shows on every visit by default so users discover the tour. A checkbox
@@ -2178,7 +2159,6 @@ function showEmptyState() {
     dom.downloadAllHtml.disabled = true;
     dom.downloadAllPng.disabled = true;
     dom.clearChartsBtn.disabled = true;
-    dom.outputTitle.textContent = 'Visualizations';
     currentClaims = [];
     claimRenderers = [];
 }
@@ -2217,7 +2197,6 @@ function renderClaims(claims, options = {}) {
     currentClaims = claims;
     claimRenderers = [];
     dom.gallery.innerHTML = '';
-    dom.outputTitle.textContent = `${claims.length} visualization${claims.length === 1 ? '' : 's'}`;
 
     // Initialize claim defaults: description, editable axis label, unit word, accent color
     claims.forEach((claim, idx) => {
