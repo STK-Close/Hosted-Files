@@ -510,7 +510,11 @@
         button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible,
         [contenteditable]:focus-visible, .example-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
         .visual-card { height: 440px; }
-        .visual-card:has(.data-editor[open]) { height: auto; min-height: 440px; }
+        /* While "Edit numbers" is open the card grows; the chart keeps its size.
+           (A class is used instead of :has() so older browsers work too.) */
+        .visual-card.editing { height: auto; min-height: 440px; }
+        .visual-card .card-body { min-height: 200px; }
+        .visual-card.editing .card-body { flex: 0 0 240px; height: 240px; }
 
         /* Collapsible option groups in the left column */
         .opt-group { border: 1px solid var(--slate-200); border-radius: var(--rounded-md); }
@@ -3184,7 +3188,7 @@ function buildCardFor(claim, idx) {
     descEl.setAttribute('role', 'textbox');
     descEl.setAttribute('aria-label', 'Chart description');
     descEl.textContent = claim.description || '';
-    descEl.addEventListener('input', () => { claim.description = descEl.textContent.trim(); claim.edited = true; });
+    descEl.addEventListener('input', () => { claim.description = descEl.textContent.trim(); claim.edited = true; claim.descEdited = true; });
     descEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); descEl.blur(); } });
 
     // --- ORIGINAL SENTENCE (small context) ---
@@ -3233,6 +3237,7 @@ function buildCardFor(claim, idx) {
     axisRow.appendChild(axisLabelEl);
 
     const editor = buildDataEditor(claim, () => renderer.render());
+    editor.addEventListener('toggle', () => el.classList.toggle('editing', editor.open));
 
     const checkEl = document.createElement('p');
     checkEl.className = 'check-note';
@@ -3262,6 +3267,11 @@ function buildCardFor(claim, idx) {
             if (!claim.titleEdited) {
                 claim.title = CHART_STYLE.titles === 'headline' ? headlineFor(claim) : claim.labelTitle;
                 if (titleEl.textContent !== claim.title) titleEl.textContent = claim.title;
+            }
+            // The description follows the numbers until the person edits it.
+            if (!claim.descEdited) {
+                claim.description = defaultDescription(claim);
+                if (descEl.textContent !== claim.description) descEl.textContent = claim.description;
             }
             // Number check: flag wording that doesn't match the numbers.
             const issues = checkClaim(claim);
@@ -3302,29 +3312,36 @@ function buildDataEditor(claim, rerender) {
     const labelInput = (value, aria, onSet) => {
         const i = document.createElement('input');
         i.type = 'text'; i.value = value; i.setAttribute('aria-label', aria);
-        i.addEventListener('change', () => { onSet(i.value.trim()); claim.edited = true; rerender(); });
+        const commitLabel = () => { onSet(i.value.trim()); claim.edited = true; rerender(); };
+        i.addEventListener('change', commitLabel);
+        i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commitLabel(); } });
         grid.appendChild(i);
     };
     const valueInput = (num, aria, onSet) => {
         const i = document.createElement('input');
         i.type = 'text'; i.inputMode = 'decimal'; i.value = num.display; i.setAttribute('aria-label', aria);
-        i.addEventListener('change', () => {
+        let last = i.value;
+        const commit = (fromTyping) => {
+            if (i.value === last) return;
             const parsed = parseNumber(i.value);
             if (!parsed) {
-                i.setAttribute('aria-invalid', 'true');
-                help.textContent = 'Use a number like 1,200, $1.2M, 45% or -3.';
+                // While typing, wait quietly; on Enter or leaving the field, explain.
+                if (!fromTyping) { i.setAttribute('aria-invalid', 'true'); help.textContent = 'Use a number like 1,200, $1.2M, 45% or -3.'; }
                 return;
             }
             i.removeAttribute('aria-invalid');
             help.textContent = '';
-            i.value = parsed.display;
+            if (!fromTyping) i.value = parsed.display;
+            last = i.value;
             onSet(parsed);
             claim.edited = true;
             rerender();
-        });
+        };
+        i.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(false); } });
+        i.addEventListener('change', () => commit(false));
+        i.addEventListener('input', () => { clearTimeout(i._t); i._t = setTimeout(() => commit(true), 600); });
         grid.appendChild(i);
     };
-
     if (claim.kind === 'comparison') {
         head('Label', 'Value');
         labelInput(inferBeforeLabel(claim), 'First label', v => { claim.beforeLabel = v || 'Before'; });
