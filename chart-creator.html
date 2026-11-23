@@ -9,10 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts@8.9.1/dist/apexcharts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
@@ -500,7 +500,7 @@
     <header class="header-container">
         <div class="header">
             <h1>Creative Services' Chart Creator</h1>
-            <button id="theme-toggle" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
+            <button id="theme-toggle" title="Switch between light and dark mode" aria-label="Switch between light and dark mode"><i class="fas fa-moon"></i></button>
         </div>
     </header>
 
@@ -510,7 +510,7 @@
         <div class="controls-column">
             <div class="controls-card" id="controls-card">
                 <h2 class="section-title">1. Paste text or upload a file</h2>
-                <textarea id="main-input" placeholder="Example: Our team grew from 28 people last year to 54 this year, and client satisfaction reached 92%."></textarea>
+                <textarea id="main-input" aria-label="Text or data to chart" placeholder="Example: Our team grew from 28 people last year to 54 this year, and client satisfaction reached 92%."></textarea>
 
                 <button id="generate-btn" class="control-btn" title="Generate charts from the text above (or Ctrl/Cmd+Enter)"><i class="fas fa-wand-magic-sparkles"></i> Make charts</button>
                 <button id="file-btn" class="control-btn secondary" title="Upload a CSV, TSV, TXT, or Excel file"><i class="fas fa-file-arrow-up"></i> Upload file</button>
@@ -534,7 +534,7 @@
                     <h3 id="output-title">Visualizations</h3>
                     <div class="output-actions">
                         <button id="download-all-pptx" disabled title="Download all charts as a single PowerPoint deck (one slide per chart, charts are editable in PowerPoint)"><i class="fas fa-file-powerpoint"></i>&nbsp; Download as PPT</button>
-                        <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files — useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
+                        <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files, useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
                         <button id="download-all-png" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; Download all PNG</button>
                         <button id="clear-charts-btn" class="danger" disabled title="Remove all charts from the gallery"><i class="fas fa-trash"></i>&nbsp; Clear charts</button>
                     </div>
@@ -582,14 +582,14 @@
 
     <!-- Help / welcome panel — shown on first visit, can be re-opened from the corner button -->
     <div id="welcome-overlay" class="welcome-overlay">
-        <div class="welcome-card">
-            <h2>Welcome to Creative Services' Chart Creator</h2>
+        <div class="welcome-card" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+            <h2 id="welcome-title">Welcome to Creative Services' Chart Creator</h2>
             <p class="lede">Turn paragraphs of text or spreadsheet data into a gallery of polished charts in seconds.</p>
             <div class="welcome-steps">
                 <div class="welcome-step-num">1</div>
                 <div class="welcome-step-text"><b>Paste text on the left</b>, or upload a CSV / Excel file. The textarea also accepts drag-and-drop.</div>
                 <div class="welcome-step-num">2</div>
-                <div class="welcome-step-text"><b>Click "Make charts"</b> — the tool finds every number in your text and creates the right kind of chart for each.</div>
+                <div class="welcome-step-text"><b>Click "Make charts"</b>. The tool finds every number in your text and creates the right kind of chart for each.</div>
                 <div class="welcome-step-num">3</div>
                 <div class="welcome-step-text"><b>Edit any title, description, or axis label</b> by clicking on it. Use the icons on each card to change chart type or download.</div>
                 <div class="welcome-step-num">4</div>
@@ -643,30 +643,38 @@
 const CURRENT_YEAR = new Date().getFullYear();
 
 const HEDGE_WORDS = /\b(roughly|nearly|almost|about|approximately|around|some|a few|several|many|most|just|only|even|quite|rather|fairly)\b/gi;
-const TRIM_LEADING = /^(our|the|a|an|to|of|for|with|in|on|at|by|and|but|that|which|who|whose|while|when|since|though|although|however|despite|yet|meanwhile|also|primarily|including|due|because|as|so|then|its|their|these|those)\s+/i;
-const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretched|stretching|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted)\b/i;
+const TRIM_LEADING = /^(our|the|a|an|to|of|for|with|in|on|at|by|and|but|that|which|who|whose|while|when|since|though|although|however|despite|yet|meanwhile|also|primarily|including|due|because|as|so|then|its|their|these|those|causing|leading|driving|pushing|helping|allowing)\s+/i;
+const CHANGE_VERB = /\b(rose|rising|fell|fall(?:ing|en)?|jumped?|jumping|climbed|climbing|dropped|dropping|grew|growing|increased|increasing|decreased|decreasing|reduced|reducing|expanded|expanding|reached|reaching|hit|hitting|averaged|averaging|totaled|totaling|stretch(?:es|ed|ing)?|climbs?|lengthened|lengthening|shortened|shortening|ticked|ticking|improved|improving|saw|seeing|reported|reporting|projects|projected|projecting|confirming|confirmed|exceed(?:ed|ing|s)?|surpass(?:ed|ing|es)?|identified|recorded|achieved|maintained|targeted)\b/i;
 
 function parseNumber(raw) {
-    const cleaned = raw.trim();
-    // Suffix must be directly adjacent to the number (no space between).
-    // This prevents "48 t" — a number followed by a stray letter from an
-    // adjoining word — from being misread as 48 trillion.
-    const m = cleaned.match(/^(\$)?\s*(-?\d{1,3}(?:,\d{3})*(?:\.\d+)?|-?\d+(?:\.\d+)?)(K|M|B|T|k|m|b|t|%)?$/);
+    let cleaned = String(raw).trim();
+    // Accounting style "(300)" means -300.
+    let negative = false;
+    const paren = cleaned.match(/^\((.+)\)$/);
+    if (paren) { negative = true; cleaned = paren[1].trim(); }
+    // Optional minus before or after "$", digits with or without thousands
+    // commas, decimals, then a scale (K/M/B/T, thousand/million/billion, bn/mn) or %.
+    const m = cleaned.match(/^(-)?\s*(\$)?\s*(-)?\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*(thousand|million|billion|trillion|bn|mn|k|m|b|t|%)?$/i);
     if (!m) return null;
-    const [, dollar, numStr, suffix] = m;
-    let value = parseFloat(numStr.replace(/,/g, ''));
+    const [, neg1, dollar, neg2, intPart, decPart = '', suffixRaw] = m;
+    if (neg1 || neg2) negative = !negative;
+    let value = parseFloat((intPart + decPart).replace(/,/g, ''));
     if (isNaN(value)) return null;
-    let unit = '';
-    if (dollar) unit = '$';
-    if (suffix) {
-        const s = suffix.toUpperCase();
-        if (s === 'K') value *= 1e3;
-        else if (s === 'M') value *= 1e6;
-        else if (s === 'B') value *= 1e9;
-        else if (s === 'T') value *= 1e12;
-        else if (s === '%') unit = '%';
+    let unit = dollar ? '$' : '';
+    let suffix = '';
+    if (suffixRaw) {
+        const s = suffixRaw.toLowerCase();
+        if (s === 'k' || s === 'thousand') { value *= 1e3; suffix = 'K'; }
+        else if (s === 'm' || s === 'million' || s === 'mn') { value *= 1e6; suffix = 'M'; }
+        else if (s === 'b' || s === 'billion' || s === 'bn') { value *= 1e9; suffix = 'B'; }
+        else if (s === 't' || s === 'trillion') { value *= 1e12; suffix = 'T'; }
+        else if (s === '%') { unit = '%'; suffix = '%'; }
     }
-    return { value, display: cleaned.replace(/\s+/g, ''), unit };
+    // Remove floating point noise (4.1 * 1e6 = 4099999.9999999995).
+    value = parseFloat(value.toPrecision(12));
+    if (negative) value = -value;
+    const display = `${negative ? '-' : ''}${dollar ? '$' : ''}${intPart}${decPart}${suffix}`;
+    return { value, display, unit };
 }
 
 function extractSubject(textBefore) {
@@ -731,12 +739,15 @@ function extractClaims(text) {
         eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
         seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20
     };
-    text = text.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/gi,
+    const toDigits = (t) => t.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\b/gi,
         (m) => wordToNum[m.toLowerCase()] || m);
     const claims = [];
     const sentences = splitSentences(text);
     sentences.forEach(rawSentence => {
-        const sentence = rawSentence.trim();
+        const original = rawSentence.trim();
+        // Number words ("one in five") are converted for parsing only. Cards and
+        // exports quote the sentence exactly as the person wrote it.
+        const sentence = toDigits(original);
         if (sentence.length < 8) return;
         const found = [];
         found.push(...tryActivityBreakdown(sentence));
@@ -748,8 +759,8 @@ function extractClaims(text) {
         found.push(...tryNowFrom(sentence));
         found.push(...tryDelta(sentence));
         found.push(...tryRatio(sentence));
-        if (found.length === 0) found.push(...tryStat(sentence));
-        else found.push(...tryStat(sentence));
+        found.push(...tryStat(sentence));
+        found.forEach(c => { c.sentence = original; });
         claims.push(...found);
     });
     return dedupe(claims);
@@ -759,14 +770,16 @@ function splitSentences(text) {
     const placeholder = '\u0001';
     const protectedText = text
         .replace(/(\d)\.(\d)/g, `$1${placeholder}$2`)
-        .replace(/\b(Q|Mr|Mrs|Ms|Dr|Inc|Ltd|Co|Corp|U\.S|e\.g|i\.e)\./gi, `$1${placeholder}`);
+        // Single-letter abbreviations such as U.S., U.K., e.g., i.e.
+        .replace(/\b([A-Za-z])\.([A-Za-z])\./g, `$1${placeholder}$2${placeholder}`)
+        .replace(/\b(Q|Mr|Mrs|Ms|Dr|Inc|Ltd|Co|Corp|vs|approx|est|etc|Jr|Sr|St|No)\./gi, `$1${placeholder}`);
     const sentences = protectedText.split(/[.!?\n]+/).map(s => s.replace(new RegExp(placeholder, 'g'), '.'));
     return sentences.filter(s => s.trim().length > 0);
 }
 
 function tryBreakdown(sentence) {
     const pairs = [];
-    const pairRegex = /([A-Z][A-Za-z][A-Za-z\s&\/]{1,30}?)\s*[:=]\s*(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/g;
+    const pairRegex = /([A-Z][A-Za-z][A-Za-z\s&\/]{1,30}?)\s*[:=]\s*((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/g;
     let m;
     while ((m = pairRegex.exec(sentence)) !== null) {
         const label = m[1].trim();
@@ -801,8 +814,8 @@ function tryActivityBreakdown(sentence) {
     // Two shapes:
     //   (a) "8 hours sleeping" — bare number + unit word + activity
     //   (b) "$50 on groceries" — currency-prefixed number + preposition + activity (no unit word)
-    const itemReBare = /^(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)\s+([a-z]+s?)\s+(.+)$/i;
-    const itemReDollar = /^(\$\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z]))?)\s+(?:on|for|to|toward|towards|in|at|with)\s+(.+)$/i;
+    const itemReBare = /^((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)\s+([a-z]+s?)\s+(.+)$/i;
+    const itemReDollar = /^(\$\s*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:\s*(?:thousand|million|billion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z]))?)\s+(?:on|for|to|toward|towards|in|at|with)\s+(.+)$/i;
 
     const items = [];
     let commonUnitWord = null;
@@ -810,7 +823,9 @@ function tryActivityBreakdown(sentence) {
 
     for (const chunk of chunks) {
         // Strip everything up to and including any leading prefix words before the first digit or $
-        const stripped = chunk.replace(/^[^\d$]+(?=\$|\d)/, '').replace(/[.!?]+$/, '').trim();
+        // Skip period tokens such as Q1, H2 or FY24 (the digit belongs to a word).
+        if (/[A-Za-z]\d/.test(chunk.match(/^[^\d$]*[\d$]/)?.[0] || '')) continue;
+        const stripped = chunk.replace(/^[^\d$-]+(?=\$|\d|-)/, '').replace(/[.!?]+$/, '').trim();
         if (!stripped) continue;
 
         // Try dollar pattern first (it's more specific)
@@ -837,7 +852,8 @@ function tryActivityBreakdown(sentence) {
 
         // Skip if the "unit word" is actually a preposition — that means there's
         // no real unit word and our regex over-captured
-        if (/^(on|for|to|toward|towards|in|at|with|of|by)$/i.test(unitWord)) continue;
+        if (/^(on|for|to|toward|towards|in|at|with|of|by|was|were|is|are|be|been|and|or|vs)$/i.test(unitWord)) continue;
+        if (/^[\d$]/.test(activityLabel)) continue;
 
         if (commonUnitWord === null) commonUnitWord = unitWord;
         else if (commonUnitWord !== unitWord) continue;
@@ -885,8 +901,8 @@ function cleanActivityLabel(label) {
 function tryTimeSeries(sentence) {
     const claims = [];
     const periodWord = '(?:Q[1-4]|Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?|FY\\s*\\d{2,4}|H[12]|20\\d{2}|19\\d{2})';
-    const valuePart = '(\\$?\\s*\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?\\s*(?:[KMBT](?![a-zA-Z])|%)?)';
-    const re = new RegExp(`(${periodWord})\\s+(?:was|=|:|is|reached|hit|totaled|came in at)?\\s*${valuePart}`, 'gi');
+    const valuePart = '((?:(?<![\\w.\\-])-)?\\$?\\s*-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?(?!\\d|,\\d{3}(?!\\d))(?:\\s*(?:thousand|million|billion|trillion|bn|mn)\\b|\\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\\s*%)?)';
+    const re = new RegExp(`(${periodWord})(?:\\s*[:=]|\\s+(?:was|is|reached|hit|totaled|came in at))?\\s*${valuePart}`, 'gi');
     const items = [];
     let m;
     while ((m = re.exec(sentence)) !== null) {
@@ -906,7 +922,7 @@ function tryTimeSeries(sentence) {
 
 function tryMultipleComparison(sentence) {
     const claims = [];
-    const re = /(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)([^\d]{1,40}?)(?:double|triple|quadruple|half|twice|thrice)\s+(?:the\s+)?(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/gi;
+    const re = /((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)([^\d]{1,40}?)(?:double|triple|quadruple|half|twice|thrice)\s+(?:the\s+)?((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/gi;
     let m;
     while ((m = re.exec(sentence)) !== null) {
         const after = parseNumber(m[1]);
@@ -922,7 +938,7 @@ function tryMultipleComparison(sentence) {
 function tryFromTo(sentence) {
     const claims = [];
     const HEDGE = '(?:(?:roughly|nearly|almost|about|approximately|around|an?\\s+average\\s+of|an?\\s+estimated|the\\s+prior|a\\s+prior|the\\s+previous|a\\s+previous|a\\s+targeted)\\s+)*';
-    const NUM = '(\\$?\\s*\\d{1,3}(?:,\\d{3})*(?:\\.\\d+)?\\s*(?:[KMBT](?![a-zA-Z])|%)?)';
+    const NUM = '((?:(?<![\\w.\\-])-)?\\$?\\s*-?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?(?!\\d|,\\d{3}(?!\\d))(?:\\s*(?:thousand|million|billion|trillion|bn|mn)\\b|\\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\\s*%)?)';
     const reA = new RegExp(`\\bfrom\\s+${HEDGE}${NUM}([^\\d]{1,30}?)\\s*to\\s+${HEDGE}${NUM}`, 'gi');
     let m;
     while ((m = reA.exec(sentence)) !== null) {
@@ -991,7 +1007,7 @@ function capitalizeWords(s) {
 
 function tryComparedTo(sentence) {
     const claims = [];
-    const re = /(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)([^\d]{1,30}?)\s*(?:compared to|versus|vs\.?|against)\s+(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/gi;
+    const re = /((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)([^\d]{1,30}?)\s*(?:compared to|versus|vs\.?|against)\s+((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/gi;
     let m;
     while ((m = re.exec(sentence)) !== null) {
         const after = parseNumber(m[1]);
@@ -1006,7 +1022,7 @@ function tryComparedTo(sentence) {
 
 function tryNowFrom(sentence) {
     const claims = [];
-    const re = /(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)([^\d]{1,40}?)(?:up from|down from|from the prior|from a prior|was previously|previously|the year prior)\s+(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)/gi;
+    const re = /((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)([^\d]{1,40}?)(?:up from|down from|from the prior|from a prior|was previously|previously|the year prior)\s+((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/gi;
     let m;
     while ((m = re.exec(sentence)) !== null) {
         const after = parseNumber(m[1]);
@@ -1021,7 +1037,7 @@ function tryNowFrom(sentence) {
 
 function tryDelta(sentence) {
     const claims = [];
-    const re = /\b(grew|rose|increased|jumped|climbed|expanded|fell|dropped|declined|decreased|reduced|shrank)\b[^.]{0,40}?\bby\s+(\d+(?:\.\d+)?%?)/gi;
+    const re = /\b(grew|rose|increased|jumped|climbed|expanded|fell|dropped|declined|decreased|reduced|shrank)\b[^.]{0,40}?\bby\s+((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)/gi;
     let m;
     while ((m = re.exec(sentence)) !== null) {
         const verb = m[1].toLowerCase();
@@ -1041,7 +1057,7 @@ function tryRatio(sentence) {
     let m;
     while ((m = re.exec(sentence)) !== null) {
         const n = parseInt(m[1]);
-        if (isNaN(n) || n < 2) continue;
+        if (isNaN(n) || n < 2 || (n >= 1900 && n <= 2100)) continue;
         const subject = extractSubject(sentence.substring(0, m.index));
         claims.push({ kind: 'ratio', title: titleFor(subject, 'Ratio'), numerator: 1, denominator: n, sentence });
     }
@@ -1053,7 +1069,7 @@ function tryStat(sentence) {
     const rangeRe = /\d+(?:\.\d+)?\s*[%KMBT]?\s*[-–]\s*\d+(?:\.\d+)?\s*[%KMBT]/;
     if (rangeRe.test(sentence)) return [];
     if (/\bbetween\s+\d/.test(sentence) && /\band\s+\d/.test(sentence)) return [];
-    const re = /(?:^|[\s\(\[,;:])(\$?\s*\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*(?:[KMBT](?![a-zA-Z])|%)?)(?=[\s\.,;:!?\)\]]|$)/g;
+    const re = /(?:^|[\s\(\[,;:])((?:(?<![\w.\-])-)?\$?\s*-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?!\d|,\d{3}(?!\d))(?:\s*(?:thousand|million|billion|trillion|bn|mn)\b|\s*[KMBT](?![a-zA-Z])|[kmbt](?![a-zA-Z])|\s*%)?)(?=[\s\.,;:!?\)\]]|$)/g;
     let m;
     const found = [];
     while ((m = re.exec(sentence)) !== null) {
@@ -1090,7 +1106,9 @@ function dedupe(claims) {
     const sorted = [...claims].sort((a, b) => (priority[b.kind] || 0) - (priority[a.kind] || 0));
     const kept = [];
     for (const c of sorted) {
-        const numbers = numbersIn(c);
+        // Only numbers in the same sentence count as duplicates; two sentences
+        // can legitimately mention the same value.
+        const numbers = numbersIn(c).map(n => `${c.sentence}\u0001${n}`);
         let overlap = false;
         for (const n of numbers) if (seen.has(n)) { overlap = true; break; }
         if (!overlap) { kept.push(c); numbers.forEach(n => seen.set(n, true)); }
@@ -1102,7 +1120,13 @@ function dedupe(claims) {
     // (134-114)/134, redundant with the comparison itself.
     const finalKept = [];
     for (const c of kept) {
-        if (c.kind === 'stat' && c.unit === '%') {
+        // A percent stat restates a comparison only when it reads as a change
+        // ("a 15% reduction"), not a level ("satisfaction reached 92%").
+        const describesChange = (claim) => {
+            const i = claim.sentence.indexOf(claim.value.display);
+            return i >= 0 && /^\s*(reduction|increase|decrease|improvement|growth|decline|drop|rise|jump|change|gain|cut|fall)\b/i.test(claim.sentence.slice(i + claim.value.display.length));
+        };
+        if (c.kind === 'stat' && c.unit === '%' && describesChange(c)) {
             const statPct = c.value.value;
             const dupedBy = kept.find(other =>
                 other !== c && other.kind === 'comparison' && other.sentence === c.sentence
@@ -1114,6 +1138,7 @@ function dedupe(claims) {
         if (c.kind === 'delta') {
             const dupedBy = kept.find(other =>
                 other !== c && other.kind === 'comparison' && other.sentence === c.sentence
+                && (other.title || '').toLowerCase() === (c.title || '').toLowerCase()
                 && Math.abs(impliedPercentChange(other) - c.value.value) < 1.5
             );
             if (dupedBy) continue;
@@ -1182,6 +1207,9 @@ function parseTabular(text) {
 function detectColumnType(header, data) {
     const samples = data.map(row => row[header]).filter(v => v != null && v !== '');
     if (samples.length === 0) return 'category';
+    // Year, date and period columns are labels, not values to chart.
+    if (/^(year|yr|fy|fiscal year|date|period|quarter|month|week|day)$/i.test(String(header).trim())) return 'category';
+    if (samples.every(v => /^(19|20)\d{2}$/.test(String(v).trim()))) return 'category';
     let numericCount = 0;
     let dateCount = 0;
     for (const v of samples) {
@@ -1201,7 +1229,7 @@ function detectColumnType(header, data) {
 function tabularToClaims(table) {
     const { headers, data, columnTypes } = table;
     const catHeader = headers.find((h, i) => ['category', 'datetime'].includes(columnTypes[i])) || headers[0];
-    const numHeaders = headers.filter((h, i) => columnTypes[i] === 'numeric');
+    const numHeaders = headers.filter((h, i) => columnTypes[i] === 'numeric' && h !== catHeader);
     if (numHeaders.length === 0) return [];
 
     const claims = [];
@@ -1209,21 +1237,25 @@ function tabularToClaims(table) {
         // Parse each cell: use parseNumber() for suffix-decorated strings so
         // "0.18%" becomes value 0.18 with display "0.18%". Preserve the raw
         // display for axis labels and tooltips.
-        const items = data.map(row => {
+        // Blank or unreadable cells are skipped rather than charted as 0.
+        const labelFor = row => (row[catHeader] == null || row[catHeader] === '') ? '(blank)' : String(row[catHeader]);
+        const items = [];
+        data.forEach(row => {
             const raw = row[numHeader];
-            if (typeof raw === 'number') {
-                return { label: String(row[catHeader]), value: raw, display: String(raw) };
-            }
+            if (raw == null || raw === '') return;
+            if (typeof raw === 'number') { items.push({ label: labelFor(row), value: raw, display: String(raw) }); return; }
             const parsed = parseNumber(String(raw));
-            if (parsed) {
-                return { label: String(row[catHeader]), value: parsed.value, display: parsed.display };
-            }
-            return { label: String(row[catHeader]), value: 0, display: String(raw) };
+            if (parsed) items.push({ label: labelFor(row), value: parsed.value, display: parsed.display });
         });
+        if (items.length === 0) return;
         // Determine column unit by sampling parsed displays
         const unit = detectCommonUnit(items.map(i => i.display));
         const isDate = columnTypes[headers.indexOf(catHeader)] === 'datetime';
-        const kind = isDate ? 'series' : (items.length > 6 ? 'series' : 'breakdown');
+        // Time-based labels (years, quarters, months, dates) make a trend;
+        // everything else is a breakdown by category.
+        const TIME_LABEL = /^((19|20)\d{2}|FY\s*\d{2,4}|Q[1-4]( \d{4})?|H[12]|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?( \d{2,4})?)$/i;
+        const looksLikeTime = items.length >= 2 && items.every(i => TIME_LABEL.test(i.label.trim()));
+        const kind = (isDate || looksLikeTime) ? 'series' : 'breakdown';
         claims.push({
             kind,
             title: numHeader,
@@ -1375,16 +1407,33 @@ function dataLabelColorsFor(palette) {
 let currentClaims = [];
 let claimRenderers = []; // { claim, mountEl, render(), getCanvas() }
 
+// Saved settings. Some embedded frames and privacy settings block storage and
+// throw an error, so every read and write is guarded; the tool still works.
+const store = {
+    get(key) { try { return window.localStorage.getItem(key); } catch (e) { return null; } },
+    set(key, value) { try { window.localStorage.setItem(key, value); } catch (e) { /* not saved */ } }
+};
+
+// Chart text colors that stay readable in light and dark mode.
+function isDarkTheme() { return document.documentElement.getAttribute('data-theme') === 'dark'; }
+function chartTextColor() { return isDarkTheme() ? '#cbd5e1' : '#334155'; }
+
+// Destroy every on-screen chart before the gallery is rebuilt, so old charts
+// don't keep running in the background.
+function destroyAllCharts() {
+    claimRenderers.forEach(r => { try { r.chartInstance && r.chartInstance.destroy(); } catch (e) {} r.chartInstance = null; });
+}
+
 // ---------- THEME ----------
 function setupTheme() {
-    if (localStorage.getItem('chart-theme') === 'dark') applyTheme(true);
+    if (store.get('chart-theme') === 'dark') applyTheme(true);
     dom.themeToggle.addEventListener('click', () => applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark'));
 }
 function applyTheme(isDark) {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
     if (!isDark) document.documentElement.removeAttribute('data-theme');
     dom.themeToggle.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    localStorage.setItem('chart-theme', isDark ? 'dark' : 'light');
+    store.set('chart-theme', isDark ? 'dark' : 'light');
     // Re-render to pick up theme colors
     if (currentClaims.length > 0) renderClaims(currentClaims);
 }
@@ -1404,7 +1453,7 @@ function setupWelcomePanel() {
     const autoShowToggle = document.getElementById('welcome-autoshow-toggle');
 
     // Default to true (show on load) if never set
-    const storedPref = localStorage.getItem(WELCOME_AUTOSHOW_KEY);
+    const storedPref = store.get(WELCOME_AUTOSHOW_KEY);
     const autoShow = storedPref === null ? true : storedPref === '1';
     autoShowToggle.checked = autoShow;
 
@@ -1412,7 +1461,7 @@ function setupWelcomePanel() {
 
     // Persist toggle changes the moment they happen so the next reload reflects them
     autoShowToggle.addEventListener('change', () => {
-        localStorage.setItem(WELCOME_AUTOSHOW_KEY, autoShowToggle.checked ? '1' : '0');
+        store.set(WELCOME_AUTOSHOW_KEY, autoShowToggle.checked ? '1' : '0');
     });
 
     const dismissWelcome = () => overlay.classList.remove('visible');
@@ -1446,7 +1495,7 @@ const TOUR_STEPS = [
     {
         selector: '#main-input',
         title: 'Paste your text here',
-        text: "Paste a sentence, paragraph, or full report. The tool reads natural language — you don't need to format anything. CSV and Excel files work too (drag-and-drop or use the Upload button).",
+        text: "Paste a sentence, paragraph, or full report. The tool reads natural language, so you don't need to format anything. CSV and Excel files work too (drag-and-drop or use the Upload button).",
         arrow: 'left'
     },
     {
@@ -1465,21 +1514,21 @@ const TOUR_STEPS = [
         // Demo card injection happens before this step. See ensureDemoCardForTour().
         selector: '#tour-demo-card .card-title',
         title: 'Edit titles and descriptions',
-        text: "Each chart appears as its own card. Click the title or description to edit them inline — they'll appear on every download.",
+        text: "Each chart appears as its own card. Click the title or description to edit them inline. They'll appear on every download.",
         arrow: 'right',
         needsDemoCard: true
     },
     {
         selector: '#tour-demo-card .chart-type-picker',
         title: 'Change chart type',
-        text: "Click the shapes icon to swap between bar, line, area, donut, or pie — whatever fits your data best.",
+        text: "Click the shapes icon to swap between bar, line, area, donut, or pie, whichever fits your data best.",
         arrow: 'right',
         needsDemoCard: true
     },
     {
         selector: '#tour-demo-card .card-actions button[title*="Download"]',
         title: 'Download a single chart',
-        text: "Click the download icon to save just this chart as a 1280×720 PNG — sized for slides.",
+        text: "Click the download icon to save just this chart as a 1280×720 PNG, sized for slides.",
         arrow: 'right',
         needsDemoCard: true
     },
@@ -1565,6 +1614,8 @@ function ensureDemoCardForTour() {
     // misclick doesn't break the flow
     card.el.querySelectorAll('.card-actions button').forEach(b => {
         b.style.pointerEvents = 'none';
+        b.disabled = true;
+        b.tabIndex = -1;
     });
     // Clear placeholder if present, then prepend the demo card
     const placeholder = dom.gallery.querySelector('.placeholder');
@@ -1729,6 +1780,16 @@ document.addEventListener('keydown', (e) => {
     if (tourActive && e.key === 'Escape') endTour();
 });
 
+// Close any open chart-type menu when clicking outside it (one shared listener).
+document.addEventListener('click', (e) => {
+    document.querySelectorAll('.chart-type-menu.visible').forEach(m => {
+        if (!m.parentElement.contains(e.target)) m.classList.remove('visible');
+    });
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('.chart-type-menu.visible').forEach(m => m.classList.remove('visible'));
+});
+
 // ---------- INPUT ACTIONS ----------
 dom.generateBtn.addEventListener('click', generate);
 dom.mainInput.addEventListener('keydown', (e) => {
@@ -1760,13 +1821,16 @@ dom.clearInputBtn.addEventListener('click', () => {
 });
 
 dom.clearChartsBtn.addEventListener('click', () => {
+    destroyAllCharts();
     currentClaims = [];
     claimRenderers = [];
     showEmptyState();
 });
 
 // Drop anywhere on the controls card
+const hasFiles = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
 ['dragover', 'dragenter'].forEach(ev => dom.controlsCard.addEventListener(ev, e => {
+    if (!hasFiles(e)) return; // let dragged text drop into the box normally
     e.preventDefault(); dom.controlsCard.classList.add('dragover');
 }));
 ['dragleave', 'drop'].forEach(ev => dom.controlsCard.addEventListener(ev, e => {
@@ -1774,9 +1838,12 @@ dom.clearChartsBtn.addEventListener('click', () => {
     dom.controlsCard.classList.remove('dragover');
 }));
 dom.controlsCard.addEventListener('drop', e => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
     if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
 });
+// A file dropped anywhere else should not replace the tool with the file.
+['dragover', 'drop'].forEach(ev => window.addEventListener(ev, e => { if (hasFiles(e)) e.preventDefault(); }));
 
 document.querySelectorAll('.example-chip').forEach(chip => {
     chip.addEventListener('click', () => {
@@ -1788,30 +1855,41 @@ document.querySelectorAll('.example-chip').forEach(chip => {
     });
 });
 
+const SUPPORTED_FILES = ['csv', 'tsv', 'txt', 'xlsx', 'xls'];
+
 function handleFile(file) {
-    const reader = new FileReader();
     const ext = file.name.toLowerCase().split('.').pop();
-    // Clear any previous text BEFORE reading so user can see the new content take its place
-    dom.mainInput.value = '';
-    autoGrowTextarea(dom.mainInput);
+    if (!SUPPORTED_FILES.includes(ext)) {
+        showToast("That file type isn't supported. Use CSV, TSV, TXT or Excel.");
+        dom.fileInput.value = '';
+        return;
+    }
+    const reader = new FileReader();
     showToast('Reading file…');
+    reader.onerror = () => showToast('Could not read that file');
     reader.onload = (e) => {
         try {
             let text;
+            let note = '';
             if (ext === 'xlsx' || ext === 'xls') {
                 const data = new Uint8Array(e.target.result);
                 const wb = XLSX.read(data, { type: 'array' });
                 text = XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]]);
+                if (wb.SheetNames.length > 1) note = `Used the first sheet, "${wb.SheetNames[0]}"`;
             } else {
                 text = e.target.result;
             }
+            // Replace the text only after the file was read successfully.
             dom.mainInput.value = text;
             dom.clearInputBtn.disabled = false;
             autoGrowTextarea(dom.mainInput);
             generate();
+            if (note) showToast(note);
         } catch (err) {
-            showToast('Could not read file');
+            showToast('Could not read that file');
             console.error(err);
+        } finally {
+            dom.fileInput.value = '';
         }
     };
     if (ext === 'xlsx' || ext === 'xls') reader.readAsArrayBuffer(file);
@@ -1842,6 +1920,7 @@ function generate() {
 }
 
 function showEmptyState() {
+    destroyAllCharts();
     dom.gallery.innerHTML = `
         <div class="placeholder">
             <i class="fas fa-circle-question"></i>
@@ -1867,6 +1946,7 @@ function showToast(message) {
 // ---------- RENDERING ----------
 
 function renderClaims(claims) {
+    destroyAllCharts();
     currentClaims = claims;
     claimRenderers = [];
     dom.gallery.innerHTML = '';
@@ -1907,7 +1987,7 @@ function defaultDescription(claim) {
             const after = claim.after.display;
             const direction = claim.after.value > claim.before.value ? 'rose' : (claim.after.value < claim.before.value ? 'fell' : 'remained');
             const pct = impliedPercentChange(claim);
-            const pctText = (pct > 0.5 && pct < 1000) ? ` — a ${pct.toFixed(0)}% change` : '';
+            const pctText = (pct > 0.5 && pct < 1000) ? `, a ${pct.toFixed(0)}% change` : '';
             return `${capitalize(subj)} ${direction} from ${before} to ${after}${pctText}.`;
         }
         case 'stat': {
@@ -2040,6 +2120,8 @@ function buildCardFor(claim, idx) {
     titleEl.className = 'card-title';
     titleEl.contentEditable = 'true';
     titleEl.spellcheck = false;
+    titleEl.setAttribute('role', 'textbox');
+    titleEl.setAttribute('aria-label', 'Chart title');
     titleEl.textContent = claim.title;
     titleEl.addEventListener('input', () => { claim.title = titleEl.textContent.trim() || 'Untitled'; });
     titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } });
@@ -2055,6 +2137,7 @@ function buildCardFor(claim, idx) {
 
         const pickerBtn = document.createElement('button');
         pickerBtn.title = 'Change chart type';
+        pickerBtn.setAttribute('aria-label', 'Change chart type');
         pickerBtn.innerHTML = '<i class="fas fa-shapes"></i>';
 
         const menu = document.createElement('div');
@@ -2083,6 +2166,7 @@ function buildCardFor(claim, idx) {
 
     const dlBtn = document.createElement('button');
     dlBtn.title = 'Download as PNG';
+    dlBtn.setAttribute('aria-label', 'Download this chart as PNG');
     dlBtn.innerHTML = '<i class="fas fa-download"></i>';
     dlBtn.onclick = () => downloadCardPng(idx);
     actions.appendChild(dlBtn);
@@ -2090,6 +2174,7 @@ function buildCardFor(claim, idx) {
     const rmBtn = document.createElement('button');
     rmBtn.className = 'danger';
     rmBtn.title = 'Remove';
+    rmBtn.setAttribute('aria-label', 'Remove this chart');
     rmBtn.innerHTML = '<i class="fas fa-times"></i>';
     rmBtn.onclick = () => {
         currentClaims.splice(idx, 1);
@@ -2105,6 +2190,8 @@ function buildCardFor(claim, idx) {
     descEl.className = 'card-description';
     descEl.contentEditable = 'true';
     descEl.spellcheck = true;
+    descEl.setAttribute('role', 'textbox');
+    descEl.setAttribute('aria-label', 'Chart description');
     descEl.textContent = claim.description || '';
     descEl.addEventListener('input', () => { claim.description = descEl.textContent.trim(); });
     descEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); descEl.blur(); } });
@@ -2126,6 +2213,8 @@ function buildCardFor(claim, idx) {
     axisLabelEl.className = 'axis-label';
     axisLabelEl.contentEditable = 'true';
     axisLabelEl.spellcheck = false;
+    axisLabelEl.setAttribute('role', 'textbox');
+    axisLabelEl.setAttribute('aria-label', 'Axis label');
     axisLabelEl.textContent = claim.axisLabel || '';
     axisLabelEl.addEventListener('input', () => {
         claim.axisLabel = axisLabelEl.textContent.trim();
@@ -2135,12 +2224,6 @@ function buildCardFor(claim, idx) {
 
     el.append(titleRow, descEl, sentenceEl, body, axisRow);
 
-    // Close menus when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!el.contains(e.target)) {
-            el.querySelectorAll('.chart-type-menu.visible').forEach(m => m.classList.remove('visible'));
-        }
-    });
 
     const renderer = {
         el, claim, body, axisRow, axisLabelEl,
@@ -2261,7 +2344,7 @@ function renderComparison(claim, body, setInstance) {
         config.colors = [accent];
         config.stroke = { curve: 'straight', width: 3 };
         config.markers = { size: 6 };
-        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '11px', colors: ['#334155'] }, background: { enabled: false }, offsetY: -8 };
+        config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '11px', colors: [chartTextColor()] }, background: { enabled: false }, offsetY: -8 };
         config.grid = { borderColor: '#e5e5e5' };
     } else {
         config.plotOptions = { bar: { distributed: true, borderRadius: 3, columnWidth: '50%' } };
@@ -2269,8 +2352,10 @@ function renderComparison(claim, body, setInstance) {
         const barColors = [accent, contrast];
         config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(barColors), fontSize: '11px', fontWeight: '700' }, offsetY: 0 };
     }
+    config.chart.foreColor = chartTextColor();
     const apex = new ApexCharts(mount, config);
-    apex.render().then(() => setInstance && setInstance(apex));
+    if (setInstance) setInstance(apex);
+    apex.render();
 }
 
 function renderBreakdown(claim, body, setInstance) {
@@ -2310,8 +2395,10 @@ function renderBreakdown(claim, body, setInstance) {
             tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } }
         };
     }
+    config.chart.foreColor = chartTextColor();
     const apex = new ApexCharts(mount, config);
-    apex.render().then(() => setInstance && setInstance(apex));
+    if (setInstance) setInstance(apex);
+    apex.render();
 }
 
 function renderSeries(claim, body, setInstance) {
@@ -2333,7 +2420,7 @@ function renderSeries(claim, body, setInstance) {
         colors: baseType === 'bar' ? palette : [accent],
         grid: { borderColor: '#e5e5e5' },
         tooltip: { y: { formatter: (v) => formatNum(v, claim.unit) } },
-        dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px', colors: ['#334155'] }, background: { enabled: false }, offsetY: -8 }
+        dataLabels: { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { fontSize: '10px', colors: [chartTextColor()] }, background: { enabled: false }, offsetY: -8 }
     };
     if (baseType === 'line') {
         config.stroke = { curve: 'straight', width: 3 };
@@ -2347,8 +2434,10 @@ function renderSeries(claim, body, setInstance) {
         config.dataLabels = { enabled: true, formatter: (v) => formatNum(v, claim.unit), style: { colors: dataLabelColorsFor(palette.slice(0, claim.items.length)), fontSize: '10px', fontWeight: '700' } };
         config.legend = { show: false };
     }
+    config.chart.foreColor = chartTextColor();
     const apex = new ApexCharts(mount, config);
-    apex.render().then(() => setInstance && setInstance(apex));
+    if (setInstance) setInstance(apex);
+    apex.render();
 }
 
 function escapeHtml(str) {
@@ -2366,8 +2455,8 @@ function escapeHtml(str) {
  * Captures the whole thing via html2canvas and returns a PNG blob.
  * This is what downloads get, regardless of how the on-screen card looks.
  */
-async function captureCardAsExport(renderer) {
-    const claim = renderer.claim;
+async function captureCardAsExport(renderer, options = {}) {
+    const claim = options.numberOnly ? { ...renderer.claim, title: '', description: '', axisLabel: '' } : renderer.claim;
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const bgColor = '#ffffff';
     const textPrimary = '#00338D';
@@ -2389,7 +2478,7 @@ async function captureCardAsExport(renderer) {
     const titleEl = document.createElement('div');
     titleEl.style.cssText = `font-size: 38px; font-weight: 700; color: ${textPrimary}; line-height: 1.2; flex-shrink: 0;`;
     titleEl.textContent = claim.title || 'Untitled';
-    exportEl.appendChild(titleEl);
+    if (!options.numberOnly) exportEl.appendChild(titleEl);
 
     // Description (only if user provided one)
     if (claim.description && claim.description.trim()) {
@@ -2625,7 +2714,8 @@ function formatNum(v, unit) {
     else if (abs >= 1e6) s = (v / 1e6).toFixed(1) + 'M';
     else if (abs >= 1e3) s = (v / 1e3).toFixed(1) + 'K';
     else if (Number.isInteger(v)) s = v.toLocaleString();
-    else s = v.toFixed(1);
+    else if (abs < 1) s = String(parseFloat(v.toPrecision(2)));   // 0.18, 0.04
+    else s = String(parseFloat(v.toFixed(1)));
     if (unit === '$') return '$' + s;
     if (unit === '%') return s + '%';
     return s;
@@ -2633,23 +2723,47 @@ function formatNum(v, unit) {
 
 // ---------- DOWNLOAD ----------
 
+// Runs one export at a time: export buttons are disabled while it runs, and
+// any failure shows a message instead of leaving "Building…" on screen.
+let exportBusy = false;
+async function runExport(fn) {
+    if (exportBusy) { showToast('Still working on the last download'); return; }
+    exportBusy = true;
+    const buttons = [dom.downloadAllPptx, dom.downloadAllHtml, dom.downloadAllPng, dom.clearChartsBtn];
+    buttons.forEach(b => b.disabled = true);
+    try { await fn(); }
+    catch (err) { console.error(err); showToast("Download didn't work. Please try again."); }
+    finally {
+        exportBusy = false;
+        const none = claimRenderers.length === 0;
+        buttons.forEach(b => b.disabled = none);
+    }
+}
+// A copy of the current cards, so removing a card mid-download is safe.
+function snapshotRenderers() { return [...claimRenderers]; }
+function safeName(title) { return (title || 'chart').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'chart'; }
+
 async function downloadCardPng(idx) {
     const renderer = claimRenderers[idx];
     if (!renderer) return;
-    showToast('Saving PNG…');
-    const blob = await renderer.getPngBlob();
-    const filename = `${(renderer.claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.png`;
-    saveAs(blob, filename);
-    showToast('Saved');
+    await runExport(async () => {
+        showToast('Saving PNG…');
+        const blob = await renderer.getPngBlob();
+        if (!blob) throw new Error('No image');
+        saveAs(blob, `${safeName(renderer.claim.title)}.png`);
+        showToast('Saved');
+    });
 }
 
-dom.downloadAllPng.addEventListener('click', async () => {
+dom.downloadAllPng.addEventListener('click', () => runExport(async () => {
+    const claimRenderers = snapshotRenderers();
     if (claimRenderers.length === 0) return;
     // Single visualization: download the file directly — no point zipping one item
     if (claimRenderers.length === 1) {
         showToast('Saving PNG…');
         const blob = await claimRenderers[0].getPngBlob();
-        const name = `${(claimRenderers[0].claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.png`;
+        if (!blob) throw new Error('No image');
+        const name = `${safeName(claimRenderers[0].claim.title)}.png`;
         saveAs(blob, name);
         showToast('Saved');
         return;
@@ -2657,14 +2771,16 @@ dom.downloadAllPng.addEventListener('click', async () => {
     showToast('Building ZIP…');
     const zip = new JSZip();
     for (let i = 0; i < claimRenderers.length; i++) {
+        showToast(`Building ZIP: ${i + 1} of ${claimRenderers.length}`);
         const blob = await claimRenderers[i].getPngBlob();
-        const name = `${i + 1}_${(claimRenderers[i].claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.png`;
+        if (!blob) throw new Error('No image');
+        const name = `${i + 1}_${safeName(claimRenderers[i].claim.title)}.png`;
         zip.file(name, blob);
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     saveAs(zipBlob, 'charts.zip');
     showToast('ZIP saved');
-});
+}));
 
 /**
  * Export each visualization as a standalone HTML file packaged in a ZIP.
@@ -2673,13 +2789,14 @@ dom.downloadAllPng.addEventListener('click', async () => {
  * For stat/ratio/delta cards, the file contains semantic HTML with inline CSS
  * (no external scripts needed).
  */
-dom.downloadAllHtml.addEventListener('click', async () => {
+dom.downloadAllHtml.addEventListener('click', () => runExport(async () => {
+    const claimRenderers = snapshotRenderers();
     if (claimRenderers.length === 0) return;
     // Single visualization: download the file directly — no point zipping one item
     if (claimRenderers.length === 1) {
         showToast('Saving HTML…');
         const claim = claimRenderers[0].claim;
-        const filename = `${(claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.html`;
+        const filename = `${safeName(claim.title)}.html`;
         const html = buildStandaloneHtml(claim, claimRenderers[0]);
         const blob = new Blob([html], { type: 'text/html' });
         saveAs(blob, filename);
@@ -2690,14 +2807,14 @@ dom.downloadAllHtml.addEventListener('click', async () => {
     const zip = new JSZip();
     for (let i = 0; i < claimRenderers.length; i++) {
         const claim = claimRenderers[i].claim;
-        const filename = `${i + 1}_${(claim.title || 'chart').replace(/[^a-z0-9]+/gi, '_')}.html`;
+        const filename = `${i + 1}_${safeName(claim.title)}.html`;
         const html = buildStandaloneHtml(claim, claimRenderers[i]);
         zip.file(filename, html);
     }
     const zipBlob = await zip.generateAsync({ type: 'blob' });
     saveAs(zipBlob, 'charts-html.zip');
     showToast('HTML saved');
-});
+}));
 
 /**
  * Build a single standalone HTML file representing one claim.
@@ -2839,11 +2956,20 @@ function buildStandaloneHtml(claim, renderer) {
         ${headerBlock}
         <div id="chart"></div>
         ${footerBlock}
-        <script src="https://cdn.jsdelivr.net/npm/apexcharts"><\/script>
+        <script src="https://cdn.jsdelivr.net/npm/apexcharts@8.9.1/dist/apexcharts.min.js"><\/script>
         <script>
         // ===== Chart configuration =====
         // Edit colors, labels, or data here, then refresh the page.
-        const chartOptions = ${JSON.stringify(chartConfig, null, 2)};
+        const chartOptions = ${JSON.stringify(chartConfig, null, 2).replace(/</g, '\\u003c')};
+        // Number format: $ and % kept, large values shortened (4.2B, 1.5M, 12K).
+        const UNIT = ${JSON.stringify(claim.unit === '$' || claim.unit === '%' ? claim.unit : '')};
+        ${formatNum.toString()}
+        const fmt = (v) => formatNum(v, UNIT);
+        if (!['pie', 'donut'].includes(chartOptions.chart.type)) {
+            chartOptions.dataLabels = Object.assign({}, chartOptions.dataLabels, { formatter: fmt });
+            chartOptions.yaxis = { labels: { formatter: fmt } };
+        }
+        chartOptions.tooltip = { y: { formatter: fmt } };
         new ApexCharts(document.querySelector("#chart"), chartOptions).render();
         <\/script>`);
 }
@@ -2864,7 +2990,8 @@ ${body}
 </html>`;
 }
 
-dom.downloadAllPptx.addEventListener('click', async () => {
+dom.downloadAllPptx.addEventListener('click', () => runExport(async () => {
+    const claimRenderers = snapshotRenderers();
     if (claimRenderers.length === 0) return;
     showToast('Building PPT…');
     const pptx = new PptxGenJS();
@@ -2914,7 +3041,10 @@ dom.downloadAllPptx.addEventListener('click', async () => {
             // (16:9), so we must preserve that aspect ratio — stretching to
             // the full 12.3" slide width would otherwise produce a 6.92"-tall
             // image that overlaps the title and description above.
-            const blob = await renderer.getPngBlob();
+            // The slide already has the title and description as text, so the
+            // image shows only the number.
+            const blob = await captureCardAsExport(renderer, { numberOnly: true });
+            if (!blob) throw new Error('No image');
             const dataUrl = await blobToDataURL(blob);
             const maxW = 12.3, maxH = chartH;
             const sourceAspect = 1280 / 720; // 16:9 = 1.778
@@ -2939,7 +3069,7 @@ dom.downloadAllPptx.addEventListener('click', async () => {
     }
     await pptx.writeFile({ fileName: 'charts.pptx' });
     showToast('PPT saved');
-});
+}));
 
 function nativePptxChartFor(claim, pptx) {
     const accentIdx = claim.accentColorIdx || 0;
