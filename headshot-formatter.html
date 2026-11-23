@@ -1797,21 +1797,64 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { state.faceResult = null; }
     }
 
+    // ------------------------------------------------------------
+    // HEAD SIZE ESTIMATE (hair ignored)
+    // Classic face proportions: the eyes sit about halfway between the
+    // chin and the top of the skull. So skull height is about 2x the
+    // eye-to-chin distance. This uses only facial landmarks, so it isn't
+    // thrown off by tall hair, flat hair, or no hair.
+    // A second estimate from face width (ear to ear along the jaw) is used
+    // as a sanity check, for photos where the head is tipped up or down.
+    // Both ratios are estimates from common artist and face-measurement
+    // proportions; tune them here if faces come out a little big or small.
+    // ------------------------------------------------------------
+    const HEAD_RATIO_FROM_EYES  = 2.0;  // skull height / eye-to-chin distance
+    const HEAD_RATIO_FROM_WIDTH = 1.55; // skull height / jaw width
+    const HEAD_WIDTH_WEIGHT     = 0.25; // how much the width estimate counts (0 to 1)
+
+    function estimateHeadFromLandmarks(landmarks) {
+        const avg = pts => ({
+            x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+            y: pts.reduce((s, p) => s + p.y, 0) / pts.length
+        });
+        const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+        const jaw = landmarks.getJawOutline();
+        const chin = jaw[8];
+        const eyes = avg([...landmarks.getLeftEye(), ...landmarks.getRightEye()]);
+
+        // Distances are measured along the face, so a tilted head still works.
+        const fromEyes = dist(eyes, chin) * HEAD_RATIO_FROM_EYES;
+        const fromWidth = dist(jaw[0], jaw[16]) * HEAD_RATIO_FROM_WIDTH;
+        let height = fromEyes * (1 - HEAD_WIDTH_WEIGHT) + fromWidth * HEAD_WIDTH_WEIGHT;
+
+        // Guard against a bad landmark read: keep within 15% of the eye estimate.
+        height = Math.min(fromEyes * 1.15, Math.max(fromEyes * 0.85, height));
+
+        return {
+            height,
+            chinY: chin.y,
+            // Center on the line between the eyes and the chin, not the detector box.
+            centerX: (eyes.x + chin.x) / 2
+        };
+    }
+
     function calculateAutoPosition(state, canvasConfig) {
         const size = dom.sizeSelect.value;
         const guides = guideConfig[size];
 
         if (state.faceResult && !guides.isCircle) {
-            const { detection, landmarks } = state.faceResult;
-            const chin = landmarks.getJawOutline()[8];
-            const headTopY = detection.box.y - (detection.box.height * 0.3);
-            const headH = chin.y - headTopY;
+            const { landmarks } = state.faceResult;
+            const head = estimateHeadFromLandmarks(landmarks);
 
-            const scale = (canvasConfig.h - (guides.top + guides.bottom)) / headH;
+            // Fit chin-to-skull-top between the two guides. Hair is ignored on
+            // purpose, so every face ends up about the same size; tall hair can
+            // extend past the top guide or out of the frame.
+            const scale = (canvasConfig.h - (guides.top + guides.bottom)) / head.height;
             state.initialScale = state.scale = scale;
 
-            state.offsetX = (canvasConfig.w / 2) - ((detection.box.x + (detection.box.width / 2)) * scale);
-            state.offsetY = (canvasConfig.h - guides.bottom) - (chin.y * scale);
+            state.offsetX = (canvasConfig.w / 2) - (head.centerX * scale);
+            state.offsetY = (canvasConfig.h - guides.bottom) - (head.chinY * scale);
         } else {
             state.initialScale = state.scale = Math.min(canvasConfig.w / state.processed.width, canvasConfig.h / state.processed.height);
             state.offsetX = (canvasConfig.w - state.processed.width * state.scale) / 2;
