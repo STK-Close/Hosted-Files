@@ -422,7 +422,7 @@
 
         function resetUIForMode(mode) {
             state.hasContent = false; state.originalImageData = null; state.drawPoints = []; state.fontChosen = false;
-            dom.fileElem.value = ""; dom.signatureText.value = ""; setUploadMessage('');
+            dom.fileElem.value = ""; dom.signatureText.value = ""; dom.clearTextBtn.style.display = 'none'; setUploadMessage('');
             hideError();
             clearDrawing();
             [dom.previewImage, dom.typedSignaturePreview, dom.drawingCanvas, dom.fontPreviewList].forEach(el => el.style.display = 'none');
@@ -431,7 +431,7 @@
             document.getElementById(`${mode}-panel`).classList.add('active');
             if (mode === 'upload') { dom.sensitivityControl.style.display = 'block'; dom.smoothingControl.style.display = 'block'; }
             else if (mode === 'draw') { dom.drawingCanvas.style.display = 'block'; dom.sizeControl.style.display = 'block'; }
-            else if (mode === 'type') { dom.fontPreviewList.style.display = 'flex'; dom.typeModeInstruction.style.display = 'block'; updateTypedSignature(); }
+            else if (mode === 'type') { dom.fontPreviewList.style.display = 'flex'; dom.typeModeInstruction.style.display = 'block'; fillTypedNameFromExport(); updateTypedSignature(); }
             checkDownloadReadiness();
         }
 
@@ -687,6 +687,7 @@
                 const hasValue = dom.signatureText.value.trim().length > 0;
                 dom.clearTextBtn.style.display = hasValue ? 'flex' : 'none';
                 state.fontChosen = false;
+                state.typedFromExport = false;
                 updateTypedSignature();
                 const words = dom.signatureText.value.trim().split(/\s+/);
                 dom.firstName.value = words[0] || '';
@@ -710,6 +711,20 @@
                 }
             });
         }
+        // Type mode starts with the name already in the export boxes, and follows
+        // changes to those boxes until the person types their own text.
+        function exportName() {
+            return [dom.firstName.value.trim(), dom.lastName.value.trim()].filter(Boolean).join(' ');
+        }
+        function fillTypedNameFromExport() {
+            if (state.mode !== 'type') return;
+            const text = dom.signatureText.value.trim();
+            if (text && !state.typedFromExport) return;
+            dom.signatureText.value = exportName();
+            state.typedFromExport = true;
+            dom.clearTextBtn.style.display = dom.signatureText.value ? 'flex' : 'none';
+        }
+
         function updateTypedSignature() {
             if (state.mode !== 'type') return;
             const text = dom.signatureText.value;
@@ -750,7 +765,14 @@
         function updateTypedStyle() { const color = `rgba(${state.currentColor.join(',')})`; dom.typedSignaturePreview.style.color = color; dom.fontPreviewList.querySelectorAll('.font-preview-item').forEach(item => item.style.color = color); }
 
         function setupExport() {
-            [dom.firstName, dom.lastName].forEach(input => input.addEventListener('input', () => { if(dom.firstName.value.trim() && dom.lastName.value.trim()) hideError(); checkDownloadReadiness(); }));
+            [dom.firstName, dom.lastName].forEach(input => input.addEventListener('input', () => {
+                if (dom.firstName.value.trim() && dom.lastName.value.trim()) hideError();
+                if (state.mode === 'type' && (state.typedFromExport || !dom.signatureText.value.trim())) {
+                    fillTypedNameFromExport();
+                    updateTypedSignature();
+                }
+                checkDownloadReadiness();
+            }));
             dom.exportButtonsWrapper.addEventListener('click', (e) => {
                  if (checkCanExport(e)) { }
             });
