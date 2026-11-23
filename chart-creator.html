@@ -122,7 +122,11 @@
         .output-header h3 {
             margin: 0; font-size: 0.95rem; font-weight: 600; color: var(--slate-700);
         }
-        .output-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .output-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .actions-label { font-size: var(--text-sm); font-weight: 700; color: var(--slate-700); margin-right: 2px; }
+        [hidden] { display: none !important; }
+        .actions-sep { width: 1px; align-self: stretch; background: var(--slate-300); margin: 0 4px; }
+        .gallery.selecting ~ * .actions-sep, .output-header:has(#combine-go:not([hidden])) .actions-sep { display: none; }
         .output-actions button {
             background: transparent; border: 1px solid var(--slate-300); color: var(--slate-600);
             padding: 6px 12px; border-radius: var(--rounded-md); font-size: 12px; font-weight: 600;
@@ -568,8 +572,9 @@
         /* Numbers found in the text */
         .found-panel { grid-column: 1 / -1; border: 1px solid var(--slate-200); border-radius: var(--rounded-md); padding: 0 12px; }
         .found-panel > summary { min-height: var(--target-min); display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--text-sm); font-weight: 600; color: var(--slate-700); }
-        .found-text { font-size: var(--text-sm); line-height: 2.1; color: var(--slate-700); margin: 0 0 8px; white-space: pre-wrap; }
-        .num-mark { font: inherit; font-weight: 700; border-radius: 4px; padding: 1px 4px; cursor: pointer; border: 1px solid transparent; }
+        .found-text { font-size: var(--text-sm); line-height: 2.6; color: var(--slate-700); margin: 0 0 8px; white-space: pre-wrap; }
+        .num-mark { font: inherit; font-weight: 700; border-radius: 6px; padding: 0 6px; cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; justify-content: center; min-height: var(--target-min); min-width: var(--target-min); vertical-align: middle; box-sizing: border-box; margin: 2px 0; }
+        .found-key .num-mark { min-height: 0; min-width: 0; cursor: default; }
         .num-mark.charted { background: #dcfce7; color: #14532d; border-color: #86efac; }
         .num-mark.skipped { background: var(--slate-100); color: var(--slate-700); border-color: var(--slate-300); text-decoration: line-through dotted; }
         .found-key { display: flex; gap: 16px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--muted-text); margin: 0 0 12px; }
@@ -688,10 +693,12 @@
             <div class="workspace-card">
                 <div class="output-header">
                     <div class="output-actions">
-                        <button id="download-all-pptx" disabled title="Download all charts as a single PowerPoint deck (one slide per chart, charts are editable in PowerPoint)"><i class="fas fa-file-powerpoint"></i>&nbsp; Download as PPT</button>
-                        <button id="download-all-html" disabled title="Download as a ZIP of standalone HTML files, useful for web designers"><i class="fas fa-code"></i>&nbsp; Download as HTML</button>
-                        <button id="download-all-png" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; Download all PNG</button>
-                        <button type="button" id="infographic-btn" disabled title="One branded page with every chart, as a PNG"><i class="fas fa-table-cells-large"></i>&nbsp; Download infographic</button>
+                        <span class="actions-label" id="download-label">Download:</span>
+                        <button type="button" id="download-all-pptx" aria-describedby="download-label" disabled title="Download all charts as a single PowerPoint deck (one slide per chart, charts are editable in PowerPoint)"><i class="fas fa-file-powerpoint"></i>&nbsp; PowerPoint</button>
+                        <button type="button" id="download-all-html" aria-describedby="download-label" disabled title="Download as a ZIP of standalone HTML files, useful for web designers"><i class="fas fa-code"></i>&nbsp; HTML</button>
+                        <button type="button" id="download-all-png" aria-describedby="download-label" disabled title="Download all charts as PNG images packaged in a ZIP"><i class="fas fa-image"></i>&nbsp; PNG images</button>
+                        <button type="button" id="infographic-btn" aria-describedby="download-label" disabled title="One branded page with every chart, as a PNG"><i class="fas fa-table-cells-large"></i>&nbsp; Infographic</button>
+                        <span class="actions-sep" aria-hidden="true"></span>
                         <button type="button" id="combine-btn" disabled title="Pick two or more charts and merge them into one"><i class="fas fa-object-group"></i>&nbsp; Combine charts</button>
                         <button type="button" id="combine-go" hidden><i class="fas fa-check"></i>&nbsp; Combine selected</button>
                         <button type="button" id="combine-cancel" hidden>Cancel</button>
@@ -2851,7 +2858,7 @@ function renderFoundPanel(found, skipped) {
     panel.appendChild(summary);
     const key = document.createElement('p');
     key.className = 'found-key';
-    key.innerHTML = '<span><span class="num-mark charted">12%</span> charted: select it to go to its chart</span><span><span class="num-mark skipped">12%</span> not charted: not enough context</span>';
+    key.innerHTML = '<span><span class="num-mark charted" aria-hidden="true">12%</span> charted: select it to go to its chart</span><span><span class="num-mark skipped" aria-hidden="true">12%</span> not charted: not enough context</span>';
     panel.appendChild(key);
     const p = document.createElement('p');
     p.className = 'found-text';
@@ -4148,7 +4155,7 @@ function setSelecting(on) {
     dom.gallery.classList.toggle('selecting', on);
     document.getElementById('combine-go').hidden = !on;
     document.getElementById('combine-cancel').hidden = !on;
-    ['download-all-pptx', 'download-all-html', 'download-all-png', 'infographic-btn', 'combine-btn', 'clear-charts-btn']
+    ['download-label', 'download-all-pptx', 'download-all-html', 'download-all-png', 'infographic-btn', 'combine-btn', 'clear-charts-btn']
         .forEach(id => { document.getElementById(id).hidden = on; });
     if (!on) dom.gallery.querySelectorAll('.select-box input').forEach(i => { i.checked = false; });
     else showToast('Select two or more charts, then choose Combine selected.');
