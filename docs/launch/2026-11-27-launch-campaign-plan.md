@@ -154,7 +154,7 @@ The biggest risk of the whole campaign, so it is drafted now even though HyMeta 
 Composio's tools differ by platform, and some platforms limit posting by outside apps. Check before the
 batches are written.
 
-- [ ] With Composio's tool search, confirm for each platform: YouTube (upload a Short), Instagram (Reels,
+- [x] With Composio's tool search, confirm for each platform: YouTube (upload a Short), Instagram (Reels,
       already working for Lumina), TikTok (direct post, or only "send to inbox as a draft"), Threads.
 - [ ] Confirm Composio can hold more than one account per platform (Lumina's Instagram plus a product's), and
       how a tool call picks the right one.
@@ -165,6 +165,17 @@ batches are written.
       a webhook or bot a server's staff add, or a channel the server sets up for that. Where a server offers no
       such route, that server is skipped and Ligia is told why.
 - [ ] Any platform that cannot post automatically is skipped for that product, and the Monday report says so.
+
+**Result, checked Nov 27 with Composio's tool search (no accounts connected yet, so not yet tried live):**
+
+| Platform | Can post automatically? | Notes |
+|---|---|---|
+| YouTube Shorts | Yes | Upload with title, description and privacy. A vertical clip under 60 seconds becomes a Short. |
+| Threads | Yes | Text, image, video and carousel posts. |
+| Reddit | Yes | Text or link posts, with flair. Subreddit rules can be read first. Reddit may still hide posts from new accounts. |
+| Instagram | Yes | Already working for Lumina. |
+| TikTok | Probably only "only me" | Composio's TikTok tool says unaudited apps may only post privately. Confirm once connected; if so, TikTok posts go to the account as private drafts and someone has to publish them. |
+| Discord | Only with a bot the server adds | Composio's Discord tool is a bot. It can post only in servers whose staff add it. Large community servers rarely do. |
 
 ### Task 5: A prominent tip jar in the app (Vault Deck Forge, before Dec 8)
 
