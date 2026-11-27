@@ -29,6 +29,10 @@ Ligia's Google Calendar (Task 20).
 Gmail drafts, Supermetrics (TikTok and Instagram numbers), the browser and Playwright in these sessions
 (screenshots and screen recordings), the shared promo maker (`STK-Close/promo-maker`). No new paid services.
 
+**Update 2026-11-27 (evening):** TikTok and Threads are dropped for now; the launch uses Instagram, YouTube and Reddit.
+Reddit posts go from Ligia's own account in her voice as the maker. All three scheduled tasks exist, paused until Ligia adds
+their connectors.
+
 ## Rules this plan keeps
 
 - **This repository is public.** It holds dates, errand names and the plan only. Never put here: sheet IDs or
