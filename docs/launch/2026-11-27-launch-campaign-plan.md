@@ -95,15 +95,15 @@ cost of launching before the holiday break. It is also the smallest product and 
 in the scheduled tasks' prompts only. The repository gets `docs/launch/README.md` saying a sheet exists and
 what its tabs mean, without the link.
 
-- [ ] Create the sheet (Google Sheets connector or Composio Google Sheets; if neither can create a file,
+- [x] Create the sheet (Google Sheets connector or Composio Google Sheets; if neither can create a file,
       Ligia's first errand is "make a blank sheet and share the link", with steps).
-- [ ] Tabs and columns:
+- [x] Tabs and columns:
   - `errands`: errand_id, what, steps (plain, numbered), due, status (to do / done / skipped), done_on, notes
   - `posts`: post_id, date, time_et, platform, community (subreddit or server), format, caption, media, link,
     check (passed / held), check_notes, status (draft / ready / posted / failed / held), posted_url, notes
   - `results`: week_start, platform, views, followers, clicks, tips, notes, source
   - `change_log`: timestamp, editor, tab, row, field, old, new
-- [ ] Freeze the header rows, add a "how to use this sheet" note in row 1 of
+- [x] Freeze the header rows, add a "how to use this sheet" note in row 1 of
       each tab in plain words.
 - [ ] Reviewer agent opens the sheet and checks every tab against this list.
 
@@ -131,7 +131,7 @@ of each service on the day, so the steps match what Ligia sees.
 
 The biggest risk of the whole campaign, so it is drafted now even though HyMeta launches in January.
 
-- [ ] Create the "HyMeta launch" sheet now, the same way as Task 1, so HyMeta's errands never sit in another
+- [x] Create the "HyMeta launch" sheet now, the same way as Task 1, so HyMeta's errands never sit in another
       product's sheet. Its other errands are added in Task 11.
 - [ ] First errand in it, due Wed Dec 2: **finish the Stripe account and its payout bank** (HyMeta uses Stripe,
       and Ko-fi connects to the same account). Plain steps from Stripe's own help pages; no details in chat.
@@ -265,16 +265,16 @@ commits only to that product's repository.
       sheets' `errands` tabs. When a date moves, it updates the calendar event too (Task 20). HyMeta: from Jan 4, check whether CurseForge has answered (ask Ligia in the push) and on
       Jan 6 propose a new date if not. Hustle & Flow: from Jan 2, check the IRS newsroom for the 2027 filing
       start date and, once announced, propose moving the launch to match.
-- [ ] Create the three tasks, read each back with `get_trigger`, and fire the planner once by hand
+- [ ] Create the three tasks (poster and nudges created Nov 27, paused: tasks made from a session cannot carry connectors on this account; waiting on Ligia to add them in claude.ai or choose a long-lived session), read each back with `get_trigger`, and fire the planner once by hand
       (`fire_trigger`) to prove it works on the Vault Deck Forge sheet. Its first real posts are Dec 4.
 - [ ] Reviewer agent checks the three prompts against this plan and the products' rules.
 
 ### Task 9: Vault Deck Forge posts (batch ready Tue Dec 1)
 
-- [ ] Find the current Vault Hunters subreddit and its self-promotion rules, and the modpack Discord's rules
+- [x] Find the current Vault Hunters subreddit and its self-promotion rules, and the modpack Discord's rules
       for sharing tools (which channel, how often, whether bots or webhooks may post). Record what was found and
       the date in the sheet notes. Skip any community that forbids it.
-- [ ] Write the batch into `posts`:
+- [x] Write the batch into `posts`:
   - Buildup (Dec 4 to Dec 7): one YouTube Short teaser ("coming Tuesday"), one Discord "coming soon" post
     if the server's rules allow it.
   - Launch day (Dec 8): a YouTube Short, a Reddit post written to the subreddit's rules (made by a player, for
@@ -282,8 +282,8 @@ commits only to that product's repository.
   - Follow-through (Dec 9 to Dec 22): two to three Shorts a week (tips: the gold strategy, Best upgrades,
     importing cards) and one "what's new" post that answers feedback. Reddit and Discord at most once a week
     each, or less if their rules say so.
-- [ ] Every caption: plain words, US spelling, the unofficial line, the working link, the tip link once live.
-- [ ] A separate reviewer agent checks every post; failures are held with the reason.
+- [x] Every caption: plain words, US spelling, the unofficial line, the working link, the tip link once live.
+- [x] A separate reviewer agent checks every post; failures are held with the reason.
 
 ### Task 10: Launch eve and launch day (Mon Dec 7 and Tue Dec 8)
 
@@ -394,9 +394,9 @@ is written to it.
 The master session already added 10 events (three launches, four errands, two deadlines, the Monday report),
 each with a reminder at 9 AM the day before. This task keeps them current; it never makes duplicates.
 
-- [ ] Confirm access with the Google Calendar connector (read the existing events). Calendar ID and time zone
+- [x] Confirm access with the Google Calendar connector (read the existing events). Calendar ID and time zone
       (America/New_York) live in the scheduled tasks' prompts, not in this repository.
-- [ ] Before creating any event, search by title. Add each sheet's link to the matching events' descriptions
+- [x] Before creating any event, search by title. Add each sheet's link to the matching events' descriptions
       once the sheet exists. New errands get an event on their due date with the same day-before reminder.
 - [ ] When a date moves (CurseForge, the IRS date, a slipped errand), move the existing event.
 - [ ] Hustle & Flow events say only what its private plan allows.
