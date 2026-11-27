@@ -270,6 +270,8 @@ commits only to that product's repository.
       Jan 6 propose a new date if not. Hustle & Flow: from Jan 2, check the IRS newsroom for the 2027 filing
       start date and, once announced, propose moving the launch to match.
 - [ ] Create the three tasks (poster and nudges created Nov 27, paused: tasks made from a session cannot carry connectors on this account; waiting on Ligia to add them in claude.ai or choose a long-lived session), read each back with `get_trigger`, and fire the planner once by hand
+- [x] Nov 27 test run of the planner: Sheets, Calendar, Composio and the push all worked. Scheduled sessions have no
+      repositories, so its prompt now carries each product's rules itself and no longer edits this repository.
       (`fire_trigger`) to prove it works on the Vault Deck Forge sheet. Its first real posts are Dec 4.
 - [ ] Reviewer agent checks the three prompts against this plan and the products' rules.
 
@@ -382,7 +384,8 @@ detail, file and step lives in a private plan inside its own repository.
 ### Task 18: Master view (dates and errands only)
 
 - [ ] Keep `docs/launch/status.md` in this repository: each product's launch date, each errand's name, due date
-      and done or not. No links, accounts or numbers. Updated by the planner each Monday.
+      and done or not. No links, accounts or numbers. Updated by the working sessions when something changes
+      (Nov 27 test run: scheduled sessions carry no repositories, so the planner reports in its Monday push instead).
 
 ### Task 19: Results review (after each follow-through)
 
