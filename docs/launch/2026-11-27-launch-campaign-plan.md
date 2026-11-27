@@ -136,17 +136,17 @@ The biggest risk of the whole campaign, so it is drafted now even though HyMeta 
 - [ ] First errand in it, due Wed Dec 2: **finish the Stripe account and its payout bank** (HyMeta uses Stripe,
       and Ko-fi connects to the same account). Plain steps from Stripe's own help pages; no details in chat.
 
-- [ ] Find CurseForge's current contact route for API and partnership questions on their official support site
+- [x] Find CurseForge's current contact route for API and partnership questions on their official support site
       (do not guess an address). Record where it was found and the date.
-- [ ] Draft the email from `docs/curseforge-terms.md` in the HyMeta repository. It asks, in writing:
+- [x] Draft the email from `docs/curseforge-terms.md` in the HyMeta repository. It asks, in writing:
   1. That a paid membership site ($3.99 a month or $24.99 a year) using the API is acceptable (clause 2.3).
   2. That HyMeta may store mod details on its own server and refresh them weekly (clause 3.1, "save or cache").
   3. That curated playpacks that send every download back to CurseForge are not treated as competing (clause 3.1).
   4. What usage limits apply when the site opens to everyone, and whether a licence is needed (clause 2.3).
   5. Anything in the Mod Author Terms that applies (read that page first and summarize it in the draft notes).
   It is short, friendly, signed as Lumina Art House, LLC, and asks for an answer by Monday, January 4, 2027.
-- [ ] Reviewer agent checks the draft against the terms page for accuracy and tone.
-- [ ] Put the draft in Ligia's Gmail drafts (not sent) and add an errand to the HyMeta sheet, "Send the
+- [x] Reviewer agent checks the draft against the terms page for accuracy and tone.
+- [x] Put the draft in Ligia's Gmail drafts (not sent) and add an errand to the HyMeta sheet, "Send the
       CurseForge email", with steps, due Sat Dec 5, plus a follow-up errand on Mon Dec 21 if no answer has come.
 
 ### Task 4: Can each platform post automatically? (check before anything depends on it)
@@ -184,9 +184,9 @@ link is allowed. Ligia asked for it to be prominent; this spec is the master ses
 The Ko-fi link lives in one setting. Until her real link is in, it is a placeholder and everything below stays
 hidden.
 
-- [ ] **Always visible:** a "☕ Support the tool" button in the app header. 44px or larger, visible focus, a
+- [x] **Always visible:** a "☕ Support the tool" button in the app header. 44px or larger, visible focus, a
       screen reader label that says it opens Ko-fi in a new tab, correct in both themes.
-- [ ] **A gentle tip card at a moment of value, not on a timer:** it appears right after someone finishes
+- [x] **A gentle tip card at a moment of value, not on a timer:** it appears right after someone finishes
       building or optimizing their 3rd deck, or after 10 minutes of real use, whichever comes first. Warm and
       short, for example: "Vault Deck Forge is free and ad-free. If it helped your run, a tip keeps it going."
       Two buttons: "Leave a tip" and "Not now".
@@ -194,33 +194,33 @@ hidden.
   - Never during the guided tour or on the first visit.
   - Respects reduce motion. Closes with Escape, returns focus where it was.
   - Its state is stored only in the browser's own storage: no tracking, nothing leaves the browser.
-- [ ] **The same link** in Settings, in the Legal section.
-- [ ] **Tests first:** browser tests for the header button (shown with a real link, hidden with the
+- [x] **The same link** in Settings, in the Legal section.
+- [x] **Tests first:** browser tests for the header button (shown with a real link, hidden with the
       placeholder, size and label), the card (third deck, ten minutes, 14 days, never after a tip, never during
       the tour or first visit, reduce motion, "Leave a tip" opens the link and stops the card for good, "Not now"
       and Escape close it and return focus) and the Legal link. Show each test failing before the change and
       passing after it.
-- [ ] `npm test` (rules, build, browser tests at phone, tablet and desktop, both themes). Look at phone and
+- [x] `npm test` (rules, build, browser tests at phone, tablet and desktop, both themes). Look at phone and
       desktop screenshots of the header, the tip card and Settings, in both themes.
-- [ ] Reviewer agent checks the change. Push to `main` (publishes to vault-deck-forge.vercel.app), then open the
+- [x] Reviewer agent checks the change. Push to `main` (publishes to vault-deck-forge.vercel.app), then open the
       live site and confirm. Add a CHANGELOG entry.
 
 ### Task 6: Vault Deck Forge advert kit
 
-- [ ] Install the shared promo maker into the repository (its `install.js`, the same way HyMeta and
+- [x] Install the shared promo maker into the repository (its `install.js`, the same way HyMeta and
       Hustle & Flow have it). Never edit the copy inside the project; change `promo-maker` instead.
-- [ ] Screenshots from the live app with a sample collection: the deck grid with a strong build, Best upgrades,
+- [x] Screenshots from the live app with a sample collection: the deck grid with a strong build, Best upgrades,
       the strongest builds list, phone and desktop.
-- [ ] Draw wide, square and tall adverts. Every one carries "Unofficial fan tool. Not affiliated with
+- [x] Draw wide, square and tall adverts. Every one carries "Unofficial fan tool. Not affiliated with
       Vault Hunters / Iskallia." and the live link. No game logos or art that is not the app's own.
-- [ ] Run the promo maker's check and look at every picture. Show the kit to Ligia on a private page.
+- [x] Run the promo maker's check and look at every picture. Show the kit to Ligia on a private page.
 
 ### Task 7: Vault Deck Forge video clips
 
-- [ ] Record three to four short vertical clips (15 to 40 seconds) with Playwright's built-in screen recording
+- [x] Record three to four short vertical clips (15 to 40 seconds) with Playwright's built-in screen recording
       on the live site: building a deck from owned cards, a Best upgrades tap-through, the gold strategy, and
       importing cards from the save file. Captions are shown in the page while recording (no new installs).
-- [ ] End each clip on the matching advert as an end card.
+- [x] End each clip on the matching advert as an end card.
 - [ ] Each clip goes through the same rules check as a post before it is used (the clip file is the row's media).
 
 ### Task 8: The three scheduled tasks
@@ -320,7 +320,7 @@ Repository `STK-Close/hymeta` (public: nothing private goes in it). Its rules (`
 
 ### Task 12: HyMeta rule update, kit, clips and posts
 
-- [ ] Change the rule in HyMeta's `CLAUDE.md` "Nothing is posted by Claude. Ligia posts." to: "Claude may post
+- [x] Change the rule in HyMeta's `CLAUDE.md` "Nothing is posted by Claude. Ligia posts." to: "Claude may post
       launch content that passed the rules check, and nothing else." Keep "A playpack's advert goes out in
       its own week, not before." Commit to `main`.
 - [ ] Clips on the test site with the password screen left out, from sample mode, cropped above the list of
