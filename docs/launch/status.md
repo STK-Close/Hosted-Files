@@ -5,7 +5,7 @@ Updated 2026-11-27. Details, links and accounts live in each product's private s
 | Product | Launch | Errands |
 |---|---|---|
 | Vault Deck Forge | Tue Dec 8, 2026 | Ko-fi page, Instagram, YouTube and Reddit: done. YouTube channel description: to paste. Stripe for Ko-fi: waiting on the EIN. |
-| HyMeta | Wed Jan 13, 2027 | CurseForge email: sent Nov 27, reply expected by Jan 4. Lawyer request drafted, awaiting send. Lawyer booked by Dec 11. Stripe live: waiting on the EIN. Go or no-go: Jan 6. |
+| HyMeta | Wed Jan 13, 2027 | CurseForge email: sent Nov 27, reply expected by Jan 4. Lawyer review requested Nov 27, awaiting reply. Stripe live: waiting on the EIN. Go or no-go: Jan 6. |
 | Hustle & Flow | Tue Jan 26, 2027 (estimate, follows the IRS date) | Start by Dec 12, all done by Jan 19: on track. |
 
 Built so far: sheets and calendar linked; Vault Deck Forge tip jar (switched off), ads, clips and first 15 posts (rules-checked);
