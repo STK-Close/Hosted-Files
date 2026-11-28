@@ -387,6 +387,27 @@ detail, file and step lives in a private plan inside its own repository.
       and done or not. No links, accounts or numbers. Updated by the working sessions when something changes
       (Nov 27 test run: scheduled sessions carry no repositories, so the planner reports in its Monday push instead).
 
+### Task 18b: Frame-by-frame media safeguard (added Nov 28)
+
+Ligia, Nov 28: "I need to be able to trust that these are being made correctly and without me." Two clips had passed a
+review that never looked at their frames (a hidden caption left a still screen). Now, for all three products:
+- [x] **Automatic media check** (`promo/tool/media-check.js` in the shared promo maker, installed in each product):
+      videos must be 1080 by 1920, inside the planned length, carry an audio track, never stand still for 3 seconds
+      or more outside the end card, and show a caption at least every 3 seconds; pictures must be the right size, not
+      blank, carry the small print and be unchanged since drawn. Published copies must match the checked file byte for
+      byte. It writes a report and a contact sheet per file, runs in each product's tests, and proves itself on
+      broken samples. It also fails on the two old broken clips.
+- [x] **Visual sign-off:** the reviewer agent must open each contact sheet and describe it frame by frame, and check the
+      story against the caption plan, before a post is marked passed. A metadata-only review is a fail.
+- [x] **Posting gate:** each product sheet's posts tab has `media_check` and `visual_review` columns. The poster
+      downloads the media, compares its fingerprint with the published check report, and holds anything missing,
+      failed or changed. Held posts are reported on Monday.
+- [x] **Monday report** adds "N posts checked frame by frame, M held" and a link to an optional preview tab in the
+      product's sheet. Nothing waits for Ligia.
+- [x] Nov 28: every Vault Deck Forge post and media file was re-checked (21 files, 10 posts with media): all passed, after
+      the Trade clip's longest caption was split in two. HyMeta's 90 adverts pass. Hustle & Flow's adverts are recorded
+      the next time its kit is drawn in its own sessions; until then they cannot pass.
+
 ### Task 19: Results review (after each follow-through)
 
 - [ ] Dec 23 (Vault Deck Forge), Jan 28 (HyMeta), Feb 10 (Hustle & Flow): a one-page summary per product from
